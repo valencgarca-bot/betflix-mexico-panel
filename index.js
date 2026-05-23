@@ -163,7 +163,7 @@ app.use((req, res, next) => {
 });
 
 // -----------------------------------------------------------
-// 🔥 PANTALLA DE INICIO (Login) - FONDO DE TU REPOSITORIO 🔥
+// 🔥 PANTALLA DE INICIO (Login) - FONDO PLANO PARA RENDER 🔥
 // -----------------------------------------------------------
 app.get('/', (req, res) => {
     const ESTILO_LOGIN = `
@@ -171,27 +171,16 @@ app.get('/', (req, res) => {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
         :root {
-            --bg-panel: rgba(15, 15, 15, 0.88); 
+            --bg-deep: #0a0a0a;
+            --bg-panel: rgba(18, 18, 18, 0.95); 
             --mx-green: #00e676;
             --mx-red: #ff1744;
             --mx-white: #f5f5f5;
         }
 
-        body { color: white; font-family: 'Inter', sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; position: relative; }
+        body { color: white; font-family: 'Inter', sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; position: relative; background-color: var(--bg-deep); }
         
-        /* Carga el archivo fondo.jpg de tu NUEVA cuenta de GitHub */
-        body::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url('https://raw.githubusercontent.com/valencgarca-bot/betflix-mexico-panel/main/fondo.jpg');
-            background-size: cover;
-            background-position: center;
-            z-index: -1; 
-            filter: brightness(0.5);
-        }
-        
-        .login-panel { position: relative; background: var(--bg-panel); backdrop-filter: blur(10px); padding: 70px 50px; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.1); max-width: 440px; width: 90%; text-align: center; box-shadow: 0 25px 70px rgba(0,0,0,0.8); box-sizing: border-box; }
+        .login-panel { position: relative; background: var(--bg-panel); padding: 70px 50px; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.05); max-width: 440px; width: 90%; text-align: center; box-shadow: 0 25px 70px rgba(0,0,0,0.8); box-sizing: border-box; }
         
         .logo-mx { font-size: 32px; font-weight: 800; margin-bottom: 12px; text-transform: uppercase; letter-spacing: -1.2px; line-height: 1.1; }
         .logo-mx .green { color: var(--mx-green); } .logo-mx .white { color: var(--mx-white); } .logo-mx .red { color: var(--mx-red); }
@@ -529,6 +518,7 @@ app.post('/buscar', async (req, res) => {
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 // 🔥 CORRECCIÓN FINAL: Puerto dinámico para Render 🔥
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Panel funcionando correctamente en el puerto ${PORT}`);
 });
