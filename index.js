@@ -88,9 +88,9 @@ const CSS_MODERNO = `
     button.action-btn, .action-btn-link { color: white; border: none; padding: 16px 22px; border-radius: 10px; cursor: pointer; font-weight: 700; width: 100%; box-sizing: border-box; text-transform: uppercase; font-size: 14px; font-family: 'Inter', sans-serif; transition: all 0.2s ease; letter-spacing: 0.8px; display: inline-flex; justify-content: center; align-items: center; text-decoration: none; border: 1px solid transparent; }
     button.action-btn:hover, .action-btn-link:hover { opacity: 0.9; transform: translateY(-1.5px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
     
-    .btn-green-mx { background: linear-gradient(135deg, #00c853 0%, #008000 100%); color: #000; border-color: #00c853; box-shadow: 0 6px 20px rgba(0,255,0,0.18); }
-    .btn-white-mx { background: #fff; color: #000; border-color: #f5f5f5; box-shadow: 0 6px 20px rgba(255,255,255,0.18); }
-    .btn-red-mx { background: linear-gradient(135deg, #ff1744 0%, #a00 100%); color: #fff; border-color: #ff1744; box-shadow: 0 6px 20px rgba(255,0,0,0.18); }
+    .btn-green-mx { background: linear-gradient(135deg, #00c853 0%, #008000 100%); color: #000 !important; border-color: #00c853; box-shadow: 0 6px 20px rgba(0,255,0,0.18); }
+    .btn-white-mx { background: #fff; color: #000 !important; font-weight: 800 !important; border-color: #f5f5f5; box-shadow: 0 6px 20px rgba(255,255,255,0.18); }
+    .btn-red-mx { background: linear-gradient(135deg, #ff1744 0%, #a00 100%); color: #fff !important; border-color: #ff1744; box-shadow: 0 6px 20px rgba(255,0,0,0.18); }
     
     .danger-btn-sidebar { background: transparent; border: 1px solid #333; color: #777; padding: 12px 18px; text-align: center; border-radius: 10px; font-size: 12px; text-decoration: none; display: flex; align-items: center; gap: 12px; font-weight: 600; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.8px; width: 100%; box-sizing: border-box; }
     .danger-btn-sidebar:hover { background: rgba(255, 23, 68, 0.08); border-color: var(--mx-red); color: var(--mx-red); }
