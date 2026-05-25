@@ -5,7 +5,7 @@ const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
 const app = express();
 
-// 📂 BASE DE DATOS (Ruta corregida para Render: carpeta actual)
+// 📂 BASE DE DATOS
 const db = new sqlite3.Database('./betflix_mexico_v1.db');
 
 const MI_CORREO = 'andreavalencia6012@gmail.com';
@@ -44,6 +44,28 @@ const CSS_MODERNO = `
         --mx-white: #f5f5f5;
         --border-color: rgba(60, 60, 60, 0.3);
     }
+
+    /* Ocultar elementos nativos de Google Translate */
+    .goog-te-banner-frame.skiptranslate { display: none !important; }
+    body { top: 0px !important; }
+    #goog-gt-tt { display: none !important; }
+    .goog-te-gadget-tooltip { display: none !important; }
+
+    /* Estilo del selector de idioma personalizado */
+    .custom-lang-select { 
+        background: rgba(0,0,0,0.8); 
+        color: white; 
+        border: 1px solid #333; 
+        padding: 6px 12px; 
+        border-radius: 8px; 
+        font-family: 'Inter', sans-serif; 
+        font-size: 13px; 
+        font-weight: 600; 
+        cursor: pointer; 
+        outline: none; 
+        transition: 0.2s;
+    }
+    .custom-lang-select:focus, .custom-lang-select:hover { border-color: var(--mx-green); }
 
     @keyframes led-glow { 
         0% { border-color: var(--mx-green); box-shadow: 0 0 10px var(--mx-green-dim); } 
@@ -145,7 +167,20 @@ const CSS_MODERNO = `
             else { f.style.display = 'none'; f.removeAttribute('open'); }
         });
     }
+
+    // 🔥 SCRIPT PARA EL TRADUCTOR DE GOOGLE OCULTO 🔥
+    function googleTranslateElementInit() {
+        new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'es,en,pt', autoDisplay: false}, 'google_translate_element');
+    }
+    function changeLanguage(lang) {
+        var selectField = document.querySelector(".goog-te-combo");
+        if (selectField) {
+            selectField.value = lang;
+            selectField.dispatchEvent(new Event('change'));
+        }
+    }
 </script>
+<script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 `;
 
 app.use((req, res, next) => {
@@ -163,7 +198,7 @@ app.use((req, res, next) => {
 });
 
 // -----------------------------------------------------------
-// 🔥 PANTALLA DE INICIO (Login) - FONDO PLANO PARA RENDER 🔥
+// 🔥 PANTALLA DE INICIO (Login) CON SELECTOR DE IDIOMA 🔥
 // -----------------------------------------------------------
 app.get('/', (req, res) => {
     const ESTILO_LOGIN = `
@@ -192,9 +227,31 @@ app.get('/', (req, res) => {
         
         .btn-neon-green { background: linear-gradient(135deg, #00c853 0%, #008000 100%); color: #000; border: none; padding: 18px; border-radius: 10px; cursor: pointer; font-weight: 700; width: 100%; text-transform: uppercase; font-size: 15px; letter-spacing: 0.8px; border: 1px solid var(--mx-green); box-shadow: 0 6px 25px rgba(0,255,0,0.25); transition: all 0.2s ease; font-family: 'Inter', sans-serif; }
         .btn-neon-green:hover { opacity: 0.9; transform: translateY(-1.5px); box-shadow: 0 8px 30px rgba(0,255,0,0.35); }
+
+        /* Ocultar barra de Google Translate y estilo del nuevo selector para el Login */
+        .goog-te-banner-frame.skiptranslate { display: none !important; }
+        body { top: 0px !important; }
+        #goog-gt-tt { display: none !important; }
+        
+        .lang-selector-login { position: absolute; top: 30px; right: 40px; z-index: 1000; }
+        .lang-selector-login select { background: rgba(18,18,18,0.9); color: white; border: 1px solid var(--mx-green); padding: 10px 15px; border-radius: 10px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px; cursor: pointer; outline: none; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: 0.2s; }
+        .lang-selector-login select:hover { box-shadow: 0 4px 20px rgba(0,230,118,0.2); }
     </style>
     `;
     res.send(`${ESTILO_LOGIN}
+    
+    <div style="position: absolute; width: 0; height: 0; overflow: hidden; z-index: -1;">
+        <div id="google_translate_element"></div>
+    </div>
+    
+    <div class="lang-selector-login">
+        <select onchange="changeLanguage(this.value)">
+            <option value="es">🇪🇸 Español</option>
+            <option value="en">🇺🇸 English</option>
+            <option value="pt">🇧🇷 Português</option>
+        </select>
+    </div>
+
     <div class="login-panel">
         <div class="logo-mx"><span class="green">⚡ BET</span><span class="white">FLIX</span> <br><span class="red">M É X I C O</span></div>
         <h2>Panel de Control Profesional <br>Acceso Seguro</h2>
@@ -204,6 +261,21 @@ app.get('/', (req, res) => {
             <button class="btn-neon-green">🔓 Iniciar Sesión</button>
         </form>
     </div>
+
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'es,en,pt', autoDisplay: false}, 'google_translate_element');
+        }
+        function changeLanguage(lang) {
+            var selectField = document.querySelector(".goog-te-combo");
+            if (selectField) {
+                selectField.value = lang;
+                selectField.dispatchEvent(new Event('change'));
+            }
+        }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    
     </body>`);
 });
 
@@ -310,9 +382,18 @@ app.get('/dash', (req, res) => {
 
                 res.send(`
                 ${CSS_MODERNO}
+                <div style="position: absolute; width: 0; height: 0; overflow: hidden; z-index: -1;">
+                    <div id="google_translate_element"></div>
+                </div>
+
                 <div class="top-header">
                     <h2><span class="brand-mx">⚡ BET</span>FLIX</h2>
-                    <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="display:flex; align-items:center; gap:20px;">
+                        <select class="custom-lang-select" onchange="changeLanguage(this.value)">
+                            <option value="es">🇪🇸 ES</option>
+                            <option value="en">🇺🇸 EN</option>
+                            <option value="pt">🇧🇷 PT</option>
+                        </select>
                         <span class="user-badge">${req.session.user} | ${req.session.rol.toUpperCase()}</span>
                         <a href="/logout" style="color:var(--text-secondary); text-decoration:none; font-size:12px; font-weight:700;">SALIR</a>
                     </div>
@@ -395,9 +476,18 @@ app.get('/dash', (req, res) => {
     } else {
         res.send(`
         ${CSS_MODERNO}
+        <div style="position: absolute; width: 0; height: 0; overflow: hidden; z-index: -1;">
+            <div id="google_translate_element"></div>
+        </div>
+
         <div class="top-header">
             <h2><span class="brand-mx">⚡ BET</span>FLIX</h2>
-            <div style="display:flex; align-items:center; gap:15px;">
+            <div style="display:flex; align-items:center; gap:20px;">
+                <select class="custom-lang-select" onchange="changeLanguage(this.value)">
+                    <option value="es">🇪🇸 ES</option>
+                    <option value="en">🇺🇸 EN</option>
+                    <option value="pt">🇧🇷 PT</option>
+                </select>
                 <span class="user-badge">${req.session.user}</span>
                 <a href="/logout" style="color:var(--mx-red); text-decoration:none; font-weight:700; font-size:12px;">SALIR</a>
             </div>
@@ -467,7 +557,7 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        // 🌍 REGLAS DE PAÍSES (Estructura extendida original)
+        // 🌍 REGLAS DE PAÍSES
         if (accion === 'pais') {
             let paisDetectado = null;
             const reglasPais = [
@@ -517,7 +607,6 @@ app.post('/buscar', async (req, res) => {
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
-// 🔥 CORRECCIÓN FINAL: Puerto dinámico para Render 🔥
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Panel funcionando correctamente en el puerto ${PORT}`);
