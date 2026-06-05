@@ -9,7 +9,7 @@ const app = express();
 const db = new sqlite3.Database('./betflix_mexico_v1.db');
 
 const MI_CORREO = 'andreavalencia6012@gmail.com';
-const MI_CLAVE = 'fpgorosihjkqgqjk'; 
+const MI_CLAVE = 'nfouktygvxtujevs'; 
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
