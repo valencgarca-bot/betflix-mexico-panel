@@ -596,12 +596,17 @@ app.post('/buscar', async (req, res) => {
 
         // 📡 REGISTRO DE IPS
         if (accion === 'ip') {
-            const ipsEncontradas = textoCorreo.match(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g);
+            const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
             let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 35px; color:#f00; margin:10px 0;">${ip}</div>`).join('') : `<div style="font-size: 20px; color:#f00; margin: 30px 0;">❌ No se detectó ninguna IP.</div>`;
             return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>📡 Registro de IP</h2><p>Correo: <strong style="color:var(--mx-green);">${email_search}</strong></p><div style="margin: 40px auto; padding: 30px; background:#222; border-radius:15px; display:inline-block; border: 1px solid #f00;">${ipContenido}</div></div>`);
         }
-        res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:white; color:black; padding: 20px; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif;">${mail.html || mail.text}</div>`);
+
+        // 🔥 CORRECCIÓN EXACTA APLICADA: Censurar única y estrictamente secuencias de exactamente 6 dígitos numéricos consecutivas.
+        let contenidoFinal = mail.html || mail.text || "";
+        contenidoFinal = contenidoFinal.replace(/\b\d{6}\b/g, '<span style="background:#ff1744; color:#fff; padding:3px 8px; border-radius:6px; font-weight:700; font-size:14px;">[CÓDIGO OCULTO POR SEGURIDAD]</span>');
+
+        res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:white; color:black; padding: 20px; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif;">${contenidoFinal}</div>`);
     } catch (e) { res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>⚠️ Error de conexión IMAP</h2><p>${e.message}</p><br><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); }
 });
 
