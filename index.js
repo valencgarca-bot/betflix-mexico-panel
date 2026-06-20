@@ -10,8 +10,8 @@ const app = express();
 const dbPath = path.resolve(__dirname, 'betflix_mexico_v1.db');
 const db = new sqlite3.Database(dbPath);
 
-const MI_CORREO = 'andreavalencia6012@gmail.com';
-const MI_CLAVE = 'mvmojhchwnrfcriu'; 
+const MI_CORREO = 'darciogarces@gmail.com';
+const MI_CLAVE = 'njzyadtjrbnunfrg';
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
