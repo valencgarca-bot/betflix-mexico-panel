@@ -11,7 +11,7 @@ const dbPath = path.resolve(__dirname, 'betflix_mexico_v1.db');
 const db = new sqlite3.Database(dbPath);
 
 const MI_CORREO = 'darciogarces@gmail.com';
-const MI_CLAVE = 'njzyadtjrbnunfrg';
+const MI_CLAVE = 'npbiclcfnftiklye';
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
