@@ -11,7 +11,7 @@ const dbPath = path.resolve(__dirname, 'betflix_mexico_v1.db');
 const db = new sqlite3.Database(dbPath);
 
 const MI_CORREO = 'darciogarces@gmail.com';
-const MI_CLAVE = 'npbiclcfnftiklye';
+const MI_CLAVE = 'tfpsybpuagmcnpiz';
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
@@ -29,7 +29,7 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
-    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', '123456', 'Administrador', NULL)");
+    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
 
 // 🔥 ESTILOS PROFESIONALES Y MINIMALISTAS - INTERFAZ PREMIUM 🔥
