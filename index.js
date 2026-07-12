@@ -10,6 +10,11 @@ const app = express();
 const dbPath = path.resolve(__dirname, 'betflix_mexico_v1.db');
 const db = new sqlite3.Database(dbPath);
 
+// Wrappers de Promesas para Async/Await en SQLite
+const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(query, params, (err, row) => err ? reject(err) : resolve(row)));
+const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
+const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
+
 const MI_CORREO = 'darciogarces@gmail.com';
 const MI_CLAVE = 'tfpsybpuagmcnpiz';
 
@@ -178,17 +183,18 @@ const CSS_MODERNO = `
 <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 `;
 
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
     const rutasAbiertas = ['/', '/login', '/logout'];
     if (rutasAbiertas.includes(req.path)) return next();
     if (req.session && req.session.uid) {
-        db.get("SELECT id FROM usuarios WHERE id = ?", [req.session.uid], (err, row) => {
+        try {
+            const row = await dbGet("SELECT id FROM usuarios WHERE id = ?", [req.session.uid]);
             if (!row) {
                 req.session.destroy();
                 return res.send("<script>alert('⛔ 🇲🇽 ACCESO DENEGADO \\n\\nTu cuenta ha sido eliminada por el administrador.'); window.location='/';</script>");
             }
             next();
-        });
+        } catch (err) { return res.redirect('/'); }
     } else { return res.redirect('/'); }
 });
 
@@ -270,14 +276,15 @@ app.get('/', (req, res) => {
     </body>`);
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { user, pass } = req.body;
-    db.get("SELECT * FROM usuarios WHERE user = ? AND pass = ?", [user, pass], (err, row) => {
+    try {
+        const row = await dbGet("SELECT * FROM usuarios WHERE user = ? AND pass = ?", [user, pass]);
         if (row) {
             req.session.uid = row.id; req.session.user = row.user; req.session.rol = row.rol;
             res.redirect('/dash');
         } else { res.send("<script>alert('⛔ Datos de acceso incorrectos.'); window.location='/';</script>"); }
-    });
+    } catch (err) { res.redirect('/'); }
 });
 
 app.get('/admin/logout-todos', (req, res) => {
@@ -287,18 +294,18 @@ app.get('/admin/logout-todos', (req, res) => {
     } else { res.redirect('/dash'); }
 });
 
-app.get('/admin/nuke-database', (req, res) => {
+app.get('/admin/nuke-database', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'ruben' || req.session.rol === 'Administrador');
     if (esAdminPrincipal) {
-        db.run("DELETE FROM correos", [], () => {
-            db.run("DELETE FROM usuarios WHERE user != 'ruben'", [], () => {
-                res.send("<script>alert('💥 BASE DE DATOS FORMATEADA COMPLETAMENTE.'); window.location='/dash';</script>");
-            });
-        });
+        try {
+            await dbRun("DELETE FROM correos", []);
+            await dbRun("DELETE FROM usuarios WHERE user != 'ruben'", []);
+            res.send("<script>alert('💥 BASE DE DATOS FORMATEADA COMPLETAMENTE.'); window.location='/dash';</script>");
+        } catch(err) { res.redirect('/dash'); }
     } else { res.redirect('/dash'); }
 });
 
-app.get('/dash', (req, res) => {
+app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'ruben' || req.session.rol === 'Administrador');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
 
@@ -306,196 +313,194 @@ app.get('/dash', (req, res) => {
         let query = esAdminPrincipal ? "SELECT * FROM usuarios WHERE user != 'ruben'" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
         let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
 
-        db.all(query, params, (err, usuarios) => {
-            db.all("SELECT * FROM correos", [], (err, correos) => {
-                // Consultar el historial de códigos
-                db.all("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 100", [], (err, registros) => {
+        try {
+            const usuarios = await dbAll(query, params);
+            const correos = await dbAll("SELECT * FROM correos", []);
+            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 100", []);
                     
-                    let subadmins = usuarios.filter(u => u.rol === 'Subadministrador');
-                    let clientes = usuarios.filter(u => u.rol === 'Cliente');
-                    if (esSubAdmin) subadmins = usuarios.filter(u => u.id === req.session.uid);
+            let subadmins = usuarios.filter(u => u.rol === 'Subadministrador');
+            let clientes = usuarios.filter(u => u.rol === 'Cliente');
+            if (esSubAdmin) subadmins = usuarios.filter(u => u.id === req.session.uid);
 
-                    let subadminsHtml = "";
-                    subadmins.forEach(sub => {
-                        let clientesDelSub = clientes.filter(c => c.creado_por === sub.id);
-                        subadminsHtml += `
-                        <details class="folder item-folder">
-                            <summary>
-                                <span>📁 ${sub.user.toUpperCase()}</span>
-                                <div style="display:flex; align-items:center; gap:12px;">
-                                    <span class="user-count">${clientesDelSub.length} usuarios</span>
-                                </div>
-                            </summary>
-                            <div class="folder-content">
-                                <a href="/admin/del-user/${sub.id}" class="action-btn-link btn-red-mx" style="margin-bottom:25px; padding: 10px; font-size:11px;" onclick="return confirm('⚠️ ¿Borrar a este subadmin y sus clientes?')">❌ ELIMINAR SUBADMINISTRADOR</a>
-                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px;">`;
-                                clientesDelSub.forEach(cli => {
-                                    let correosDelCli = correos.filter(c => c.user_id === cli.id);
-                                    subadminsHtml += `
-                                    <div class="client-card item-client" style="border-left-color: var(--mx-green);">
-                                        <strong style="color: var(--mx-green);">👤 ${cli.user}</strong>
-                                        <a href="/admin/del-user/${cli.id}" class="del-btn" onclick="return confirm('¿Borrar cliente?')">×</a>
-                                        <form action="/admin/add-mail-masivo" method="POST" style="margin-top:15px; display:flex; gap:8px;">
-                                            <input type="hidden" name="uid" value="${cli.id}">
-                                            <input name="emails" placeholder="Pega los correos..." style="padding:10px; margin:0; font-size:13px;">
-                                            <button class="action-btn btn-green-mx" style="width:auto; padding:10px 15px; font-size:12px;">📥</button>
-                                        </form>
-                                        <div class="email-list">`;
-                                            correosDelCli.forEach(m => { subadminsHtml += `<div class="email-item"><span>${m.email}</span> <a href="/admin/del-mail/${m.id}" style="color:#f00; text-decoration:none;">×</a></div>`; });
-                                    subadminsHtml += `</div></div>`;
-                                });
-                        subadminsHtml += `</div></div></details>`;
-                    });
-
-                    let clientesDirectosHtml = "";
-                    if (esAdminPrincipal) {
-                        let clientesDirectos = clientes.filter(c => !c.creado_por);
-                        if(clientesDirectos.length > 0) {
-                            clientesDirectosHtml += `
-                            <h4 style="color:var(--text-primary); margin-top:40px; border-bottom:1px solid var(--border-color); padding-bottom:12px; font-size:16px;">👤 Clientes Directos</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px;">`;
-                            clientesDirectos.forEach(cli => {
-                                let correosDelCli = correos.filter(c => c.user_id === cli.id);
-                                clientesDirectosHtml += `
-                                <div class="client-card item-client" style="border-left-color: var(--mx-red);">
-                                    <strong style="color: var(--mx-red);">👤 ${cli.user}</strong>
-                                    <a href="/admin/del-user/${cli.id}" class="del-btn" onclick="return confirm('¿Borrar cliente?')">×</a>
-                                    <form action="/admin/add-mail-masivo" method="POST" style="margin-top:15px; display:flex; gap:8px;">
-                                        <input type="hidden" name="uid" value="${cli.id}">
-                                        <input name="emails" placeholder="Pega los correos..." style="padding:10px; margin:0; font-size:13px;">
-                                        <button class="action-btn btn-red-mx" style="width:auto; padding:10px 15px; font-size:12px;">📥</button>
-                                    </form>
-                                    <div class="email-list">`;
-                                        correosDelCli.forEach(m => { clientesDirectosHtml += `<div class="email-item"><span>${m.email}</span> <a href="/admin/del-mail/${m.id}" style="color:#f00; text-decoration:none;">×</a></div>`; });
-                                clientesDirectosHtml += `</div></div>`;
-                            });
-                            clientesDirectosHtml += `</div>`;
-                        }
-                    }
-
-                    // HTML de la tabla de auditoría de códigos
-                    let registrosHtml = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top:20px;">
-                        <tr style="border-bottom: 1px solid var(--border-color); color:var(--text-secondary); text-align:left;">
-                            <th style="padding:12px;">Usuario</th>
-                            <th style="padding:12px;">Correo Buscado</th>
-                            <th style="padding:12px;">Fecha y Hora</th>
-                        </tr>`;
-                    if (registros && registros.length > 0) {
-                        registros.forEach(r => {
-                            registrosHtml += `<tr style="border-bottom: 1px solid #1a1a1a;">
-                                <td style="padding:12px; font-weight:bold; color:var(--mx-green);">${r.user}</td>
-                                <td style="padding:12px; color:var(--text-primary);">${r.email_buscado}</td>
-                                <td style="padding:12px; color:var(--text-secondary);">${r.fecha}</td>
-                            </tr>`;
+            let subadminsHtml = "";
+            subadmins.forEach(sub => {
+                let clientesDelSub = clientes.filter(c => c.creado_por === sub.id);
+                subadminsHtml += `
+                <details class="folder item-folder">
+                    <summary>
+                        <span>📁 ${sub.user.toUpperCase()}</span>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span class="user-count">${clientesDelSub.length} usuarios</span>
+                        </div>
+                    </summary>
+                    <div class="folder-content">
+                        <a href="/admin/del-user/${sub.id}" class="action-btn-link btn-red-mx" style="margin-bottom:25px; padding: 10px; font-size:11px;" onclick="return confirm('⚠️ ¿Borrar a este subadmin y sus clientes?')">❌ ELIMINAR SUBADMINISTRADOR</a>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px;">`;
+                        clientesDelSub.forEach(cli => {
+                            let correosDelCli = correos.filter(c => c.user_id === cli.id);
+                            subadminsHtml += `
+                            <div class="client-card item-client" style="border-left-color: var(--mx-green);">
+                                <strong style="color: var(--mx-green);">👤 ${cli.user}</strong>
+                                <a href="/admin/del-user/${cli.id}" class="del-btn" onclick="return confirm('¿Borrar cliente?')">×</a>
+                                <form action="/admin/add-mail-masivo" method="POST" style="margin-top:15px; display:flex; gap:8px;">
+                                    <input type="hidden" name="uid" value="${cli.id}">
+                                    <input name="emails" placeholder="Pega los correos..." style="padding:10px; margin:0; font-size:13px;">
+                                    <button class="action-btn btn-green-mx" style="width:auto; padding:10px 15px; font-size:12px;">📥</button>
+                                </form>
+                                <div class="email-list">`;
+                                    correosDelCli.forEach(m => { subadminsHtml += `<div class="email-item"><span>${m.email}</span> <a href="/admin/del-mail/${m.id}" style="color:#f00; text-decoration:none;">×</a></div>`; });
+                            subadminsHtml += `</div></div>`;
                         });
-                    } else {
-                        registrosHtml += `<tr><td colspan="3" style="padding:15px; text-align:center; color:#555;">No hay registros de códigos solicitados aún.</td></tr>`;
-                    }
-                    registrosHtml += `</table></div>`;
+                subadminsHtml += `</div></div></details>`;
+            });
 
-                    res.send(`
-                    ${CSS_MODERNO}
-                    <div style="position: absolute; width: 0; height: 0; overflow: hidden; z-index: -1;">
-                        <div id="google_translate_element"></div>
+            let clientesDirectosHtml = "";
+            if (esAdminPrincipal) {
+                let clientesDirectos = clientes.filter(c => !c.creado_por);
+                if(clientesDirectos.length > 0) {
+                    clientesDirectosHtml += `
+                    <h4 style="color:var(--text-primary); margin-top:40px; border-bottom:1px solid var(--border-color); padding-bottom:12px; font-size:16px;">👤 Clientes Directos</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px;">`;
+                    clientesDirectos.forEach(cli => {
+                        let correosDelCli = correos.filter(c => c.user_id === cli.id);
+                        clientesDirectosHtml += `
+                        <div class="client-card item-client" style="border-left-color: var(--mx-red);">
+                            <strong style="color: var(--mx-red);">👤 ${cli.user}</strong>
+                            <a href="/admin/del-user/${cli.id}" class="del-btn" onclick="return confirm('¿Borrar cliente?')">×</a>
+                            <form action="/admin/add-mail-masivo" method="POST" style="margin-top:15px; display:flex; gap:8px;">
+                                <input type="hidden" name="uid" value="${cli.id}">
+                                <input name="emails" placeholder="Pega los correos..." style="padding:10px; margin:0; font-size:13px;">
+                                <button class="action-btn btn-red-mx" style="width:auto; padding:10px 15px; font-size:12px;">📥</button>
+                            </form>
+                            <div class="email-list">`;
+                                correosDelCli.forEach(m => { clientesDirectosHtml += `<div class="email-item"><span>${m.email}</span> <a href="/admin/del-mail/${m.id}" style="color:#f00; text-decoration:none;">×</a></div>`; });
+                        clientesDirectosHtml += `</div></div>`;
+                    });
+                    clientesDirectosHtml += `</div>`;
+                }
+            }
+
+            // HTML de la tabla de auditoría de códigos
+            let registrosHtml = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top:20px;">
+                <tr style="border-bottom: 1px solid var(--border-color); color:var(--text-secondary); text-align:left;">
+                    <th style="padding:12px;">Usuario</th>
+                    <th style="padding:12px;">Correo Buscado</th>
+                    <th style="padding:12px;">Fecha y Hora</th>
+                </tr>`;
+            if (registros && registros.length > 0) {
+                registros.forEach(r => {
+                    registrosHtml += `<tr style="border-bottom: 1px solid #1a1a1a;">
+                        <td style="padding:12px; font-weight:bold; color:var(--mx-green);">${r.user}</td>
+                        <td style="padding:12px; color:var(--text-primary);">${r.email_buscado}</td>
+                        <td style="padding:12px; color:var(--text-secondary);">${r.fecha}</td>
+                    </tr>`;
+                });
+            } else {
+                registrosHtml += `<tr><td colspan="3" style="padding:15px; text-align:center; color:#555;">No hay registros de códigos solicitados aún.</td></tr>`;
+            }
+            registrosHtml += `</table></div>`;
+
+            res.send(`
+            ${CSS_MODERNO}
+            <div style="position: absolute; width: 0; height: 0; overflow: hidden; z-index: -1;">
+                <div id="google_translate_element"></div>
+            </div>
+
+            <div class="top-header">
+                <h2><span class="brand-mx">⚡ BET</span>FLIX</h2>
+                <div style="display:flex; align-items:center; gap:20px;">
+                    <select class="custom-lang-select" onchange="changeLanguage(this.value)">
+                        <option value="es">🇪🇸 ES</option>
+                        <option value="en">🇺🇸 EN</option>
+                        <option value="pt">🇧🇷 PT</option>
+                    </select>
+                    <span class="user-badge">${req.session.user} | ${req.session.rol.toUpperCase()}</span>
+                    <a href="/logout" style="color:var(--text-secondary); text-decoration:none; font-size:12px; font-weight:700;">SALIR</a>
+                </div>
+            </div>
+            
+            <div class="dashboard-layout">
+                <div class="sidebar">
+                    <div class="sidebar-title">Herramientas</div>
+                    <button class="tab-btn" onclick="openTab('panel-stream')">📨 Leer Correos</button>
+                    <button class="tab-btn" onclick="openTab('panel-buscar')">🔎 Buscar Dueño de Cuenta</button>
+                    
+                    <div class="sidebar-title" style="margin-top:25px;">Gestión</div>
+                    <button class="tab-btn" onclick="openTab('panel-registrar')">➕ Crear Nuevo Usuario</button>
+                    <button class="tab-btn" onclick="openTab('panel-usuarios')">👥 Base de Usuarios</button>
+                    <button class="tab-btn" onclick="openTab('panel-auditoria')" style="color: var(--mx-red);">🕵️ Historial de Códigos</button>
+                    
+                    <div class="sidebar-footer">
+                    ${esAdminPrincipal ? `
+                        <a href="/admin/logout-todos" class="danger-btn-sidebar logout" onclick="return confirm('¿Cerrar sesión de TODOS?')">🛑 Desconectar Todos</a>
+                        <a href="/admin/nuke-database" class="danger-btn-sidebar" onclick="return confirm('⚠️ ¿BORRAR TODO EL SISTEMA?')">💥 Formatear Sistema</a>
+                    ` : ''}
+                    </div>
+                </div>
+
+                <div class="main-content">
+                    <div id="panel-stream" class="tab-panel">
+                        <div class="panel-header">
+                            <h3>📨 Leer Correos de Plataformas</h3>
+                            <p>Rastreo IMAP en tiempo real por correo electrónico.</p>
+                        </div>
+                        <form action="/buscar" method="POST">
+                            <input name="email_search" placeholder="Escribe el correo a buscar (Netflix, Disney, etc)..." required style="border-color: #444; background: rgba(255,255,255,0.03);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 10px;">
+                                <button type="submit" name="accion" value="mensaje" class="action-btn btn-green-mx">📩 Leer Mensaje</button>
+                                <button type="submit" name="accion" value="pais" class="action-btn btn-white-mx">🌍 Analizar País</button>
+                                <button type="submit" name="accion" value="ip" class="action-btn btn-red-mx">📡 Buscar IP</button>
+                            </div>
+                        </form>
                     </div>
 
-                    <div class="top-header">
-                        <h2><span class="brand-mx">⚡ BET</span>FLIX</h2>
-                        <div style="display:flex; align-items:center; gap:20px;">
-                            <select class="custom-lang-select" onchange="changeLanguage(this.value)">
-                                <option value="es">🇪🇸 ES</option>
-                                <option value="en">🇺🇸 EN</option>
-                                <option value="pt">🇧🇷 PT</option>
-                            </select>
-                            <span class="user-badge">${req.session.user} | ${req.session.rol.toUpperCase()}</span>
-                            <a href="/logout" style="color:var(--text-secondary); text-decoration:none; font-size:12px; font-weight:700;">SALIR</a>
+                    <div id="panel-buscar" class="tab-panel">
+                        <div class="panel-header">
+                            <h3>🔎 Buscar Dueño de Cuenta</h3>
+                            <p>Encuentra rápidamente qué cliente tiene asignado un correo específico.</p>
                         </div>
+                        <input type="text" id="buscadorLocal" onkeyup="buscarCorreoLocal(); openTab('panel-usuarios');" placeholder="Escribe un correo o nombre aquí para filtrar..." style="border-color:#ffaa00;">
+                    </div>
+
+                    <div id="panel-registrar" class="tab-panel">
+                        <div class="panel-header">
+                            <h3>➕ Crear Nuevo Usuario</h3>
+                            <p>Crea perfiles oficiales para nuevos clientes o subadministradores.</p>
+                        </div>
+                        <form action="/admin/crear" method="POST">
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:18px;">
+                                <input name="n" placeholder="Nombre de Usuario" required>
+                                <input name="c" placeholder="Contraseña" required>
+                            </div>
+                            <select name="r">
+                                <option value="Cliente">Perfil: Cliente Normal</option>
+                                ${esAdminPrincipal ? '<option value="Subadministrador">Perfil: Subadministrador</option>' : ''}
+                            </select>
+                            <button class="action-btn btn-white-mx" style="margin-top:10px;">Crear Cuenta</button>
+                        </form>
+                    </div>
+
+                    <div id="panel-usuarios" class="tab-panel">
+                        <div class="panel-header">
+                            <h3>👥 Base de Usuarios</h3>
+                            <p>Directorio centralizado. Gestión de subadministradores, clientes y correos.</p>
+                        </div>
+                        ${subadminsHtml}
+                        ${clientesDirectosHtml}
+                        ${(!subadminsHtml && !clientesDirectosHtml) ? '<p style="color:#555; text-align:center;">No hay usuarios registrados aún en el sistema.</p>' : ''}
                     </div>
                     
-                    <div class="dashboard-layout">
-                        <div class="sidebar">
-                            <div class="sidebar-title">Herramientas</div>
-                            <button class="tab-btn" onclick="openTab('panel-stream')">📨 Leer Correos</button>
-                            <button class="tab-btn" onclick="openTab('panel-buscar')">🔎 Buscar Dueño de Cuenta</button>
-                            
-                            <div class="sidebar-title" style="margin-top:25px;">Gestión</div>
-                            <button class="tab-btn" onclick="openTab('panel-registrar')">➕ Crear Nuevo Usuario</button>
-                            <button class="tab-btn" onclick="openTab('panel-usuarios')">👥 Base de Usuarios</button>
-                            <button class="tab-btn" onclick="openTab('panel-auditoria')" style="color: var(--mx-red);">🕵️ Historial de Códigos</button>
-                            
-                            <div class="sidebar-footer">
-                            ${esAdminPrincipal ? `
-                                <a href="/admin/logout-todos" class="danger-btn-sidebar logout" onclick="return confirm('¿Cerrar sesión de TODOS?')">🛑 Desconectar Todos</a>
-                                <a href="/admin/nuke-database" class="danger-btn-sidebar" onclick="return confirm('⚠️ ¿BORRAR TODO EL SISTEMA?')">💥 Formatear Sistema</a>
-                            ` : ''}
-                            </div>
+                    <div id="panel-auditoria" class="tab-panel">
+                        <div class="panel-header">
+                            <h3>🕵️ Auditoría de Códigos</h3>
+                            <p>Registro de usuarios que han solicitado visualizar un código de 6 dígitos.</p>
                         </div>
-
-                        <div class="main-content">
-                            <div id="panel-stream" class="tab-panel">
-                                <div class="panel-header">
-                                    <h3>📨 Leer Correos de Plataformas</h3>
-                                    <p>Rastreo IMAP en tiempo real por correo electrónico.</p>
-                                </div>
-                                <form action="/buscar" method="POST">
-                                    <input name="email_search" placeholder="Escribe el correo a buscar (Netflix, Disney, etc)..." required style="border-color: #444; background: rgba(255,255,255,0.03);">
-                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 10px;">
-                                        <button type="submit" name="accion" value="mensaje" class="action-btn btn-green-mx">📩 Leer Mensaje</button>
-                                        <button type="submit" name="accion" value="pais" class="action-btn btn-white-mx">🌍 Analizar País</button>
-                                        <button type="submit" name="accion" value="ip" class="action-btn btn-red-mx">📡 Buscar IP</button>
-                                    </div>
-                                </form>
-                            </div>
-
-                            <div id="panel-buscar" class="tab-panel">
-                                <div class="panel-header">
-                                    <h3>🔎 Buscar Dueño de Cuenta</h3>
-                                    <p>Encuentra rápidamente qué cliente tiene asignado un correo específico.</p>
-                                </div>
-                                <input type="text" id="buscadorLocal" onkeyup="buscarCorreoLocal(); openTab('panel-usuarios');" placeholder="Escribe un correo o nombre aquí para filtrar..." style="border-color:#ffaa00;">
-                            </div>
-
-                            <div id="panel-registrar" class="tab-panel">
-                                <div class="panel-header">
-                                    <h3>➕ Crear Nuevo Usuario</h3>
-                                    <p>Crea perfiles oficiales para nuevos clientes o subadministradores.</p>
-                                </div>
-                                <form action="/admin/crear" method="POST">
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:18px;">
-                                        <input name="n" placeholder="Nombre de Usuario" required>
-                                        <input name="c" placeholder="Contraseña" required>
-                                    </div>
-                                    <select name="r">
-                                        <option value="Cliente">Perfil: Cliente Normal</option>
-                                        ${esAdminPrincipal ? '<option value="Subadministrador">Perfil: Subadministrador</option>' : ''}
-                                    </select>
-                                    <button class="action-btn btn-white-mx" style="margin-top:10px;">Crear Cuenta</button>
-                                </form>
-                            </div>
-
-                            <div id="panel-usuarios" class="tab-panel">
-                                <div class="panel-header">
-                                    <h3>👥 Base de Usuarios</h3>
-                                    <p>Directorio centralizado. Gestión de subadministradores, clientes y correos.</p>
-                                </div>
-                                ${subadminsHtml}
-                                ${clientesDirectosHtml}
-                                ${(!subadminsHtml && !clientesDirectosHtml) ? '<p style="color:#555; text-align:center;">No hay usuarios registrados aún en el sistema.</p>' : ''}
-                            </div>
-                            
-                            <div id="panel-auditoria" class="tab-panel">
-                                <div class="panel-header">
-                                    <h3>🕵️ Auditoría de Códigos</h3>
-                                    <p>Registro de usuarios que han solicitado visualizar un código de 6 dígitos.</p>
-                                </div>
-                                ${registrosHtml}
-                            </div>
-                        </div>
+                        ${registrosHtml}
                     </div>
-                    </body>`);
-                });
-            });
-        });
+                </div>
+            </div>
+            </body>`);
+        } catch (err) { res.redirect('/'); }
     } else {
         res.send(`
         ${CSS_MODERNO}
@@ -534,16 +539,21 @@ app.get('/dash', (req, res) => {
     }
 });
 
-app.post('/admin/crear', (req, res) => {
+app.post('/admin/crear', async (req, res) => {
     let creado_por = (req.session.rol === 'Subadministrador') ? req.session.uid : null;
-    db.run("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por], () => res.redirect('/dash'));
+    try {
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
 });
 
-app.post('/admin/add-mail-masivo', (req, res) => {
+app.post('/admin/add-mail-masivo', async (req, res) => {
     const list = req.body.emails.split(/[\s,]+/).filter(e => e.includes('@'));
-    db.all("SELECT c.email, COALESCE(u.user, 'Fantasma/Eliminado') as owner FROM correos c LEFT JOIN usuarios u ON c.user_id = u.id", [], (err, rows) => {
+    try {
+        const rows = await dbAll("SELECT c.email, COALESCE(u.user, 'Fantasma/Eliminado') as owner FROM correos c LEFT JOIN usuarios u ON c.user_id = u.id", []);
         const correosExistentes = {};
         rows.forEach(r => { correosExistentes[r.email.toLowerCase()] = r.owner; });
+        
         const stmt = db.prepare("INSERT INTO correos (email, user_id) VALUES (?, ?)");
         let insertados = 0, repetidos = [];
         list.forEach(m => {
@@ -552,16 +562,26 @@ app.post('/admin/add-mail-masivo', (req, res) => {
             else { stmt.run(correoLimpio, req.body.uid); insertados++; }
         });
         stmt.finalize(); 
+        
         if (repetidos.length > 0) res.send(`<script>alert('✅ Se guardaron ${insertados} correos.\\n\\n⚠️ Se bloquearon ${repetidos.length} repetidos.'); window.location='/dash';</script>`); 
         else res.redirect('/dash'); 
-    });
+    } catch(err) { res.redirect('/dash'); }
 });
 
-app.get('/admin/del-user/:id', (req, res) => {
-    db.run("DELETE FROM usuarios WHERE id = ?", [req.params.id], () => { db.run("DELETE FROM correos WHERE user_id = ?", [req.params.id], () => res.redirect('/dash')); });
+app.get('/admin/del-user/:id', async (req, res) => {
+    try {
+        await dbRun("DELETE FROM usuarios WHERE id = ?", [req.params.id]);
+        await dbRun("DELETE FROM correos WHERE user_id = ?", [req.params.id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
 });
 
-app.get('/admin/del-mail/:id', (req, res) => { db.run("DELETE FROM correos WHERE id = ?", [req.params.id], () => res.redirect('/dash')); });
+app.get('/admin/del-mail/:id', async (req, res) => {
+    try {
+        await dbRun("DELETE FROM correos WHERE id = ?", [req.params.id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
 
 app.post('/buscar', async (req, res) => {
     const { email_search, accion } = req.body;
@@ -627,7 +647,9 @@ app.post('/buscar', async (req, res) => {
 
         // 🔥 REGISTRAR EN LA BASE DE DATOS SI SE SOLICITÓ LEER UN MENSAJE QUE CONTIENE UN CÓDIGO
         if (/\b\d{6}\b/.test(textoBruto) && (!accion || accion === 'mensaje')) {
-            db.run("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]);
+            try {
+                await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]);
+            } catch(err) {}
         }
 
         // 🔥 REVELAR CÓDIGO CON ADVERTENCIA
