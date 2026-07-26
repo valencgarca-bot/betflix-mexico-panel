@@ -3,7 +3,7 @@ const session = require('express-session');
 const sqlite3 = require('sqlite3').verbose();
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
-const path = require('path'); // 🔥 Librería nativa para asegurar la ruta
+const path = require('path');
 const app = express();
 
 // 📂 BASE DE DATOS (Ruta absoluta blindada para evitar borrados)
@@ -15,8 +15,18 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-const MI_CORREO = 'darciogarces@gmail.com';
-const MI_CLAVE = 'tfpsybpuagmcnpiz';
+// 🔥 CONFIGURACIÓN DE LAS CUENTAS DE GMAIL 🔥
+const CUENTAS_GMAIL = [
+    { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy' },
+    { user: 'riandasnet@gmail.com', pass: 'updchdcdsjnxvnyy' },
+    { user: 'cuenta3@gmail.com', pass: 'contraseña_app_3' },
+    { user: 'cuenta4@gmail.com', pass: 'contraseña_app_4' },
+    { user: 'cuenta5@gmail.com', pass: 'contraseña_app_5' },
+    { user: 'cuenta6@gmail.com', pass: 'contraseña_app_6' },
+    { user: 'cuenta7@gmail.com', pass: 'contraseña_app_7' },
+    { user: 'cuenta8@gmail.com', pass: 'contraseña_app_8' },
+    { user: 'cuenta9@gmail.com', pass: 'contraseña_app_9' }
+];
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
@@ -168,19 +178,7 @@ const CSS_MODERNO = `
             else { f.style.display = 'none'; f.removeAttribute('open'); }
         });
     }
-
-    function googleTranslateElementInit() {
-        new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'es,en,pt', autoDisplay: false}, 'google_translate_element');
-    }
-    function changeLanguage(lang) {
-        var selectField = document.querySelector(".goog-te-combo");
-        if (selectField) {
-            selectField.value = lang;
-            selectField.dispatchEvent(new Event('change'));
-        }
-    }
 </script>
-<script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 `;
 
 app.use(async (req, res, next) => {
@@ -258,7 +256,6 @@ app.get('/', (req, res) => {
             <button class="btn-neon-green">🔓 Iniciar Sesión</button>
         </form>
     </div>
-
     <script type="text/javascript">
         function googleTranslateElementInit() {
             new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'es,en,pt', autoDisplay: false}, 'google_translate_element');
@@ -583,19 +580,44 @@ app.get('/admin/del-mail/:id', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
+// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL) 🔥
 app.post('/buscar', async (req, res) => {
     const { email_search, accion } = req.body;
-    const config = { imap: { user: MI_CORREO, password: MI_CLAVE, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
+    let messages = [];
+    let connection = null;
+    let mail = null;
+    let cuentaExitosa = null;
+
     try {
-        const connection = await imaps.connect(config);
-        await connection.openBox('INBOX');
-        const messages = await connection.search([['TEXT', email_search.trim()]], { bodies: [''], struct: true });
+        // Itera sobre las cuentas de correo configuradas al inicio
+        for (const cuenta of CUENTAS_GMAIL) {
+            const config = { imap: { user: cuenta.user, password: cuenta.pass, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
+            
+            try {
+                connection = await imaps.connect(config);
+                await connection.openBox('INBOX');
+                messages = await connection.search([['TEXT', email_search.trim()]], { bodies: [''], struct: true });
+
+                if (messages.length > 0) {
+                    cuentaExitosa = cuenta.user;
+                    break; // Se detiene el bucle si encontró el correo
+                } else {
+                    connection.end();
+                }
+            } catch (err) {
+                console.log(`⚠️ Error al conectar con ${cuenta.user}:`, err.message);
+                if (connection) connection.end();
+                continue; // Si falla una cuenta, intenta con la siguiente
+            }
+        }
+
+        // Si terminó de buscar en las cuentas y no encontró nada
         if (messages.length === 0) { 
-            connection.end(); 
             return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
         }
+
         messages.sort((a, b) => b.attributes.uid - a.attributes.uid);
-        const mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
+        mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
         connection.end();
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
@@ -634,7 +656,7 @@ app.post('/buscar', async (req, res) => {
             ];
             for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
             let htmlRes = paisDetectado ? `<div style="font-size: 50px; margin: 40px auto; padding: 30px; background:#fff; color:#000; border-radius:15px; display:inline-block; border-bottom: 5px solid #f00; border-top: 5px solid #0f0;">${paisDetectado}</div>` : `<div style="margin: 30px auto; padding: 20px; background:#222; border-radius:15px; display:inline-block; border: 1px solid #ffaa00;"><h3 style="color:#ffaa00; margin-top:0;">⚠️ País no detectado</h3></div>`;
-            return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>🌍 Análisis de País</h2><p>Correo: <strong style="color:var(--mx-green);">${email_search}</strong></p>${htmlRes}</div>`);
+            return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>🌍 Análisis de País</h2><p>Correo: <strong style="color:var(--mx-green);">${email_search}</strong> (Encontrado en: ${cuentaExitosa})</p>${htmlRes}</div>`);
         }
 
         // 📡 REGISTRO DE IPS
@@ -642,7 +664,7 @@ app.post('/buscar', async (req, res) => {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
             let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 35px; color:#f00; margin:10px 0;">${ip}</div>`).join('') : `<div style="font-size: 20px; color:#f00; margin: 30px 0;">❌ No se detectó ninguna IP.</div>`;
-            return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>📡 Registro de IP</h2><p>Correo: <strong style="color:var(--mx-green);">${email_search}</strong></p><div style="margin: 40px auto; padding: 30px; background:#222; border-radius:15px; display:inline-block; border: 1px solid #f00;">${ipContenido}</div></div>`);
+            return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>📡 Registro de IP</h2><p>Correo: <strong style="color:var(--mx-green);">${email_search}</strong> (Encontrado en: ${cuentaExitosa})</p><div style="margin: 40px auto; padding: 30px; background:#222; border-radius:15px; display:inline-block; border: 1px solid #f00;">${ipContenido}</div></div>`);
         }
 
         // 🔥 REGISTRAR EN LA BASE DE DATOS SI SE SOLICITÓ LEER UN MENSAJE QUE CONTIENE UN CÓDIGO
@@ -656,8 +678,10 @@ app.post('/buscar', async (req, res) => {
         let contenidoFinal = mail.html || mail.text || "";
         contenidoFinal = contenidoFinal.replace(/\b(\d{6})\b/g, '<span style="background:#00c853; color:#000; padding:4px 10px; border-radius:6px; font-weight:900; font-size:18px; border: 2px solid #000; display:inline-block;">$1</span><br><div style="color:#ffaa00; font-size:13px; font-weight:bold; padding:8px; border: 1px dashed #ffaa00; border-radius:6px; display:inline-block; margin-top:8px; background:rgba(255, 170, 0, 0.1);">⚠️ Por favor, sé responsable si hay algún cambio.</div>');
 
-        res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:white; color:black; padding: 20px; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif;">${contenidoFinal}</div>`);
-    } catch (e) { res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>⚠️ Error de conexión IMAP</h2><p>${e.message}</p><br><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); }
+        res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:white; color:black; padding: 20px; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif;"><p style="text-align:center; font-weight:bold; color:red;">Encontrado en: ${cuentaExitosa}</p>${contenidoFinal}</div>`);
+    } catch (e) { 
+        res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>⚠️ Error de conexión IMAP</h2><p>${e.message}</p><br><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
+    }
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
