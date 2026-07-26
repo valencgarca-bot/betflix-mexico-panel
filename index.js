@@ -19,7 +19,7 @@ const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(qu
 const CUENTAS_GMAIL = [
     { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy' },
     { user: 'riandasnet@gmail.com', pass: 'updchdcdsjnxvnyy' },
-    { user: 'cuenta3@gmail.com', pass: 'contraseña_app_3' },
+    { user: 'clubecampestrejp@gmail.com', pass: 'ipmvedbivouzeudi' },
     { user: 'cuenta4@gmail.com', pass: 'contraseña_app_4' },
     { user: 'cuenta5@gmail.com', pass: 'contraseña_app_5' },
     { user: 'cuenta6@gmail.com', pass: 'contraseña_app_6' },
