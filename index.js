@@ -4,6 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
 const path = require('path');
+const puppeteer = require('puppeteer'); // 🔥 LIBRERÍA AGREGADA PARA PROTON
 const app = express();
 
 // 📂 BASE DE DATOS (Ruta absoluta blindada para evitar borrados)
@@ -580,7 +581,45 @@ app.get('/admin/del-mail/:id', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL) 🔥
+// 🔥 FUNCIÓN AGREGADA: BÚSQUEDA EN PROTONMAIL CON PUPPETEER 🔥
+async function buscarEnProtonWeb(email_search) {
+    const browser = await puppeteer.launch({ 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+    });
+    
+    const page = await browser.newPage();
+    let textoCorreo = "";
+
+    try {
+        await page.goto('https://account.proton.me/login', { waitUntil: 'networkidle2' });
+        
+        await page.waitForSelector('#username', { timeout: 15000 });
+        await page.type('#username', 'storesvendas@pm.me'); 
+        await page.type('#password', '@Dede916562255');   
+        await page.click('button[type="submit"]');
+
+        await page.waitForSelector('input[data-testid="heading:searchbar"]', { timeout: 25000 });
+
+        await page.type('input[data-testid="heading:searchbar"]', email_search);
+        await page.keyboard.press('Enter');
+
+        await page.waitForSelector('.item-container', { timeout: 15000 });
+        await page.click('.item-container'); 
+
+        await page.waitForSelector('.message-content', { timeout: 15000 });
+        textoCorreo = await page.evaluate(() => document.querySelector('.message-content').innerText);
+
+    } catch (err) {
+        console.log("⚠️ No se encontró en Proton o error de lectura:", err.message);
+    } finally {
+        await browser.close();
+    }
+
+    return textoCorreo;
+}
+
+// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL + PROTON) 🔥
 app.post('/buscar', async (req, res) => {
     const { email_search, accion } = req.body;
     let messages = [];
@@ -611,16 +650,27 @@ app.post('/buscar', async (req, res) => {
             }
         }
 
-        // Si terminó de buscar en las cuentas y no encontró nada
-        if (messages.length === 0) { 
-            return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
-        }
+        let textoBruto = "";
+        let textoCorreo = "";
 
-        messages.sort((a, b) => b.attributes.uid - a.attributes.uid);
-        mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
-        connection.end();
-        const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
-        const textoCorreo = textoBruto.toLowerCase();
+        // 🔥 MODIFICACIÓN: Si no encuentra en Gmail, busca en Proton
+        if (messages.length === 0) { 
+            console.log("No encontrado en Gmail. Buscando en ProtonMail...");
+            textoBruto = await buscarEnProtonWeb(email_search.trim());
+            
+            if (!textoBruto) {
+                return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo ni en Gmail ni en Proton:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
+            }
+            cuentaExitosa = "storesvendas@pm.me (Proton)";
+            textoCorreo = textoBruto.toLowerCase();
+        } else {
+            // Lógica original si lo encontró en Gmail
+            messages.sort((a, b) => b.attributes.uid - a.attributes.uid);
+            mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
+            connection.end();
+            textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
+            textoCorreo = textoBruto.toLowerCase();
+        }
 
         // 🌍 REGLAS DE PAÍSES
         if (accion === 'pais') {
@@ -675,12 +725,12 @@ app.post('/buscar', async (req, res) => {
         }
 
         // 🔥 REVELAR CÓDIGO CON ADVERTENCIA
-        let contenidoFinal = mail.html || mail.text || "";
+        let contenidoFinal = mail ? (mail.html || mail.text || "") : textoBruto; // Ajuste por si viene de Proton
         contenidoFinal = contenidoFinal.replace(/\b(\d{6})\b/g, '<span style="background:#00c853; color:#000; padding:4px 10px; border-radius:6px; font-weight:900; font-size:18px; border: 2px solid #000; display:inline-block;">$1</span><br><div style="color:#ffaa00; font-size:13px; font-weight:bold; padding:8px; border: 1px dashed #ffaa00; border-radius:6px; display:inline-block; margin-top:8px; background:rgba(255, 170, 0, 0.1);">⚠️ Por favor, sé responsable si hay algún cambio.</div>');
 
         res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:white; color:black; padding: 20px; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif;"><p style="text-align:center; font-weight:bold; color:red;">Encontrado en: ${cuentaExitosa}</p>${contenidoFinal}</div>`);
     } catch (e) { 
-        res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>⚠️ Error de conexión IMAP</h2><p>${e.message}</p><br><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
+        res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>⚠️ Error de conexión IMAP / Procesamiento</h2><p>${e.message}</p><br><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
     }
 });
 
