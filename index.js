@@ -20,7 +20,7 @@ const CUENTAS_GMAIL = [
     { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy' },
     { user: 'riandasnet@gmail.com', pass: 'updchdcdsjnxvnyy' },
     { user: 'clubecampestrejp@gmail.com', pass: 'ipmvedbivouzeudi' },
-    { user: 'clubecampestrejp@gmail.com', pass: 'vhtvjorujpohphks' },
+    { user: 'capoeirajpmg@gmail.com', pass: 'vhtvjorujpohphks' },
     { user: 'cuenta5@gmail.com', pass: 'contraseña_app_5' },
     { user: 'cuenta6@gmail.com', pass: 'contraseña_app_6' },
     { user: 'cuenta7@gmail.com', pass: 'contraseña_app_7' },
