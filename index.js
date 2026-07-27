@@ -4,6 +4,8 @@ const sqlite3 = require('sqlite3').verbose();
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
 const path = require('path');
+const Imap = require('imap'); // Librería nativa para el reenvío crudo
+const nodemailer = require('nodemailer'); // Librería para enviar a Gmail
 const app = express();
 
 // 📂 BASE DE DATOS (Ruta absoluta blindada para evitar borrados)
@@ -18,8 +20,8 @@ const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(qu
 // 🔥 CONFIGURACIÓN DE LAS CUENTAS (GMAIL Y PROTON BRIDGE LOCAL) 🔥
 const CUENTAS_CORREO = [
     { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy', host: 'imap.gmail.com', port: 993, tls: true },
-    { user: 'riandasnet@gmail.com', pass: 'updchdcdsjnxvnyy', host: 'imap.gmail.com', port: 993, tls: true },
-    { user: 'clubecampestrejp@gmail.com', pass: 'ipmvedbivouzeudi', host: 'imap.gmail.com', port: 993, tls: true },
+    { user: 'riandasnet@gmail.com', pass: 'zddwcfnuxvawgqch', host: 'imap.gmail.com', port: 993, tls: true },
+    { user: 'clubecampestrejp@gmail.com', pass: 'sffqomrnhrkgexqj', host: 'imap.gmail.com', port: 993, tls: true },
     { user: 'storesvendas@pm.me', pass: 'ITv7xTmz2tK5Q5UcwTqq1A', host: '127.0.0.1', port: 1143, tls: false, tlsOptions: { rejectUnauthorized: false } }
 ];
 
@@ -681,6 +683,68 @@ app.post('/buscar', async (req, res) => {
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
+
+// 🔥 SISTEMA DE REENVÍO AUTOMÁTICO EN SEGUNDO PLANO (SIN FILTROS DE IDIOMA) 🔥
+const reenvioGmail = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'tokioappoficial@gmail.com',
+        pass: 'avzepljuczbawvoy'
+    }
+});
+
+const escuchaProton = new Imap({
+    user: 'storesvendas@pm.me',
+    password: 'ITv7xTmz2tK5Q5UcwTqq1A',
+    host: '127.0.0.1',
+    port: 1143,
+    tls: false,
+    tlsOptions: { rejectUnauthorized: false }
+});
+
+escuchaProton.once('ready', function() {
+    escuchaProton.openBox('INBOX', false, function(err, box) {
+        if (err) {
+            console.error('Error al abrir buzón de Proton:', err);
+            return;
+        }
+        
+        console.log('✅ Motor de reenvío conectado y vigilando ProtonMail sin filtros...');
+        
+        escuchaProton.on('mail', function(numNewMsgs) {
+            const fetch = escuchaProton.seq.fetch(box.messages.total + ':' + box.messages.total, {
+                bodies: [''], 
+                markSeen: true
+            });
+
+            fetch.on('message', function(msg, seqno) {
+                msg.on('body', function(stream, info) {
+                    let buffer = '';
+                    stream.on('data', function(chunk) { buffer += chunk.toString('utf8'); });
+                    
+                    stream.once('end', function() {
+                        reenvioGmail.sendMail({
+                            envelope: {
+                                from: 'tokioappoficial@gmail.com',
+                                to: 'tokioappoficial@gmail.com'
+                            },
+                            raw: buffer
+                        }, (err, info) => {
+                            if (err) console.error('❌ Error enviando a Gmail:', err);
+                            else console.log('📨 Correo reenviado automáticamente sin importar el idioma.');
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
+escuchaProton.once('error', function(err) {
+    console.log('⚠️ Error en la conexión IMAP de fondo:', err);
+});
+
+escuchaProton.connect();
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
