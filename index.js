@@ -4,8 +4,6 @@ const sqlite3 = require('sqlite3').verbose();
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
 const path = require('path');
-const Imap = require('imap'); // Librería nativa para el reenvío crudo
-const nodemailer = require('nodemailer'); // Librería para enviar a Gmail
 const app = express();
 
 // 📂 BASE DE DATOS (Ruta absoluta blindada para evitar borrados)
@@ -17,12 +15,17 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 🔥 CONFIGURACIÓN DE LAS CUENTAS (GMAIL Y PROTON BRIDGE LOCAL) 🔥
-const CUENTAS_CORREO = [
-    { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy', host: 'imap.gmail.com', port: 993, tls: true },
-    { user: 'riandasnet@gmail.com', pass: 'zddwcfnuxvawgqch', host: 'imap.gmail.com', port: 993, tls: true },
-    { user: 'clubecampestrejp@gmail.com', pass: 'sffqomrnhrkgexqj', host: 'imap.gmail.com', port: 993, tls: true },
-    { user: 'storesvendas@pm.me', pass: 'ITv7xTmz2tK5Q5UcwTqq1A', host: '127.0.0.1', port: 1143, tls: false, tlsOptions: { rejectUnauthorized: false } }
+// 🔥 CONFIGURACIÓN DE LAS CUENTAS DE GMAIL 🔥
+const CUENTAS_GMAIL = [
+    { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy' },
+    { user: 'riandasnet@gmail.com', pass: 'updchdcdsjnxvnyy' },
+    { user: 'clubecampestrejp@gmail.com', pass: 'ipmvedbivouzeudi' },
+    { user: 'clubecampestrejp@gmail.com', pass: 'vhtvjorujpohphks' },
+    { user: 'cuenta5@gmail.com', pass: 'contraseña_app_5' },
+    { user: 'cuenta6@gmail.com', pass: 'contraseña_app_6' },
+    { user: 'cuenta7@gmail.com', pass: 'contraseña_app_7' },
+    { user: 'cuenta8@gmail.com', pass: 'contraseña_app_8' },
+    { user: 'cuenta9@gmail.com', pass: 'contraseña_app_9' }
 ];
 
 app.use(express.urlencoded({ extended: true }));
@@ -36,6 +39,8 @@ app.use(session({
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER)");
+    
+    // 🔥 NUEVA TABLA: Historial de quién pidió códigos de verificación
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
@@ -160,7 +165,7 @@ const CSS_MODERNO = `
 
         if(input === '') {
             folders.forEach(f => { f.style.display = ''; f.removeAttribute('open'); });
-            clients.forEach(c => { c.style.display = ''; });
+            clients.forEach(c => c.style.display = '');
             return;
         }
         clients.forEach(c => {
@@ -264,6 +269,7 @@ app.get('/', (req, res) => {
         }
     </script>
     <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    
     </body>`);
 });
 
@@ -371,6 +377,7 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
+            // HTML de la tabla de auditoría de códigos
             let registrosHtml = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top:20px;">
                 <tr style="border-bottom: 1px solid var(--border-color); color:var(--text-secondary); text-align:left;">
                     <th style="padding:12px;">Usuario</th>
@@ -432,7 +439,7 @@ app.get('/dash', async (req, res) => {
                     <div id="panel-stream" class="tab-panel">
                         <div class="panel-header">
                             <h3>📨 Leer Correos de Plataformas</h3>
-                            <p>Rastreo IMAP en tiempo real por correo electrónico (Gmail y Proton Bridge).</p>
+                            <p>Rastreo IMAP en tiempo real por correo electrónico.</p>
                         </div>
                         <form action="/buscar" method="POST">
                             <input name="email_search" placeholder="Escribe el correo a buscar (Netflix, Disney, etc)..." required style="border-color: #444; background: rgba(255,255,255,0.03);">
@@ -573,7 +580,7 @@ app.get('/admin/del-mail/:id', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL + PROTON BRIDGE) 🔥
+// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL) 🔥
 app.post('/buscar', async (req, res) => {
     const { email_search, accion } = req.body;
     let messages = [];
@@ -582,17 +589,9 @@ app.post('/buscar', async (req, res) => {
     let cuentaExitosa = null;
 
     try {
-        for (const cuenta of CUENTAS_CORREO) {
-            const config = { 
-                imap: { 
-                    user: cuenta.user, 
-                    password: cuenta.pass, 
-                    host: cuenta.host, 
-                    port: cuenta.port, 
-                    tls: cuenta.tls, 
-                    tlsOptions: cuenta.tlsOptions || { rejectUnauthorized: false } 
-                } 
-            };
+        // Itera sobre las cuentas de correo configuradas al inicio
+        for (const cuenta of CUENTAS_GMAIL) {
+            const config = { imap: { user: cuenta.user, password: cuenta.pass, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
             
             try {
                 connection = await imaps.connect(config);
@@ -601,17 +600,18 @@ app.post('/buscar', async (req, res) => {
 
                 if (messages.length > 0) {
                     cuentaExitosa = cuenta.user;
-                    break;
+                    break; // Se detiene el bucle si encontró el correo
                 } else {
                     connection.end();
                 }
             } catch (err) {
                 console.log(`⚠️ Error al conectar con ${cuenta.user}:`, err.message);
                 if (connection) connection.end();
-                continue;
+                continue; // Si falla una cuenta, intenta con la siguiente
             }
         }
 
+        // Si terminó de buscar en las cuentas y no encontró nada
         if (messages.length === 0) { 
             return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
         }
@@ -667,12 +667,14 @@ app.post('/buscar', async (req, res) => {
             return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>📡 Registro de IP</h2><p>Correo: <strong style="color:var(--mx-green);">${email_search}</strong> (Encontrado en: ${cuentaExitosa})</p><div style="margin: 40px auto; padding: 30px; background:#222; border-radius:15px; display:inline-block; border: 1px solid #f00;">${ipContenido}</div></div>`);
         }
 
+        // 🔥 REGISTRAR EN LA BASE DE DATOS SI SE SOLICITÓ LEER UN MENSAJE QUE CONTIENE UN CÓDIGO
         if (/\b\d{6}\b/.test(textoBruto) && (!accion || accion === 'mensaje')) {
             try {
                 await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]);
             } catch(err) {}
         }
 
+        // 🔥 REVELAR CÓDIGO CON ADVERTENCIA
         let contenidoFinal = mail.html || mail.text || "";
         contenidoFinal = contenidoFinal.replace(/\b(\d{6})\b/g, '<span style="background:#00c853; color:#000; padding:4px 10px; border-radius:6px; font-weight:900; font-size:18px; border: 2px solid #000; display:inline-block;">$1</span><br><div style="color:#ffaa00; font-size:13px; font-weight:bold; padding:8px; border: 1px dashed #ffaa00; border-radius:6px; display:inline-block; margin-top:8px; background:rgba(255, 170, 0, 0.1);">⚠️ Por favor, sé responsable si hay algún cambio.</div>');
 
@@ -683,68 +685,6 @@ app.post('/buscar', async (req, res) => {
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
-
-// 🔥 SISTEMA DE REENVÍO AUTOMÁTICO EN SEGUNDO PLANO (SIN FILTROS DE IDIOMA) 🔥
-const reenvioGmail = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: 'tokioappoficial@gmail.com',
-        pass: 'avzepljuczbawvoy'
-    }
-});
-
-const escuchaProton = new Imap({
-    user: 'storesvendas@pm.me',
-    password: 'ITv7xTmz2tK5Q5UcwTqq1A',
-    host: '127.0.0.1',
-    port: 1143,
-    tls: false,
-    tlsOptions: { rejectUnauthorized: false }
-});
-
-escuchaProton.once('ready', function() {
-    escuchaProton.openBox('INBOX', false, function(err, box) {
-        if (err) {
-            console.error('Error al abrir buzón de Proton:', err);
-            return;
-        }
-        
-        console.log('✅ Motor de reenvío conectado y vigilando ProtonMail sin filtros...');
-        
-        escuchaProton.on('mail', function(numNewMsgs) {
-            const fetch = escuchaProton.seq.fetch(box.messages.total + ':' + box.messages.total, {
-                bodies: [''], 
-                markSeen: true
-            });
-
-            fetch.on('message', function(msg, seqno) {
-                msg.on('body', function(stream, info) {
-                    let buffer = '';
-                    stream.on('data', function(chunk) { buffer += chunk.toString('utf8'); });
-                    
-                    stream.once('end', function() {
-                        reenvioGmail.sendMail({
-                            envelope: {
-                                from: 'tokioappoficial@gmail.com',
-                                to: 'tokioappoficial@gmail.com'
-                            },
-                            raw: buffer
-                        }, (err, info) => {
-                            if (err) console.error('❌ Error enviando a Gmail:', err);
-                            else console.log('📨 Correo reenviado automáticamente sin importar el idioma.');
-                        });
-                    });
-                });
-            });
-        });
-    });
-});
-
-escuchaProton.once('error', function(err) {
-    console.log('⚠️ Error en la conexión IMAP de fondo:', err);
-});
-
-escuchaProton.connect();
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
