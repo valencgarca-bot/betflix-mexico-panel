@@ -17,15 +17,14 @@ const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(qu
 
 // 🔥 CONFIGURACIÓN DE LAS CUENTAS DE GMAIL 🔥
 const CUENTAS_GMAIL = [
-    { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy' },
+  { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy' },
     { user: 'riandasnet@gmail.com', pass: 'updchdcdsjnxvnyy' },
     { user: 'clubecampestrejp@gmail.com', pass: 'ipmvedbivouzeudi' },
     { user: 'capoeirajpmg@gmail.com', pass: 'vhtvjorujpohphks' },
     { user: 'darciogarces@gmail.com', pass: 'wkcidkcgtuapcnkh' },
     { user: 'julianamjp1@gmail.com', pass: 'lkambczcmvkddvcz' },
     { user: 'casu34jk@gmail.com', pass: 'btvouamnnjrjdrup' },
-    { user: 'santiagorevend@gmail.com', pass: 'dqawfgnliyolqvjy' },
-    { user: 'cuenta9@gmail.com', pass: 'contraseña_app_9' }
+    { user: 'santiagorevend@gmail.com', pass: 'dqawfgnliyolqvjy' }
 ];
 
 app.use(express.urlencoded({ extended: true }));
@@ -39,7 +38,10 @@ app.use(session({
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER)");
+    
+    // 🔥 NUEVA TABLA: Historial de quién pidió códigos de verificación
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
@@ -374,6 +376,7 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
+            // HTML de la tabla de auditoría de códigos
             let registrosHtml = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top:20px;">
                 <tr style="border-bottom: 1px solid var(--border-color); color:var(--text-secondary); text-align:left;">
                     <th style="padding:12px;">Usuario</th>
@@ -576,56 +579,45 @@ app.get('/admin/del-mail/:id', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA PARALELIZADO PERO CON TU LÓGICA EXACTA 🔥
+// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL) 🔥
 app.post('/buscar', async (req, res) => {
     const { email_search, accion } = req.body;
-
-    // Función que conecta a una sola cuenta, busca tu correo específico y devuelve null si no lo halla
-    const buscarEnCuenta = async (cuenta) => {
-        const config = { imap: { user: cuenta.user, password: cuenta.pass, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
-        let connection = null;
-        try {
-            connection = await imaps.connect(config);
-            await connection.openBox('INBOX');
-            
-            // TU LÓGICA ORIGINAL INTACTA: Busca exactamente el correo que pides
-            const msgs = await connection.search([['TEXT', email_search.trim()]], { bodies: [''], struct: true });
-
-            if (msgs && msgs.length > 0) {
-                return { msgs, usuario: cuenta.user, connection }; 
-            } else {
-                connection.end();
-                return null; // Si no está aquí, devuelve nulo para que el sistema siga buscando
-            }
-        } catch (err) {
-            if (connection) connection.end();
-            return null; // Si falla la conexión, devuelve nulo y no rompe todo el sistema
-        }
-    };
+    let messages = [];
+    let connection = null;
+    let mail = null;
+    let cuentaExitosa = null;
 
     try {
-        // Ejecutamos las 9 búsquedas AL MISMO TIEMPO (Velocidad total)
-        const promesasBusqueda = CUENTAS_GMAIL.map(cuenta => buscarEnCuenta(cuenta));
-        
-        // Esperamos a que todas las 9 conexiones terminen de revisar
-        const resultados = await Promise.all(promesasBusqueda);
+        // Itera sobre las cuentas de correo configuradas al inicio
+        for (const cuenta of CUENTAS_GMAIL) {
+            const config = { imap: { user: cuenta.user, password: cuenta.pass, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
+            
+            try {
+                connection = await imaps.connect(config);
+                await connection.openBox('INBOX');
+                messages = await connection.search([['TEXT', email_search.trim()]], { bodies: [''], struct: true });
 
-        // Filtramos para quedarnos ÚNICAMENTE con la cuenta que SÍ encontró tu correo
-        const resultadoExitoso = resultados.find(resultado => resultado !== null);
-
-        if (!resultadoExitoso) {
-            return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`);
+                if (messages.length > 0) {
+                    cuentaExitosa = cuenta.user;
+                    break; // Se detiene el bucle si encontró el correo
+                } else {
+                    connection.end();
+                }
+            } catch (err) {
+                console.log(`⚠️ Error al conectar con ${cuenta.user}:`, err.message);
+                if (connection) connection.end();
+                continue; // Si falla una cuenta, intenta con la siguiente
+            }
         }
 
-        let messages = resultadoExitoso.msgs;
-        let cuentaExitosa = resultadoExitoso.usuario;
-        let connection = resultadoExitoso.connection;
+        // Si terminó de buscar en las cuentas y no encontró nada
+        if (messages.length === 0) { 
+            return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
+        }
 
-        // Procesamos el correo encontrado (Tu misma lógica original)
         messages.sort((a, b) => b.attributes.uid - a.attributes.uid);
-        let mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
+        mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
         connection.end();
-        
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
@@ -686,10 +678,8 @@ app.post('/buscar', async (req, res) => {
         contenidoFinal = contenidoFinal.replace(/\b(\d{6})\b/g, '<span style="background:#00c853; color:#000; padding:4px 10px; border-radius:6px; font-weight:900; font-size:18px; border: 2px solid #000; display:inline-block;">$1</span><br><div style="color:#ffaa00; font-size:13px; font-weight:bold; padding:8px; border: 1px dashed #ffaa00; border-radius:6px; display:inline-block; margin-top:8px; background:rgba(255, 170, 0, 0.1);">⚠️ Por favor, sé responsable si hay algún cambio.</div>');
 
         res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:white; color:black; padding: 20px; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif;"><p style="text-align:center; font-weight:bold; color:red;">Encontrado en: ${cuentaExitosa}</p>${contenidoFinal}</div>`);
-
     } catch (e) { 
-        console.error(e);
-        return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ Ocurrió un error en la búsqueda.</h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
+        res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>⚠️ Error de conexión IMAP</h2><p>${e.message}</p><br><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
     }
 });
 
