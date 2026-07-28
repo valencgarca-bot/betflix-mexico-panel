@@ -27,6 +27,34 @@ const CUENTAS_GMAIL_MAP = {
     'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
 };
 
+// 🔥 SISTEMA TURBO: CACHÉ DE CONEXIONES IMAP PERMANENTES 🔥
+const conexionesActivas = {};
+
+async function obtenerConexionIMAP(correo, password) {
+    // Si ya existe la conexión y está autenticada, la reutilizamos (0 segundos de demora)
+    if (conexionesActivas[correo] && conexionesActivas[correo].imap && conexionesActivas[correo].imap.state === 'authenticated') {
+        return conexionesActivas[correo];
+    }
+
+    // Si no existe o se desconectó, creamos una nueva
+    const config = { 
+        imap: { user: correo, password: password, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } 
+    };
+    
+    const connection = await imaps.connect(config);
+    await connection.openBox('INBOX');
+    
+    // Guardamos en caché
+    conexionesActivas[correo] = connection;
+    
+    // Escuchamos eventos de desconexión para limpiar el caché automáticamente y evitar errores
+    connection.imap.on('end', () => { delete conexionesActivas[correo]; });
+    connection.imap.on('error', () => { delete conexionesActivas[correo]; });
+    connection.imap.on('close', () => { delete conexionesActivas[correo]; });
+
+    return connection;
+}
+
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
     secret: 'betflix_mexico_ultra_secure_2026_MX',
@@ -603,25 +631,21 @@ app.post('/buscar', async (req, res) => {
             correoSeleccionado = correoBase;
         }
 
-        // 3. Obtenemos su contraseña y conectamos de inmediato SOLO a esa cuenta.
+        // 3. OBTENEMOS LA CONEXIÓN (INSTANTÁNEA DESDE EL CACHÉ O LA CREA SI NO EXISTE)
         const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoSeleccionado];
-        const config = { imap: { user: correoSeleccionado, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
 
         try {
-            connection = await imaps.connect(config);
-            await connection.openBox('INBOX');
+            connection = await obtenerConexionIMAP(correoSeleccionado, passwordSeleccionado);
             
             // Busca usando exactamente lo que el cliente escribió (ej: clubecampestrejp+claro180325v@gmail.com)
             messages = await connection.search([['TEXT', correoIngresado]], { bodies: [''], struct: true });
 
             if (messages.length > 0) {
                 cuentaExitosa = correoSeleccionado;
-            } else {
-                connection.end();
             }
         } catch (err) {
             console.log(`⚠️ Error al conectar con ${correoSeleccionado}:`, err.message);
-            if (connection) connection.end();
+            // Ya no cerramos la conexión aquí manualmente para no destruir el caché
         }
 
         // 4. Si no encontró resultados en la bandeja específica
@@ -631,7 +655,9 @@ app.post('/buscar', async (req, res) => {
 
         messages.sort((a, b) => b.attributes.uid - a.attributes.uid);
         mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
-        connection.end();
+        
+        // 🚀 AQUÍ ESTABA EL CULPABLE DE LA LENTITUD: "connection.end();" FUE ELIMINADO PARA MANTENER EL TURBO ACTIVO.
+        
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
@@ -699,7 +725,22 @@ app.post('/buscar', async (req, res) => {
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
+// 🔥 PRE-CALENTAR CONEXIONES IMAP PARA QUE EL PRIMER CLIC SEA INSTANTÁNEO 🔥
+async function precalentarConexiones() {
+    console.log("🚀 INICIANDO MODO TURBO: Conectando cuentas de Gmail en segundo plano...");
+    for (const [email, pass] of Object.entries(CUENTAS_GMAIL_MAP)) {
+        try {
+            await obtenerConexionIMAP(email, pass);
+            console.log(`✅ Conexión Turbo Lista: ${email}`);
+        } catch (err) {
+            console.log(`⚠️ Error pre-conectando ${email}:`, err.message);
+        }
+    }
+    console.log("⚡ ¡SISTEMA LISTO! Lectura de correos ahora en milisegundos.");
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Panel funcionando correctamente en el puerto ${PORT}`);
+    precalentarConexiones();
 });
