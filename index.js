@@ -23,8 +23,8 @@ const CUENTAS_GMAIL = [
     { user: 'capoeirajpmg@gmail.com', pass: 'vhtvjorujpohphks' },
     { user: 'darciogarces@gmail.com', pass: 'wkcidkcgtuapcnkh' },
     { user: 'julianamjp1@gmail.com', pass: 'lkambczcmvkddvcz' },
-    { user: 'cuenta7@gmail.com', pass: 'contraseña_app_7' },
-    { user: 'cuenta8@gmail.com', pass: 'contraseña_app_8' },
+    { user: 'casu34jk@gmail.com', pass: 'btvouamnnjrjdrup' },
+    { user: 'santiagorevend@gmail.com', pass: 'dqawfgnliyolqvjy' },
     { user: 'cuenta9@gmail.com', pass: 'contraseña_app_9' }
 ];
 
@@ -39,10 +39,7 @@ app.use(session({
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER)");
-    
-    // 🔥 NUEVA TABLA: Historial de quién pidió códigos de verificación
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
-    
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
@@ -377,7 +374,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // HTML de la tabla de auditoría de códigos
             let registrosHtml = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top:20px;">
                 <tr style="border-bottom: 1px solid var(--border-color); color:var(--text-secondary); text-align:left;">
                     <th style="padding:12px;">Usuario</th>
@@ -580,46 +576,54 @@ app.get('/admin/del-mail/:id', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA PARALELIZADO (SÚPER RÁPIDO) 🔥
+// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA PARALELIZADO PERO CON TU LÓGICA EXACTA 🔥
 app.post('/buscar', async (req, res) => {
     const { email_search, accion } = req.body;
-    let messages = [];
-    let connection = null;
-    let mail = null;
-    let cuentaExitosa = null;
 
-    // Función que conecta a una sola cuenta. Promesa que resuelve si encuentra el correo y rechaza si falla o no lo encuentra.
+    // Función que conecta a una sola cuenta, busca tu correo específico y devuelve null si no lo halla
     const buscarEnCuenta = async (cuenta) => {
         const config = { imap: { user: cuenta.user, password: cuenta.pass, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
-        let tempConnection = null;
+        let connection = null;
         try {
-            tempConnection = await imaps.connect(config);
-            await tempConnection.openBox('INBOX');
-            const msgs = await tempConnection.search([['TEXT', email_search.trim()]], { bodies: [''], struct: true });
+            connection = await imaps.connect(config);
+            await connection.openBox('INBOX');
+            
+            // TU LÓGICA ORIGINAL INTACTA: Busca exactamente el correo que pides
+            const msgs = await connection.search([['TEXT', email_search.trim()]], { bodies: [''], struct: true });
 
-            if (msgs.length > 0) {
-                return { msgs, usuario: cuenta.user, conn: tempConnection }; 
+            if (msgs && msgs.length > 0) {
+                return { msgs, usuario: cuenta.user, connection }; 
             } else {
-                tempConnection.end(); // Cierra conexión si no hay resultados en esta cuenta
-                throw new Error('Correo no encontrado en esta cuenta');
+                connection.end();
+                return null; // Si no está aquí, devuelve nulo para que el sistema siga buscando
             }
         } catch (err) {
-            if (tempConnection) tempConnection.end();
-            throw err;
+            if (connection) connection.end();
+            return null; // Si falla la conexión, devuelve nulo y no rompe todo el sistema
         }
     };
 
     try {
-        // Ejecutamos TODAS las búsquedas al mismo tiempo en paralelo usando Promise.any
-        const resultado = await Promise.any(CUENTAS_GMAIL.map(cuenta => buscarEnCuenta(cuenta)));
+        // Ejecutamos las 9 búsquedas AL MISMO TIEMPO (Velocidad total)
+        const promesasBusqueda = CUENTAS_GMAIL.map(cuenta => buscarEnCuenta(cuenta));
         
-        messages = resultado.msgs;
-        cuentaExitosa = resultado.usuario;
-        connection = resultado.conn;
+        // Esperamos a que todas las 9 conexiones terminen de revisar
+        const resultados = await Promise.all(promesasBusqueda);
 
-        // Procesamos el correo encontrado
+        // Filtramos para quedarnos ÚNICAMENTE con la cuenta que SÍ encontró tu correo
+        const resultadoExitoso = resultados.find(resultado => resultado !== null);
+
+        if (!resultadoExitoso) {
+            return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`);
+        }
+
+        let messages = resultadoExitoso.msgs;
+        let cuentaExitosa = resultadoExitoso.usuario;
+        let connection = resultadoExitoso.connection;
+
+        // Procesamos el correo encontrado (Tu misma lógica original)
         messages.sort((a, b) => b.attributes.uid - a.attributes.uid);
-        mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
+        let mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
         connection.end();
         
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
@@ -684,8 +688,8 @@ app.post('/buscar', async (req, res) => {
         res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:white; color:black; padding: 20px; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif;"><p style="text-align:center; font-weight:bold; color:red;">Encontrado en: ${cuentaExitosa}</p>${contenidoFinal}</div>`);
 
     } catch (e) { 
-        // Si Promise.any falla, significa que ninguna cuenta encontró el correo (o todas fallaron)
-        return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
+        console.error(e);
+        return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ Ocurrió un error en la búsqueda.</h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
     }
 });
 
