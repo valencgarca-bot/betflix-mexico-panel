@@ -22,7 +22,7 @@ const CUENTAS_GMAIL = [
     { user: 'clubecampestrejp@gmail.com', pass: 'ipmvedbivouzeudi' },
     { user: 'capoeirajpmg@gmail.com', pass: 'vhtvjorujpohphks' },
     { user: 'darciogarces@gmail.com', pass: 'wkcidkcgtuapcnkh' },
-    { user: 'cuenta6@gmail.com', pass: 'contraseña_app_6' },
+    { user: 'julianamjp1@gmail.com', pass: 'lkambczcmvkddvcz' },
     { user: 'cuenta7@gmail.com', pass: 'contraseña_app_7' },
     { user: 'cuenta8@gmail.com', pass: 'contraseña_app_8' },
     { user: 'cuenta9@gmail.com', pass: 'contraseña_app_9' }
