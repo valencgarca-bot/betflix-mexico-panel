@@ -15,17 +15,17 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 🔥 CONFIGURACIÓN DE LAS CUENTAS DE GMAIL 🔥
-const CUENTAS_GMAIL = [
-  { user: 'tokioappoficial@gmail.com', pass: 'avzepljuczbawvoy' },
-    { user: 'riandasnet@gmail.com', pass: 'updchdcdsjnxvnyy' },
-    { user: 'clubecampestrejp@gmail.com', pass: 'ipmvedbivouzeudi' },
-    { user: 'capoeirajpmg@gmail.com', pass: 'vhtvjorujpohphks' },
-    { user: 'darciogarces@gmail.com', pass: 'wkcidkcgtuapcnkh' },
-    { user: 'julianamjp1@gmail.com', pass: 'lkambczcmvkddvcz' },
-    { user: 'casu34jk@gmail.com', pass: 'btvouamnnjrjdrup' },
-    { user: 'santiagorevend@gmail.com', pass: 'dqawfgnliyolqvjy' }
-];
+// 🔥 CONFIGURACIÓN DE LAS CUENTAS DE GMAIL (Mapa para acceso O(1) ultra rápido) 🔥
+const CUENTAS_GMAIL_MAP = {
+    'tokioappoficial@gmail.com': 'avzepljuczbawvoy',
+    'riandasnet@gmail.com': 'updchdcdsjnxvnyy',
+    'clubecampestrejp@gmail.com': 'ipmvedbivouzeudi',
+    'capoeirajpmg@gmail.com': 'vhtvjorujpohphks',
+    'darciogarces@gmail.com': 'wkcidkcgtuapcnkh',
+    'julianamjp1@gmail.com': 'lkambczcmvkddvcz',
+    'casu34jk@gmail.com': 'btvouamnnjrjdrup',
+    'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
+};
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
@@ -38,10 +38,7 @@ app.use(session({
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER)");
-    
-    // 🔥 NUEVA TABLA: Historial de quién pidió códigos de verificación
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
-    
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
@@ -579,7 +576,7 @@ app.get('/admin/del-mail/:id', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL) 🔥
+// 🔥 SISTEMA DE BÚSQUEDA MULTI-CUENTA (GMAIL) INSTANTÁNEO O(1) 🔥
 app.post('/buscar', async (req, res) => {
     const { email_search, accion } = req.body;
     let messages = [];
@@ -588,29 +585,46 @@ app.post('/buscar', async (req, res) => {
     let cuentaExitosa = null;
 
     try {
-        // Itera sobre las cuentas de correo configuradas al inicio
-        for (const cuenta of CUENTAS_GMAIL) {
-            const config = { imap: { user: cuenta.user, password: cuenta.pass, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
-            
-            try {
-                connection = await imaps.connect(config);
-                await connection.openBox('INBOX');
-                messages = await connection.search([['TEXT', email_search.trim()]], { bodies: [''], struct: true });
+        let correoIngresado = email_search.trim().toLowerCase();
+        let correoBase = correoIngresado;
 
-                if (messages.length > 0) {
-                    cuentaExitosa = cuenta.user;
-                    break; // Se detiene el bucle si encontró el correo
-                } else {
-                    connection.end();
-                }
-            } catch (err) {
-                console.log(`⚠️ Error al conectar con ${cuenta.user}:`, err.message);
-                if (connection) connection.end();
-                continue; // Si falla una cuenta, intenta con la siguiente
+        // 1. Limpiamos el alias (quitamos lo que hay entre el + y la @)
+        if (correoIngresado.includes('+')) {
+            const partes = correoIngresado.split('@');
+            if (partes.length === 2) {
+                const usuarioPuro = partes[0].split('+')[0];
+                correoBase = `${usuarioPuro}@${partes[1]}`;
             }
         }
 
-        // Si terminó de buscar en las cuentas y no encontró nada
+        // 2. Buscamos de forma instantánea si existe en nuestro mapa. Si no, usa el correo por defecto.
+        let correoSeleccionado = "darciogarces@gmail.com";
+        if (CUENTAS_GMAIL_MAP[correoBase]) {
+            correoSeleccionado = correoBase;
+        }
+
+        // 3. Obtenemos su contraseña y conectamos de inmediato SOLO a esa cuenta.
+        const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoSeleccionado];
+        const config = { imap: { user: correoSeleccionado, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false } } };
+
+        try {
+            connection = await imaps.connect(config);
+            await connection.openBox('INBOX');
+            
+            // Busca usando exactamente lo que el cliente escribió (ej: clubecampestrejp+claro180325v@gmail.com)
+            messages = await connection.search([['TEXT', correoIngresado]], { bodies: [''], struct: true });
+
+            if (messages.length > 0) {
+                cuentaExitosa = correoSeleccionado;
+            } else {
+                connection.end();
+            }
+        } catch (err) {
+            console.log(`⚠️ Error al conectar con ${correoSeleccionado}:`, err.message);
+            if (connection) connection.end();
+        }
+
+        // 4. Si no encontró resultados en la bandeja específica
         if (messages.length === 0) { 
             return res.send(`<div style="background:#000; text-align:center; padding:40px; color:white; font-family: 'Inter', sans-serif;"><h2>❌ No se encontró el correo:<br><span style="color:var(--mx-green);">${email_search}</span></h2><br><a href="/dash" style="color:var(--text-secondary); text-decoration:none; border: 1px solid #333; padding: 10px 20px; border-radius: 10px;">⬅ VOLVER AL PANEL</a></div>`); 
         }
@@ -673,7 +687,7 @@ app.post('/buscar', async (req, res) => {
             } catch(err) {}
         }
 
-        // 🔥 REVELAR CÓDIGO CON ADVERTENCIA
+        // 🔥 REVELAR CÓDIGO CON ADVERTENCIA (MUESTRA CUALQUIER IDIOMA)
         let contenidoFinal = mail.html || mail.text || "";
         contenidoFinal = contenidoFinal.replace(/\b(\d{6})\b/g, '<span style="background:#00c853; color:#000; padding:4px 10px; border-radius:6px; font-weight:900; font-size:18px; border: 2px solid #000; display:inline-block;">$1</span><br><div style="color:#ffaa00; font-size:13px; font-weight:bold; padding:8px; border: 1px dashed #ffaa00; border-radius:6px; display:inline-block; margin-top:8px; background:rgba(255, 170, 0, 0.1);">⚠️ Por favor, sé responsable si hay algún cambio.</div>');
 
