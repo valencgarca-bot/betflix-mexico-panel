@@ -28,18 +28,17 @@ const CUENTAS_GMAIL_MAP = {
     'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
 };
 
-// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS 
-// Añade cualquier plataforma aquí en el futuro sin tocar el resto del código
+// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS (DISEÑO PREMIUM)
 const PLATAFORMAS = {
-    'netflix': { nombre: 'Netflix', color: '#E50914', icono: '📺', keyword_from: 'netflix' },
-    'disney': { nombre: 'Disney+', color: '#113CCF', icono: '🔵', keyword_from: 'disney' },
-    'paramount': { nombre: 'Paramount+', color: '#0064FF', icono: '🟣', keyword_from: 'paramount' },
-    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', icono: '🟠', keyword_from: 'crunchyroll' },
-    'spotify': { nombre: 'Spotify', color: '#1DB954', icono: '🟢', keyword_from: 'spotify' },
-    'max': { nombre: 'Max', color: '#8A2BE2', icono: '⚫', keyword_from: 'max' },
-    'prime': { nombre: 'Prime Video', color: '#00A8E1', icono: '🔷', keyword_from: 'amazon' },
-    'vix': { nombre: 'ViX', color: '#FF0000', icono: '🔴', keyword_from: 'vix' },
-    'universal': { nombre: 'Universal+', color: '#00e676', icono: '🎬', keyword_from: 'universal' }
+    'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
+    'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disney' },
+    'paramount': { nombre: 'Paramount+', color: '#0064FF', alpha: 'rgba(0, 100, 255, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Paramount%2B_2022.svg', keyword_from: 'paramount' },
+    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b3/Crunchyroll_Logo.svg', keyword_from: 'crunchyroll' },
+    'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' },
+    'max': { nombre: 'Max', color: '#002BE7', alpha: 'rgba(0, 43, 231, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/c/ce/Max_logo.svg', keyword_from: 'max' },
+    'prime': { nombre: 'Prime Video', color: '#00A8E1', alpha: 'rgba(0, 168, 225, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/1/11/Amazon_Prime_Video_logo.svg', keyword_from: 'amazon' },
+    'vix': { nombre: 'ViX', color: '#FF0000', alpha: 'rgba(255, 0, 0, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/22/Vix_logo_2022.svg', keyword_from: 'vix' },
+    'universal': { nombre: 'Universal+', color: '#00e676', alpha: 'rgba(0, 230, 118, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/30/Universal_Plus_logo.svg', keyword_from: 'universal' }
 };
 
 app.use(express.urlencoded({ extended: true }));
@@ -218,6 +217,83 @@ const CSS_MODERNO = `
         .main-content { padding: 20px; }
         .tab-panel { padding: 30px 20px; }
     }
+
+    /* 🌟 NUEVOS ESTILOS PREMIUM PARA PLATAFORMAS (LEDS Y ANIMACIONES) */
+    .premium-tab-btn {
+        background: rgba(10, 10, 10, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-left: 4px solid var(--brand-color);
+        padding: 16px 18px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+    .premium-tab-btn::before {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+        background: radial-gradient(circle at right, var(--brand-color) 0%, transparent 60%);
+        opacity: 0; transition: opacity 0.4s; z-index: 0;
+    }
+    .premium-tab-btn:hover {
+        transform: translateX(6px);
+        border-color: var(--brand-color);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.6), inset 0 0 15px var(--brand-alpha);
+        color: #fff;
+    }
+    .premium-tab-btn:hover::before { opacity: 0.15; }
+    .premium-tab-btn.active {
+        background: linear-gradient(90deg, var(--brand-alpha) 0%, rgba(10,10,10,0.9) 100%);
+        border-color: var(--brand-color);
+        box-shadow: 0 0 25px var(--brand-alpha), inset 0 0 15px var(--brand-alpha);
+        color: #fff;
+    }
+    .plat-logo-sidebar {
+        width: 26px; height: 26px; object-fit: contain;
+        filter: drop-shadow(0 0 8px var(--brand-alpha)) brightness(1.2);
+        z-index: 1; transition: 0.3s;
+    }
+    .premium-tab-btn:hover .plat-logo-sidebar { filter: drop-shadow(0 0 12px var(--brand-color)) scale(1.1); }
+    .plat-name { z-index: 1; font-size: 13.5px; letter-spacing: 0.5px; font-weight: 600; color: #ddd; }
+    .premium-tab-btn.active .plat-name { font-weight: 800; color: #fff; }
+
+    /* Diseño Tecnológico del Panel Principal */
+    .premium-panel-header {
+        display: flex; align-items: center; gap: 25px;
+        padding-bottom: 25px; border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 35px; position: relative;
+    }
+    .premium-panel-header::after {
+        content: ''; position: absolute; bottom: -1px; left: 0; width: 120px; height: 3px;
+        background: var(--brand-color); box-shadow: 0 0 15px var(--brand-color);
+        border-radius: 5px;
+    }
+    .premium-panel-logo {
+        height: 55px; max-width: 200px; object-fit: contain;
+        filter: drop-shadow(0 0 20px var(--brand-alpha));
+    }
+    .premium-title-group h3 { margin: 0; font-size: 26px; color: #fff; font-weight: 800; letter-spacing: -0.5px; }
+    .premium-title-group p { margin: 8px 0 0 0; color: #aaa; font-size: 14px; font-weight: 500; }
+
+    /* Botones de Acción Iluminados */
+    .premium-action-btn {
+        background: rgba(10, 10, 10, 0.8);
+        border: 1px solid var(--brand-color);
+        color: #fff; padding: 18px 20px; border-radius: 12px; cursor: pointer; font-weight: 700;
+        text-transform: uppercase; font-size: 13px; letter-spacing: 1px;
+        display: inline-flex; justify-content: center; align-items: center; gap: 10px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.5), inset 0 0 10px var(--brand-alpha);
+    }
+    .premium-action-btn:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 10px 30px var(--brand-alpha), inset 0 0 25px var(--brand-color);
+        background: linear-gradient(135deg, var(--brand-alpha) 0%, rgba(0,0,0,0.9) 100%);
+        text-shadow: 0 0 10px #fff; border-color: #fff;
+    }
 </style>
 
 <script>
@@ -225,7 +301,7 @@ const CSS_MODERNO = `
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('active');
-            if(b.getAttribute('data-original-color')) {
+            if(b.getAttribute('data-original-color') && !b.classList.contains('premium-tab-btn')) {
                 b.style.borderLeftColor = 'transparent';
             }
         });
@@ -237,15 +313,15 @@ const CSS_MODERNO = `
         if(selectedBtn) {
             selectedBtn.classList.add('active');
             let origColor = selectedBtn.getAttribute('data-original-color');
-            if(origColor) selectedBtn.style.borderLeftColor = origColor;
+            if(origColor && !selectedBtn.classList.contains('premium-tab-btn')) selectedBtn.style.borderLeftColor = origColor;
         }
         
         localStorage.setItem('activeBetflixTab', tabId);
     }
     
     document.addEventListener('DOMContentLoaded', () => {
-        // Guardar colores originales de los botones del sidebar para la animación LED
-        document.querySelectorAll('.tab-btn').forEach(b => {
+        // Guardar colores originales de los botones del sidebar (los no premium)
+        document.querySelectorAll('.tab-btn:not(.premium-tab-btn)').forEach(b => {
             let color = b.style.borderLeftColor;
             if(color && color !== 'transparent') b.setAttribute('data-original-color', color);
             b.style.borderLeftColor = 'transparent';
@@ -461,27 +537,46 @@ app.get('/dash', async (req, res) => {
             } else { registrosHtml += `<tr><td colspan="3" style="padding:30px; text-align:center; color:#555;">No hay registros de códigos solicitados aún.</td></tr>`; }
             registrosHtml += `</table></div>`;
 
-            // 🔥 GENERACIÓN DINÁMICA DEL MENÚ DE PLATAFORMAS (Puntos 5, 6 y 7)
+            // 🔥 GENERACIÓN DINÁMICA DEL MENÚ DE PLATAFORMAS (NUEVO DISEÑO PREMIUM)
             let plataformasSidebarHtml = "";
             let plataformasPanelsHtml = "";
             
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
-                plataformasSidebarHtml += `<button class="tab-btn" onclick="openTab('panel-${key}')" style="border-left-color: ${plat.color};">${plat.icono} Consultar ${plat.nombre}</button>`;
                 
+                // Menú Lateral: Botón Premium con Logo SVG y Variables CSS
+                plataformasSidebarHtml += `
+                <button class="tab-btn premium-tab-btn" onclick="openTab('panel-${key}')" style="--brand-color: ${plat.color}; --brand-alpha: ${plat.alpha};">
+                    <img src="${plat.logo}" alt="${plat.nombre}" class="plat-logo-sidebar">
+                    <span class="plat-name">Consultar ${plat.nombre}</span>
+                </button>`;
+                
+                // Panel Principal: Tarjeta Tecnológica Iluminada
                 plataformasPanelsHtml += `
-                <div id="panel-${key}" class="tab-panel">
-                    <div class="panel-header">
-                        <h3 style="color: ${plat.color}; text-shadow: 0 0 20px ${plat.color}60;">${plat.icono} Consultar ${plat.nombre}</h3>
-                        <p>Busca rápida y exclusivamente correos emitidos por ${plat.nombre}.</p>
+                <div id="panel-${key}" class="tab-panel" style="--brand-color: ${plat.color}; --brand-alpha: ${plat.alpha}; border: 1px solid var(--brand-alpha); box-shadow: 0 20px 60px rgba(0,0,0,0.9), inset 0 0 40px rgba(0,0,0,0.4);">
+                    <div class="premium-panel-header">
+                        <img src="${plat.logo}" alt="${plat.nombre}" class="premium-panel-logo">
+                        <div class="premium-title-group">
+                            <h3>Gestor Central ${plat.nombre}</h3>
+                            <p>Búsqueda avanzada de códigos y accesos cifrados de ${plat.nombre}.</p>
+                        </div>
                     </div>
                     <form action="/buscar" method="POST">
                         <input type="hidden" name="plataforma" value="${key}">
-                        <input name="email_search" placeholder="Escribe el correo registrado en ${plat.nombre}..." required style="border-color: rgba(255,255,255,0.1); font-size: 16px;">
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-top: 15px;">
-                            <button type="submit" name="accion" value="mensaje" class="action-btn" style="background: linear-gradient(135deg, ${plat.color} 0%, #111 100%); border-color: ${plat.color}; box-shadow: 0 8px 25px ${plat.color}30;">📩 Leer Mensaje</button>
-                            <button type="submit" name="accion" value="pais" class="action-btn btn-white-mx">🌍 Analizar País</button>
-                            <button type="submit" name="accion" value="ip" class="action-btn btn-red-mx">📡 Buscar IP</button>
+                        <div style="position: relative;">
+                            <input name="email_search" placeholder="Escribe el correo registrado en ${plat.nombre}..." required style="border: 1px solid var(--brand-color); background: rgba(0,0,0,0.6); box-shadow: inset 0 2px 15px rgba(0,0,0,0.8), 0 0 20px var(--brand-alpha); font-size: 16px; padding-left: 55px; border-radius: 14px;">
+                            <span style="position: absolute; left: 20px; top: 16px; font-size: 20px; filter: drop-shadow(0 0 5px var(--brand-color));">✉️</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-top: 25px;">
+                            <button type="submit" name="accion" value="mensaje" class="premium-action-btn">
+                                📩 Leer Mensaje
+                            </button>
+                            <button type="submit" name="accion" value="pais" class="premium-action-btn" style="--brand-color: #ffffff; --brand-alpha: rgba(255,255,255,0.15);">
+                                🌍 Analizar País
+                            </button>
+                            <button type="submit" name="accion" value="ip" class="premium-action-btn" style="--brand-color: #ff1744; --brand-alpha: rgba(255,23,68,0.2);">
+                                📡 Buscar IP
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -560,12 +655,11 @@ app.get('/dash', async (req, res) => {
             </body>`);
         } catch (err) { res.redirect('/'); }
     } else {
-        // PERFIL CLIENTE
-        let plataformasPanelsHtml = "";
+        // PERFIL CLIENTE (Ahora adaptado para usar logotipos premium)
         let btnHtml = "";
         Object.keys(PLATAFORMAS).forEach((key, index) => {
             let plat = PLATAFORMAS[key];
-            btnHtml += `<button type="button" class="action-btn" style="background: linear-gradient(135deg, ${plat.color} 0%, #111 100%); border-color: ${plat.color}; margin-bottom: 10px;" onclick="document.getElementById('plat_input').value='${key}'; document.getElementById('search_form').submit();">${plat.icono} ${plat.nombre}</button>`;
+            btnHtml += `<button type="button" class="action-btn" style="background: linear-gradient(135deg, rgba(10,10,10,0.8) 0%, #111 100%); border-color: ${plat.color}; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 12px; font-weight: 800; font-size: 14px; box-shadow: inset 0 0 10px ${plat.alpha}; transition: 0.3s;" onclick="document.getElementById('plat_input').value='${key}'; document.getElementById('search_form').submit();" onmouseover="this.style.boxShadow='0 5px 20px ${plat.alpha}, inset 0 0 15px ${plat.alpha}'" onmouseout="this.style.boxShadow='inset 0 0 10px ${plat.alpha}'"><img src="${plat.logo}" style="height:22px; filter: drop-shadow(0 0 5px ${plat.alpha});"> ${plat.nombre}</button>`;
         });
 
         res.send(`
@@ -580,13 +674,13 @@ app.get('/dash', async (req, res) => {
             </div>
         </div>
         <div style="padding: 60px 20px; display:flex; justify-content:center; align-items: flex-start;">
-            <div class="tab-panel active" style="margin: 0; width:100%; max-width:500px; display: block; padding: 40px;">
-                <div class="panel-header" style="text-align:center;">
-                    <h3>📨 Lector Universal</h3>
+            <div class="tab-panel active" style="margin: 0; width:100%; max-width:500px; display: block; padding: 40px; border-color: rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.8);">
+                <div class="panel-header" style="text-align:center; border-bottom: none; margin-bottom: 15px;">
+                    <h3 style="justify-content: center;">📨 Lector Universal</h3>
                     <p>Introduce el correo y selecciona la plataforma a leer.</p>
                 </div>
                 <form id="search_form" action="/buscar" method="POST">
-                    <input name="email_search" placeholder="Correo a buscar..." required style="text-align:center; font-size:16px;">
+                    <input name="email_search" placeholder="Correo a buscar..." required style="text-align:center; font-size:16px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.8);">
                     <input type="hidden" name="accion" value="mensaje">
                     <input type="hidden" name="plataforma" id="plat_input" value="netflix">
                     <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 15px;">
@@ -625,7 +719,7 @@ app.post('/admin/add-mail-masivo', async (req, res) => {
 app.get('/admin/del-user/:id', async (req, res) => { try { await dbRun("DELETE FROM usuarios WHERE id = ?", [req.params.id]); await dbRun("DELETE FROM correos WHERE user_id = ?", [req.params.id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); } });
 app.get('/admin/del-mail/:id', async (req, res) => { try { await dbRun("DELETE FROM correos WHERE id = ?", [req.params.id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); } });
 
-// 🔥 SISTEMA DE BÚSQUEDA EXTREMA O(1) + NORMALIZACIÓN DE GMAIL (Puntos 2, 3, 4 y 6)
+// 🔥 SISTEMA DE BÚSQUEDA EXTREMA O(1) + NORMALIZACIÓN DE GMAIL
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     let messages = [];
@@ -638,15 +732,11 @@ app.post('/buscar', async (req, res) => {
         let partes = correoIngresado.split('@');
         let correoNormalizado = correoIngresado;
 
-        // 🔥 NORMALIZACIÓN SIN LIMITACIONES (Punto 2): 
-        // Eliminamos puntos (.) y alias de suma (+) SOLO para saber en qué cuenta maestra iniciar sesión.
-        // Pero al buscar en IMAP, enviaremos exactamente lo que escribió el cliente.
         if (partes.length === 2 && partes[1] === 'gmail.com') {
             let usernamePuro = partes[0].replace(/\./g, '').split('+')[0];
             correoNormalizado = `${usernamePuro}@${partes[1]}`;
         }
 
-        // Selección ultrarrápida
         let correoSeleccionado = "darciogarces@gmail.com";
         if (CUENTAS_GMAIL_MAP[correoNormalizado]) {
             correoSeleccionado = correoNormalizado;
@@ -661,24 +751,19 @@ app.post('/buscar', async (req, res) => {
             connection = await imaps.connect(config);
             await connection.openBox('INBOX');
             
-            // 🔥 OPTIMIZACIÓN DE VELOCIDAD MAXIMA Y FILTRO POR PLATAFORMA (Puntos 4 y 6)
-            // Usamos X-GM-RAW para que los servidores de Google hagan la búsqueda a la velocidad de la luz.
             let queryStr = `to:${correoIngresado}`;
             if (plataforma && PLATAFORMAS[plataforma]) {
                 queryStr += ` from:${PLATAFORMAS[plataforma].keyword_from}`;
             }
 
-            // Descargamos SOLO LOS ENCABEZADOS primero (Microsegundos)
             let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER'] });
 
             if (searchResults.length > 0) {
                 cuentaExitosa = correoSeleccionado;
                 
-                // 🔥 MOSTRAR SIEMPRE EL ÚLTIMO (Punto 3): Ordenar descendente por UID
                 searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
                 let latestUid = searchResults[0].attributes.uid;
                 
-                // Descargar el CUERPO COMPLETO únicamente del mensaje más reciente
                 messages = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
             } else {
                 connection.end();
@@ -746,12 +831,10 @@ app.post('/buscar', async (req, res) => {
             return res.send(`<div style="background:#050505; text-align:center; padding:15px; border-bottom:1px solid #222;"><a href="/dash" style="color:var(--mx-green); text-decoration:none; font-family:'Inter', sans-serif; font-weight:700;">⬅ VOLVER AL PANEL</a></div><div style="background:#0a0a0a; color:white; padding: 60px 20px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>📡 Escáner de IP</h2><p>Correo analizado: <strong style="color:var(--mx-green); font-size:18px;">${email_search}</strong></p><div style="margin: 40px auto; padding: 40px; background:#111; border-radius:20px; display:inline-block; border: 1px solid var(--mx-red); box-shadow: 0 10px 40px rgba(255,23,68,0.2);">${ipContenido}</div></div>`);
         }
 
-        // 🔥 REGISTRAR EN LA BASE DE DATOS LA AUDITORÍA
         if (/\b\d{4}\b/.test(textoBruto) && (!accion || accion === 'mensaje')) {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
 
-        // 🔥 ENTREGAR CÓDIGO ORIGINAL SIN MODIFICAR
         let contenidoFinal = mail.html || mail.text || "";
 
         res.send(`
