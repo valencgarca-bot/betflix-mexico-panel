@@ -32,13 +32,8 @@ const CUENTAS_GMAIL_MAP = {
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disney' },
-    'paramount': { nombre: 'Paramount+', color: '#0064FF', alpha: 'rgba(0, 100, 255, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Paramount%2B_2022.svg', keyword_from: 'paramount' },
     'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b3/Crunchyroll_Logo.svg', keyword_from: 'crunchyroll' },
-    'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' },
-    'max': { nombre: 'Max', color: '#002BE7', alpha: 'rgba(0, 43, 231, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/c/ce/Max_logo.svg', keyword_from: 'max' },
-    'prime': { nombre: 'Prime Video', color: '#00A8E1', alpha: 'rgba(0, 168, 225, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/1/11/Amazon_Prime_Video_logo.svg', keyword_from: 'amazon' },
-    'vix': { nombre: 'ViX', color: '#FF0000', alpha: 'rgba(255, 0, 0, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/22/Vix_logo_2022.svg', keyword_from: 'vix' },
-    'universal': { nombre: 'Universal+', color: '#00e676', alpha: 'rgba(0, 230, 118, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/30/Universal_Plus_logo.svg', keyword_from: 'universal' }
+    'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' }
 };
 
 app.use(express.urlencoded({ extended: true }));
