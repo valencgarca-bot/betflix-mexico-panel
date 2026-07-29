@@ -26,7 +26,7 @@ const CUENTAS_GMAIL_MAP = {
     'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
 };
 
-// 🚀 PLATAFORMAS REDUCIDAS CON COLORES RGB Y LOGOS OFICIALES PARA DISEÑO PREMIUM
+// 🔥 PLATAFORMAS REDUCIDAS CON COLORES RGB Y LOGOS OFICIALES
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', rgb: '229, 9, 20', icono: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#113CCF', rgb: '17, 60, 207', icono: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disney' },
@@ -51,7 +51,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🔥 ESTILOS MODERNOS Y PROFESIONALES ACTUALIZADOS
+// 🔥 ESTILOS MODERNOS Y PROFESIONALES
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -109,7 +109,6 @@ const CSS_MODERNO = `
     
     .main-content { flex: 1; padding: 40px; overflow-y: auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; }
 
-    /* 🔥 ESTILOS PREMIUM PARA TABS (SIDEBAR) Y TARJETAS (CLIENTE) */
     .tab-btn { 
         background: transparent; color: var(--text-secondary); border: none; padding: 14px 18px; 
         border-radius: 12px; text-align: left; font-size: 13px; font-weight: 600; cursor: pointer; 
@@ -145,7 +144,6 @@ const CSS_MODERNO = `
     .premium-tab:hover .sidebar-icon { transform: scale(1.1); }
     .plat-name { z-index: 1; font-weight: 700; letter-spacing: 0.3px; }
 
-    /* Tarjetas UI Cliente */
     .plat-card-grid {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 15px; margin-top: 25px; width: 100%;
@@ -207,13 +205,12 @@ const CSS_MODERNO = `
     button.action-btn:hover, .action-btn-link:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
     
     .btn-green-mx { background: linear-gradient(135deg, #00c853 0%, #008000 100%); color: #000 !important; border-color: #00c853; box-shadow: 0 8px 25px rgba(0,255,0,0.2); }
-    .btn-white-mx { background: #fff; color: #000 !important; font-weight: 800 !important; box-shadow: 0 8px 25px rgba(255,255,255,0.2); }
     .btn-red-mx { background: linear-gradient(135deg, #ff1744 0%, #a00 100%); color: #fff !important; border-color: #ff1744; box-shadow: 0 8px 25px rgba(255,0,0,0.2); }
 
     .folder { background: rgba(10,10,10,0.6); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; margin-bottom: 18px; transition: 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
     .folder summary { padding: 22px 30px; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; justify-content: space-between; }
     .folder-content { padding: 30px; background: rgba(5,5,5,0.8); border-top: 1px solid var(--border-color); }
-    .client-card { background: rgba(15,15,15,0.9); border: 1px solid var(--border-color); padding: 24px; border-radius: 14px; position: relative; border-left: 4px solid; transition: 0.3s; }
+    .client-card { background: rgba(15,15,15,0.9); border: 1px solid var(--border-color); padding: 24px; border-radius: 14px; position: relative; border-left: 4px solid; transition: 0.3s; margin-bottom: 15px; }
 </style>
 
 <script>
@@ -307,7 +304,6 @@ app.get('/dash', async (req, res) => {
         try {
             const usuarios = await dbAll(query, params);
             
-            // 🔥 GENERACIÓN DEL MENÚ Y PANELES (PREMIUM)
             let plataformasSidebarHtml = "";
             let plataformasPanelsHtml = "";
             
@@ -341,6 +337,25 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
+            // Generación de la vista de Usuarios Restaurada
+            let listaUsuariosHtml = "";
+            for (let u of usuarios) {
+                let correosUser = await dbAll("SELECT * FROM correos WHERE user_id = ?", [u.id]);
+                let badgeColor = u.rol === 'Administrador' ? '#00e676' : (u.rol === 'Subadministrador' ? '#0064FF' : '#b0b0b0');
+                
+                listaUsuariosHtml += `
+                <div class="client-card" style="border-left-color: ${badgeColor};">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <span style="font-weight:700; font-size:16px; color:#fff;">👤 ${u.user}</span>
+                        <span style="background: rgba(255,255,255,0.05); padding: 4px 12px; border-radius: 8px; font-size:11px; font-weight:700; color:${badgeColor}; border:1px solid rgba(255,255,255,0.05);">${u.rol}</span>
+                    </div>
+                    <div style="font-size:13px; color:#aaa; margin-bottom:12px;">Contraseña: <strong style="color:#fff;">${u.pass}</strong></div>
+                    <div style="display:flex; gap:10px;">
+                        <form action="/eliminar-usuario" method="POST" style="margin:0;"><input type="hidden" name="id" value="${u.id}"><button class="action-btn btn-red-mx" style="padding: 8px 16px; font-size:11px;">🗑️ Eliminar</button></form>
+                    </div>
+                </div>`;
+            }
+
             res.send(`
             ${CSS_MODERNO}
             <div class="top-header">
@@ -366,13 +381,38 @@ app.get('/dash', async (req, res) => {
 
                 <div class="main-content">
                     ${plataformasPanelsHtml}
-                    <div id="panel-buscar" class="tab-panel"><div class="panel-header"><h3>🔎 Buscar Dueño</h3></div><input type="text" id="buscadorLocal" onkeyup="buscarCorreoLocal();" placeholder="Filtrar base de usuarios..."></div>
-                    <div id="panel-usuarios" class="tab-panel"><div class="panel-header"><h3>👥 Base de Usuarios</h3></div><p>Gestiona clientes y subadmins aquí.</p></div>
+                    
+                    <div id="panel-buscar" class="tab-panel">
+                        <div class="panel-header"><h3>🔎 Buscar Dueño</h3><p>Filtra y revisa los clientes registrados.</p></div>
+                        <input type="text" id="buscadorLocal" onkeyup="buscarCorreoLocal();" placeholder="Filtrar base de usuarios o correos...">
+                    </div>
+
+                    <div id="panel-usuarios" class="tab-panel">
+                        <div class="panel-header">
+                            <h3>👥 Gestión y Creación de Usuarios</h3>
+                            <p>Crea nuevos accesos (Subadministradores o Clientes) y administra las cuentas existentes.</p>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.4); padding: 30px; border-radius: 16px; border: 1px solid var(--border-color); margin-bottom: 35px;">
+                            <h4 style="margin-top:0; margin-bottom:20px; color:#fff; font-size:16px;">➕ Registrar Nuevo Usuario</h4>
+                            <form action="/crear-usuario" method="POST">
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <input name="user" placeholder="Nombre de usuario" required>
+                                    <input name="pass" placeholder="Contraseña" required>
+                                </div>
+                                <select name="rol" required>
+                                    <option value="Cliente">Cliente</option>
+                                    <option value="Subadministrador">Subadministrador</option>
+                                </select>
+                                <button type="submit" class="action-btn btn-green-mx">Crear Usuario Ahora</button>
+                            </form>
+                        </div>
+                        <h4 style="margin-bottom:20px; color:#fff; font-size:16px;">📋 Usuarios Activos</h4>
+                        <div>${listaUsuariosHtml || '<p style="color:#777;">No hay usuarios creados todavía.</p>'}</div>
+                    </div>
                 </div>
             </div>`);
         } catch (err) { res.redirect('/'); }
     } else {
-        // 🔥 VISTA DE CLIENTE CON DISEÑO GRID PREMIUM
         let btnHtml = "<div class='plat-card-grid'>";
         Object.keys(PLATAFORMAS).forEach((key) => {
             let plat = PLATAFORMAS[key];
@@ -410,9 +450,31 @@ app.get('/dash', async (req, res) => {
     }
 });
 
-// 🔥 BÚSQUEDA NATIVA IMAP EN TIEMPO REAL (Corrige el bug de Disney+ mostrando correos viejos)
+// Rutas de administración de usuarios restauradas
+app.post('/crear-usuario', async (req, res) => {
+    if (!req.session.uid) return res.redirect('/');
+    const { user, pass, rol } = req.body;
+    try {
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [user, pass, rol, req.session.uid]);
+        res.send("<script>alert('✅ Usuario creado exitosamente'); window.location='/dash';</script>");
+    } catch (e) {
+        res.send("<script>alert('❌ Error: El usuario ya existe o datos inválidos'); window.location='/dash';</script>");
+    }
+});
+
+app.post('/eliminar-usuario', async (req, res) => {
+    if (!req.session.uid) return res.redirect('/');
+    const { id } = req.body;
+    try {
+        await dbRun("DELETE FROM usuarios WHERE id = ?", [id]);
+        res.send("<script>alert('🗑️ Usuario eliminado correctamente'); window.location='/dash';</script>");
+    } catch (e) {
+        res.redirect('/dash');
+    }
+});
+
 app.post('/buscar', async (req, res) => {
-    const { email_search, accion, plataforma } = req.body;
+    const { email_search, plataforma } = req.body;
     let messages = [];
     let connection = null;
 
@@ -436,21 +498,16 @@ app.post('/buscar', async (req, res) => {
             connection = await imaps.connect(config);
             await connection.openBox('INBOX');
             
-            // 🔥 SOLUCIÓN ESTRICTA: IMAP NATIVO en lugar de X-GM-RAW para garantizar la sincronización en vivo.
             let searchCriteria = [['TO', correoIngresado]];
             if (plataforma && PLATAFORMAS[plataforma]) {
                 searchCriteria.push(['FROM', PLATAFORMAS[plataforma].keyword_from]);
             }
 
-            // Descarga instantánea de encabezados para validar el buzón
             let searchResults = await connection.search(searchCriteria, { bodies: ['HEADER'] });
 
             if (searchResults.length > 0) {
-                // Ordenar por identificador único descendente (El número más alto siempre es el más reciente)
                 searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
                 let latestUid = searchResults[0].attributes.uid;
-                
-                // Extraer únicamente el cuerpo de ese mensaje exacto
                 messages = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
             } else {
                 connection.end();
@@ -485,4 +542,4 @@ app.post('/buscar', async (req, res) => {
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`🚀 Panel V3 Premium iniciado en puerto ${PORT}`); });
+app.listen(PORT, () => { console.log(`🚀 Panel V3.1 Premium iniciado en puerto ${PORT}`); });
