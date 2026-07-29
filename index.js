@@ -197,8 +197,6 @@ const CSS_MODERNO = `
     .led-action-btn:hover::after { left: 100%; }
     .led-action-btn:hover { transform: translateY(-3px); }
     .led-action-btn img { height: 20px; }
-
-    /* Estilos dinámicos inyectados por plataforma */
     
     .danger-btn-sidebar { 
         background: transparent; border: 1px solid rgba(255, 23, 68, 0.3); color: #999; 
@@ -597,7 +595,7 @@ app.get('/admin/del-mail/:id', async (req, res) => { try { await dbRun("DELETE F
 
 // 🔥 SISTEMA DE BÚSQUEDA EXTREMA O(1) + NORMALIZACIÓN DE GMAIL + CONTROL DE CACHÉ
 app.post('/buscar', async (req, res) => {
-    // 🛡️ Previene estrictamente que el navegador almacene en caché las respuestas y repita resultados.
+    // 🛡️ Previene estrictamente que el navegador almacene en caché
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -637,15 +635,18 @@ app.post('/buscar', async (req, res) => {
                 queryStr += ` from:${PLATAFORMAS[plataforma].keyword_from}`;
             }
 
-            let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER'] });
+            // 🔥 BÚSQUEDA ULTRARRÁPIDA: Ya no descargamos HEADERS, solo los números UIDs (Tarda milisegundos)
+            let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: [] });
 
             if (searchResults.length > 0) {
                 cuentaExitosa = correoSeleccionado;
                 
-                // 🔥 Siempre se extrae el UID más alto (el correo más reciente)
+                // 🔥 Aseguramos obtener SIEMPRE el número de identificador (UID) más alto.
+                // En IMAP, el UID más alto equivale exactamente al mensaje más nuevo, sea leído o no.
                 searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
                 let latestUid = searchResults[0].attributes.uid;
                 
+                // Descargamos el cuerpo COMPLETO únicamente del mensaje más nuevo.
                 messages = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
             } else {
                 connection.end();
