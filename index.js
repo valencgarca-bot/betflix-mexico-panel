@@ -31,8 +31,8 @@ const CUENTAS_GMAIL_MAP = {
 // 🚀 SISTEMA ESCALABLE DE PLATAFORMAS (DISEÑO PREMIUM)
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
-    'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disney' },
-    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b3/Crunchyroll_Logo.svg', keyword_from: 'crunchyroll' },
+    'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' },
+    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Crunchyroll_Logo.svg/512px-Crunchyroll_Logo.svg.png', keyword_from: 'crunchyroll' },
     'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.3)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' }
 };
 
@@ -348,7 +348,7 @@ const CSS_MODERNO = `
         });
     }
 </script>
-`;
+`
 
 app.use(async (req, res, next) => {
     const rutasAbiertas = ['/', '/login', '/logout'];
@@ -846,8 +846,6 @@ app.post('/buscar', async (req, res) => {
         res.send(`<div style="background:#030303; text-align:center; padding:60px; color:white; font-family: 'Inter', sans-serif; min-height:100vh;"><h2 style="color:var(--mx-red);">⚠️ Error de conexión IMAP</h2><p style="color:#888;">${e.message}</p><br><br><a href="/dash" style="color:white; text-decoration:none; background: #111; border: 1px solid #333; padding: 15px 30px; border-radius: 12px; font-weight:700;">⬅ VOLVER AL PANEL</a></div>`); 
     }
 });
-
-app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => { console.log(`🚀 Panel V2 funcionando a máxima velocidad en el puerto ${PORT}`); });
