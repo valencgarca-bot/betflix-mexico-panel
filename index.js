@@ -24,7 +24,7 @@ const CUENTAS_GMAIL_MAP = {
     'capoeirajpmg@gmail.com': 'vhtvjorujpohphks',
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh',
     'julianamjp1@gmail.com': 'lkambczcmvkddvcz',
-    'casu34jk@gmail.com': 'fsndjehlgpikqpwf',
+    'casu34jk@gmail.com': 'npbqnwucjkicsnow',
     'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
 };
 
