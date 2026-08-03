@@ -21,7 +21,7 @@ const CUENTAS_GMAIL_MAP = {
     'tokioappoficial@gmail.com': 'avzepljuczbawvoy',
     'riandasnet@gmail.com': 'updchdcdsjnxvnyy',
     'clubecampestrejp@gmail.com': 'ipmvedbivouzeudi',
-    'capoeirajpmg@gmail.com': 'vhtvjorujpohphks',
+    'capoeirajpmg@gmail.com': 'nsadcogfhbxbmnac',
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh',
     'julianamjp1@gmail.com': 'lkambczcmvkddvcz',
     'casu34jk@gmail.com': 'npbqnwucjkicsnow',
