@@ -27,11 +27,11 @@ const CUENTAS_GMAIL_MAP = {
     'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
 };
 
-// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS (Logo Crunchyroll arreglado)
+// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS (Logo Crunchyroll arreglado con link directo y seguro)
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' },
-    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b3/Crunchyroll_Logo.svg', keyword_from: 'crunchyroll' },
+    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.08)', logo: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/crunchyroll.svg', keyword_from: 'crunchyroll' },
     'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' }
 };
 
@@ -77,11 +77,9 @@ const CSS_MODERNO = `
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; 
     }
 
-    /* Ocultar traductor de Google */
     .goog-te-banner-frame.skiptranslate, #goog-gt-tt, .goog-te-gadget-tooltip { display: none !important; }
     body { top: 0px !important; }
 
-    /* HEADER SUPERIOR */
     .top-header { 
         background: var(--bg-main); 
         padding: 20px 40px; 
@@ -102,9 +100,7 @@ const CSS_MODERNO = `
     .brand-logo { font-size: 22px; font-weight: 800; display:flex; align-items:center; gap: 8px; letter-spacing: -0.5px; text-transform: uppercase;}
     .brand-logo .icon { color: #10b981; }
 
-    .search-top {
-        display: flex; align-items: center; gap: 15px;
-    }
+    .search-top { display: flex; align-items: center; gap: 15px; }
     .search-top input {
         background: var(--card-bg); border: none; padding: 12px 20px; width: 300px;
         border-radius: var(--radius-pill); box-shadow: var(--shadow-soft);
@@ -116,7 +112,6 @@ const CSS_MODERNO = `
         cursor: pointer; display: flex; justify-content: center; align-items: center;
     }
 
-    /* LAYOUT PRINCIPAL DE 3 COLUMNAS */
     .dashboard-grid { 
         display: grid; 
         grid-template-columns: 420px 1fr 320px; 
@@ -125,10 +120,7 @@ const CSS_MODERNO = `
         align-items: start;
     }
 
-    /* COLUMNA 1: PLATAFORMAS */
-    .platforms-grid {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-    }
+    .platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .plat-card {
         background: var(--card-bg); border-radius: var(--radius-card); padding: 25px 20px;
         box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: 15px;
@@ -136,7 +128,6 @@ const CSS_MODERNO = `
     }
     .plat-header { display: flex; justify-content: space-between; align-items: flex-start; z-index: 2; position: relative; }
     
-    /* LOGOS CON LUZ LED */
     .plat-logo { height: 28px; max-width: 100px; object-fit: contain; transition: 0.3s; }
     .main-card-logo { height: 40px; max-width: 150px; object-fit: contain; transition: 0.3s; }
 
@@ -153,7 +144,6 @@ const CSS_MODERNO = `
     .btn-light-pill { background: var(--btn-light); color: var(--text-dark); border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; }
     .btn-light-pill:hover { background: #e2e8f0; }
 
-    /* COLUMNA 2: PANEL CENTRAL */
     .center-panel { display: flex; flex-direction: column; gap: 25px; }
     .main-card {
         background: var(--card-bg); border-radius: var(--radius-card); padding: 40px;
@@ -181,12 +171,18 @@ const CSS_MODERNO = `
         color: var(--text-dark); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif;
     }
 
-    .placeholder-card {
-        background: var(--card-bg); border-radius: var(--radius-card); padding: 40px;
-        box-shadow: var(--shadow-soft); height: 250px;
+    /* CONTENEDOR DEL IFRAME DE RESULTADOS */
+    .iframe-container {
+        background: var(--card-bg); border-radius: var(--radius-card); 
+        box-shadow: var(--shadow-soft); overflow: hidden; 
+        height: 500px; display: flex; flex-direction: column;
+    }
+    .iframe-header {
+        padding: 15px 25px; background: var(--btn-light); 
+        border-bottom: 1px solid var(--border-soft); font-weight: 700; 
+        font-size: 13px; color: var(--text-dark); display: flex; align-items: center; gap: 8px;
     }
 
-    /* COLUMNA 3: SIDEBAR DERECHO */
     .right-sidebar { display: flex; flex-direction: column; gap: 25px; }
     .side-card {
         background: var(--card-bg); border-radius: var(--radius-card); padding: 25px;
@@ -237,7 +233,7 @@ app.use(async (req, res, next) => {
             const row = await dbGet("SELECT id FROM usuarios WHERE id = ?", [req.session.uid]);
             if (!row) {
                 req.session.destroy();
-                return res.send("<script>alert('⛔ 🇲🇽 ACCESO DENEGADO \\n\\nTu cuenta ha sido eliminada por el administrador.'); window.location='/';</script>");
+                return res.send("<script>alert('⛔ ACCESO DENEGADO'); window.location='/';</script>");
             }
             next();
         } catch (err) { return res.redirect('/'); }
@@ -296,7 +292,7 @@ app.get('/dash', async (req, res) => {
             const correos = await dbAll("SELECT * FROM correos", []);
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
 
-            // --- GENERAR TARJETAS DE PLATAFORMAS (Con filtro LED aplicado) ---
+            // --- GENERAR TARJETAS ---
             let plataformasCardsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -305,21 +301,21 @@ app.get('/dash', async (req, res) => {
                     <div style="position:absolute; top:-50px; right:-50px; width:150px; height:150px; background:radial-gradient(circle, ${plat.alpha} 0%, transparent 70%); border-radius:50%; pointer-events:none;"></div>
                     <div class="plat-header">
                         <img src="${plat.logo}" alt="${plat.nombre}" class="plat-logo" style="filter: drop-shadow(0px 0px 10px ${plat.color});">
-                        <span class="status-ok">OK</span>
+                        <span class="status-ok">DE ACUERDO</span>
                     </div>
                     <div class="plat-stats">
-                        <span>Estatus</span>
+                        <span>Estado</span>
                         <div class="line" style="background: ${plat.color};"></div>
-                        <small>Active Codes: 145/200</small>
+                        <small>Códigos activos: 145/200</small>
                     </div>
                     <div class="plat-actions">
                         <button class="btn-dark-blue" onclick="openTab('panel-${key}')">Consulta tu plataforma</button>
-                        <button class="btn-light-pill" onclick="openTab('panel-${key}')">Consult Codes</button>
+                        <button class="btn-light-pill" onclick="openTab('panel-${key}')">Consultar códigos</button>
                     </div>
                 </div>`;
             });
 
-            // --- GENERAR PANELES CENTRALES (Con filtro LED aplicado al logo grande) ---
+            // --- GENERAR PANELES CENTRALES (AHORA APUNTAN AL IFRAME CON target="marco_resultados") ---
             let plataformasPanelsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -332,7 +328,7 @@ app.get('/dash', async (req, res) => {
                             <p>Búsqueda avanzada de códigos y accesos cifrados de ${plat.nombre}.</p>
                         </div>
                     </div>
-                    <form action="/buscar" method="POST">
+                    <form action="/buscar" method="POST" target="marco_resultados">
                         <input type="hidden" name="plataforma" value="${key}">
                         <div class="action-row">
                             <button type="submit" name="accion" value="mensaje" class="action-btn-pill">📩 LEER MENSAJE</button>
@@ -400,7 +396,13 @@ app.get('/dash', async (req, res) => {
                         <a href="/admin/logout-todos" style="color:red; font-size:12px;">🛑 Desconectar a todos</a>
                     </div>
 
-                    <div class="placeholder-card"></div>
+                    <!-- AQUÍ ESTÁ EL ESPACIO BLANCO (IFRAME) DONDE CARGARÁN LOS RESULTADOS -->
+                    <div class="iframe-container">
+                        <div class="iframe-header">
+                            <span>📑</span> Visor de Resultados
+                        </div>
+                        <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
+                    </div>
                 </div>
 
                 <div class="right-sidebar">
@@ -431,31 +433,6 @@ app.get('/dash', async (req, res) => {
             </div>
             `);
         } catch (err) { res.redirect('/'); }
-    } else {
-        res.send(`
-        ${CSS_MODERNO}
-        <div class="top-header">
-            <div class="user-pill" onclick="window.location='/logout'">
-                <img src="https://ui-avatars.com/api/?name=${req.session.user}&background=random" alt="Avatar">
-                <div class="info"><strong>${req.session.user}</strong><span>Salir</span></div>
-            </div>
-            <div class="brand-logo"><span class="icon">⚡</span> PLATAFORMAS STREAMING</div>
-            <div></div>
-        </div>
-        <div style="padding: 50px; display:flex; justify-content:center;">
-            <div class="main-card active" style="width: 100%; max-width: 500px;">
-                <h3 style="text-align:center; margin-bottom:20px;">📨 Lector Universal</h3>
-                <form id="search_form" action="/buscar" method="POST">
-                    <input type="text" name="email_search" class="search-input-large" placeholder="Correo a buscar..." required style="margin-bottom: 20px;">
-                    <input type="hidden" name="accion" value="mensaje">
-                    <input type="hidden" name="plataforma" id="plat_input" value="netflix">
-                    <div style="display:flex; flex-direction:column; gap:10px;">
-                        ${Object.keys(PLATAFORMAS).map(key => `<button type="button" class="action-btn-pill" onclick="document.getElementById('plat_input').value='${key}'; document.getElementById('search_form').submit();">${PLATAFORMAS[key].nombre}</button>`).join('')}
-                    </div>
-                </form>
-            </div>
-        </div>
-        `);
     }
 });
 
@@ -464,12 +441,16 @@ app.post('/admin/crear', async (req, res) => {
     try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
+// 🔥 RUTA DE BÚSQUEDA ADAPTADA PARA MOSTRARSE DENTRO DEL IFRAME (Sin botones de "Volver")
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     let messages = [];
     let connection = null;
     let mail = null;
     let cuentaExitosa = null;
+
+    // ESTILOS BÁSICOS PARA EL INTERIOR DEL IFRAME
+    const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #ffffff; color: #0f172a; padding: 20px; margin: 0; }</style>`;
 
     try {
         let correoIngresado = email_search.trim().toLowerCase();
@@ -517,9 +498,9 @@ app.post('/buscar', async (req, res) => {
 
         if (messages.length === 0) { 
             let nombrePlat = (plataforma && PLATAFORMAS[plataforma]) ? PLATAFORMAS[plataforma].nombre : '';
-            return res.send(`<div style="background:#f4f6f9; text-align:center; padding:60px; color:#0f172a; font-family: 'Inter', sans-serif; min-height: 100vh;">
-                <h2>❌ No se encontró correo reciente${nombrePlat ? ` de ${nombrePlat}` : ''} para:<br><span style="color:#10b981;">${email_search}</span></h2>
-                <br><br><a href="/dash" style="color:#0f172a; text-decoration:none; background: #ffffff; padding: 15px 30px; border-radius: 50px; font-weight:700; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">⬅ VOLVER AL PANEL</a>
+            return res.send(`${cssIframe}<div style="text-align:center; padding:40px;">
+                <h2 style="color:#ef4444;">❌ No se encontró correo reciente${nombrePlat ? ` de ${nombrePlat}` : ''}</h2>
+                <p>Para la cuenta: <strong>${email_search}</strong></p>
             </div>`); 
         }
 
@@ -535,15 +516,15 @@ app.post('/buscar', async (req, res) => {
                 { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
             ];
             for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 50px; margin: 40px auto; padding: 40px; background:#fff; border-radius:24px; display:inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">${paisDetectado}</div>` : `<div style="margin: 40px auto; padding: 30px; background:#fff0f2; border-radius:24px; display:inline-block;"><h3 style="color:#ef4444;">⚠️ País no detectado</h3></div>`;
-            return res.send(`<div style="background:#ffffff; text-align:center; padding:15px; box-shadow: 0 2px 10px rgba(0,0,0,0.02);"><a href="/dash" style="color:#10b981; text-decoration:none; font-family:'Inter', sans-serif; font-weight:700;">⬅ VOLVER AL PANEL</a></div><div style="background:#f4f6f9; color:#0f172a; padding: 60px 20px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>🌍 Análisis de País Geoespacial</h2><p>Correo analizado: <strong>${email_search}</strong></p>${htmlRes}</div>`);
+            let htmlRes = paisDetectado ? `<div style="font-size: 40px; margin: 20px auto; padding: 20px; background:#f8fafc; border-radius:16px; display:inline-block; border: 1px solid #e2e8f0;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 20px; background:#fef2f2; border-radius:16px; display:inline-block;"><h3 style="color:#ef4444; margin:0;">⚠️ País no detectado</h3></div>`;
+            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>🌍 Análisis de País</h2><p>${email_search}</p>${htmlRes}</div>`);
         }
 
         if (accion === 'ip') {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 40px; font-weight:800; color:#ef4444; margin:15px 0;">${ip}</div>`).join('') : `<div style="font-size: 20px; color:#ef4444; margin: 30px 0;">❌ No se detectó ninguna IP pública.</div>`;
-            return res.send(`<div style="background:#ffffff; text-align:center; padding:15px; box-shadow: 0 2px 10px rgba(0,0,0,0.02);"><a href="/dash" style="color:#10b981; text-decoration:none; font-family:'Inter', sans-serif; font-weight:700;">⬅ VOLVER AL PANEL</a></div><div style="background:#f4f6f9; color:#0f172a; padding: 60px 20px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>📡 Escáner de IP</h2><p>Correo analizado: <strong>${email_search}</strong></p><div style="margin: 40px auto; padding: 40px; background:#ffffff; border-radius:24px; display:inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">${ipContenido}</div></div>`);
+            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 30px; font-weight:800; color:#ef4444; margin:10px 0;">${ip}</div>`).join('') : `<div style="font-size: 18px; color:#ef4444; margin: 20px 0;">❌ No se detectó ninguna IP pública.</div>`;
+            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>📡 Escáner de IP</h2><p>${email_search}</p><div style="margin: 20px auto; padding: 20px; background:#f8fafc; border-radius:16px; display:inline-block; border: 1px solid #e2e8f0;">${ipContenido}</div></div>`);
         }
 
         if (/\b\d{4}\b/.test(textoBruto) && (!accion || accion === 'mensaje')) {
@@ -552,20 +533,12 @@ app.post('/buscar', async (req, res) => {
 
         let contenidoFinal = mail.html || mail.text || "";
 
-        res.send(`
-        <div style="background:#ffffff; padding: 15px 30px; display:flex; justify-content:space-between; align-items:center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.03);">
-            <a href="/dash" style="color: #0f172a; text-decoration:none; background: #f1f5f9; padding: 10px 20px; border-radius: 50px; font-family:'Inter', sans-serif; font-weight:700; transition: 0.3s;">⬅ VOLVER AL PANEL</a>
-            <div style="font-family:'Inter', sans-serif; color: #64748b; font-size: 13px;">Extracción segura vía servidor central</div>
-        </div>
-        <div style="background:#f4f6f9; min-height:100vh; padding-top:40px;">
-            <div style="background:white; color:black; padding: 0; margin: 0 auto; max-width: 800px; font-family:'Inter', sans-serif; border-radius: 24px; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">
-                ${contenidoFinal}
-            </div>
-        </div>`);
+        // Se envía el correo crudo para que se renderice dentro del Iframe
+        res.send(contenidoFinal);
     } catch (e) { 
-        res.send(`<div style="background:#f4f6f9; text-align:center; padding:60px; color:#0f172a; font-family: 'Inter', sans-serif; min-height:100vh;"><h2 style="color:#ef4444;">⚠️ Error</h2><p>${e.message}</p><a href="/dash">VOLVER</a></div>`); 
+        res.send(`${cssIframe}<div style="text-align:center; padding:40px;"><h2 style="color:#ef4444;">⚠️ Error en el servidor</h2><p>${e.message}</p></div>`); 
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`🚀 Panel V4 con luz LED funcionando en el puerto ${PORT}`); });
+app.listen(PORT, () => { console.log(`🚀 Panel V5 con Iframe funcionando en el puerto ${PORT}`); });
