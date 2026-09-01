@@ -284,7 +284,7 @@ app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'ruben' || req.session.rol === 'Administrador');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
 
-    if (esAdminPrincipal || esSubAdmin) {
+    if (esAdminPrincipal || esSubAdmin || req.session.rol === 'Cliente') {
         try {
             let query = esAdminPrincipal ? "SELECT * FROM usuarios WHERE user != 'ruben'" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
@@ -348,6 +348,9 @@ app.get('/dash', async (req, res) => {
             } else {
                 actividadesHtml = `<div class="activity-item"><span>No hay actividades recientes.</span></div>`;
             }
+            
+            // Lógica para poblar selector de clientes
+            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user}</option>`).join('');
 
             res.send(`
             ${CSS_MODERNO}
@@ -391,9 +394,19 @@ app.get('/dash', async (req, res) => {
                     </div>
 
                     <div id="panel-usuarios" class="main-card">
-                        <h3>Base de Usuarios</h3>
-                        <p style="color:#64748b; font-size:13px;">(Vista simplificada para diseño UI).</p>
-                        <a href="/admin/logout-todos" style="color:red; font-size:12px;">🛑 Desconectar a todos</a>
+                        <h3>Gestión de Accesos a Correos</h3>
+                        <p style="color:#64748b; font-size:13px; margin-bottom: 20px;">Asigna correos específicos para que solo puedan ser consultados por clientes autorizados.</p>
+                        
+                        <form action="/admin/asignar-correo" method="POST" style="margin-bottom: 25px;">
+                            <select name="user_id" class="input-classic" required>
+                                <option value="" disabled selected>Selecciona un cliente...</option>
+                                ${clientesOpcionesHtml}
+                            </select>
+                            <input type="email" name="email" class="input-classic" placeholder="Correo a asignar (ej: cliente@gmail.com)" required>
+                            <button type="submit" class="btn-submit">Asignar Correo a Cliente</button>
+                        </form>
+                        
+                        <a href="/admin/logout-todos" style="color:red; font-size:12px;">🛑 Desconectar a todos los usuarios</a>
                     </div>
 
                     <!-- AQUÍ ESTÁ EL ESPACIO BLANCO (IFRAME) DONDE CARGARÁN LOS RESULTADOS -->
@@ -416,9 +429,11 @@ app.get('/dash', async (req, res) => {
                     <div class="side-card">
                         <h4>Gestión del Sistema</h4>
                         <div class="menu-list">
+                            ${(esAdminPrincipal || esSubAdmin) ? `
                             <button class="menu-btn-item" onclick="openTab('panel-crear-user')">🔍 Crear Nuevo Usuario</button>
                             <button class="menu-btn-item" onclick="openTab('panel-crear-user')">👤 Crear Usuario</button>
-                            <button class="menu-btn-item" onclick="openTab('panel-usuarios')">🗄️ Base de Usuarios</button>
+                            <button class="menu-btn-item" onclick="openTab('panel-usuarios')">🗄️ Asignar Correos</button>
+                            ` : ''}
                             <button class="menu-btn-item" onclick="alert('Historial completo en desarrollo')">🔒 Historial de Códigos</button>
                         </div>
                     </div>
@@ -441,7 +456,16 @@ app.post('/admin/crear', async (req, res) => {
     try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 RUTA DE BÚSQUEDA ADAPTADA PARA MOSTRARSE DENTRO DEL IFRAME (Sin botones de "Volver")
+// 🔥 RUTA NUEVA: Asignación de correos a clientes
+app.post('/admin/asignar-correo', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try { 
+        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [req.body.email.trim().toLowerCase(), req.body.user_id]); 
+        res.redirect('/dash'); 
+    } catch(err) { res.redirect('/dash'); }
+});
+
+// 🔥 RUTA DE BÚSQUEDA ADAPTADA PARA MOSTRARSE DENTRO DEL IFRAME 
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     let messages = [];
@@ -454,6 +478,15 @@ app.post('/buscar', async (req, res) => {
 
     try {
         let correoIngresado = email_search.trim().toLowerCase();
+        
+        // 🛡️ RESTRICCIÓN DE SEGURIDAD PARA CLIENTES
+        if (req.session.rol === 'Cliente') {
+            const permiso = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [correoIngresado, req.session.uid]);
+            if (!permiso) {
+                return res.send(`${cssIframe}<div style="text-align:center; padding:40px;"><h2 style="color:#ef4444;">⛔ Acceso Denegado</h2><p>No tienes autorización para buscar códigos o leer mensajes de este correo.</p></div>`);
+            }
+        }
+
         let partes = correoIngresado.split('@');
         let correoNormalizado = correoIngresado;
 
