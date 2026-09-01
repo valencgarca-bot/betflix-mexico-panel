@@ -6,9 +6,15 @@ const { simpleParser } = require('mailparser');
 const path = require('path');
 const app = express();
 
-// 📂 BASE DE DATOS PREPARADA PARA ALMACENAMIENTO PERSISTENTE
-const dbPath = process.env.DB_PATH || path.resolve(__dirname, 'betflix_mexico_v1.db');
-const db = new sqlite3.Database(dbPath);
+// 📂 BASE DE DATOS PERSISTENTE CON RUTA ABSOLUTA SEGURA
+const dbPath = path.resolve(__dirname, 'betflix_mexico_v1.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error("Error al abrir la base de datos", err.message);
+    } else {
+        console.log("💾 Base de datos conectada correctamente en:", dbPath);
+    }
+});
 
 // Wrappers de Promesas para Async/Await en SQLite
 const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(query, params, (err, row) => err ? reject(err) : resolve(row)));
@@ -27,7 +33,7 @@ const CUENTAS_GMAIL_MAP = {
     'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
 };
 
-// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS (Logo Crunchyroll arreglado con link directo y seguro)
+// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' },
@@ -43,20 +49,19 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// 🔥 INICIALIZACIÓN DE LA BASE DE DATOS ACTUALIZADA
+// 🔥 INICIALIZACIÓN SEGURA DE LA BASE DE DATOS (NO BORRA DATOS EXISTENTES)
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     
-    // Intenta agregar columnas por si la BD ya existía previamente sin ellas
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
     db.run("ALTER TABLE correos ADD COLUMN fecha_asignacion DATETIME DEFAULT (date('now', 'localtime'))", (err) => {});
     
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🔥 ESTILOS NUEVOS
+// 🔥 ESTILOS CSS MODERNOS
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -176,7 +181,6 @@ const CSS_MODERNO = `
         color: var(--text-dark); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif;
     }
 
-    /* CONTENEDOR DEL IFRAME DE RESULTADOS */
     .iframe-container {
         background: var(--card-bg); border-radius: var(--radius-card); 
         box-shadow: var(--shadow-soft); overflow: hidden; 
@@ -224,6 +228,10 @@ const CSS_MODERNO = `
     
     document.addEventListener('DOMContentLoaded', () => {
         let active = localStorage.getItem('activeBetflixTab');
+        const urlParams = new URLSearchParams(window.location.search);
+        if(urlParams.has('buscar_dueno')) {
+            active = 'panel-base-datos';
+        }
         if(!active || !document.getElementById(active)) active = 'panel-netflix'; 
         openTab(active);
     });
@@ -297,7 +305,6 @@ app.get('/dash', async (req, res) => {
             const correos = await dbAll("SELECT * FROM correos", []);
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
 
-            // --- GENERAR TARJETAS ---
             let plataformasCardsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -320,7 +327,6 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // --- GENERAR PANELES CENTRALES (IFRAME) ---
             let plataformasPanelsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -354,30 +360,55 @@ app.get('/dash', async (req, res) => {
                 actividadesHtml = `<div class="activity-item"><span>No hay actividades recientes.</span></div>`;
             }
             
-            // Lógica para poblar selector de clientes
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user}</option>`).join('');
 
-            // --- LÓGICA BASE DE USUARIOS ---
+            let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             let tablaUsuariosHtml = "";
+            
             if (esAdminPrincipal || esSubAdmin) {
                 let usuariosVisibles = esAdminPrincipal 
                     ? usuarios.filter(u => u.user !== 'ruben') 
                     : usuarios.filter(u => u.creado_por === req.session.uid);
 
                 if (usuariosVisibles.length === 0) {
-                    tablaUsuariosHtml = "<tr><td colspan='3' style='padding: 15px; text-align: center;'>No tienes clientes asignados.</td></tr>";
+                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 15px; text-align: center;'>No tienes clientes asignados.</td></tr>";
                 } else {
                     usuariosVisibles.forEach(u => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
-                        let listaCorreosHtml = correosDelUsuario.length > 0 
-                            ? correosDelUsuario.map(c => `<span style="background:#e2e8f0; padding:2px 8px; border-radius:12px; font-size:11px; margin-right:5px; display:inline-block; margin-bottom:4px;">${c.email} (Asig: ${c.fecha_asignacion || 'N/A'})</span>`).join('')
-                            : "<span style='color:var(--text-muted); font-size:11px;'>Sin correos</span>";
+                        
+                        let listaCorreosHtml = "";
+                        if (correosDelUsuario.length > 0) {
+                            listaCorreosHtml = correosDelUsuario.map(c => {
+                                let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
+                                let estiloFondo = esBuscado ? "background: #fee2e2; border: 1px solid #ef4444;" : "background: #f1f5f9;";
+                                
+                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:6px 10px; border-radius:8px; font-size:11px; margin-bottom:5px;">
+                                    <span>${c.email} <small style="color:var(--text-muted);">(Asig: ${c.fecha_asignacion || 'N/A'})</small></span>
+                                    <form action="/admin/eliminar-correo" method="POST" style="margin:0;">
+                                        <input type="hidden" name="correo_id" value="${c.id}">
+                                        <button type="submit" style="background:none; border:none; color:#ef4444; font-weight:bold; cursor:pointer; font-size:12px;" title="Eliminar correo">✕</button>
+                                    </form>
+                                </div>`;
+                            }).join('');
+                        } else {
+                            listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px;'>Sin correos asignados</span>";
+                        }
 
                         tablaUsuariosHtml += `
                         <tr style="border-bottom: 1px solid var(--border-soft);">
-                            <td style="padding: 15px; font-weight: 600;">${u.user} <br><small style="color:var(--text-muted); font-weight:400;">${u.rol}</small></td>
-                            <td style="padding: 15px;">${listaCorreosHtml}</td>
-                            <td style="padding: 15px; font-size: 12px;">${esAdminPrincipal && u.creado_por ? `ID Creador: ${u.creado_por}` : 'Tú'}</td>
+                            <td style="padding: 15px; font-weight: 600; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:400;">${u.rol}</small></td>
+                            <td style="padding: 15px; vertical-align: top;">
+                                <div style="max-height: 150px; overflow-y: auto; padding-right: 5px;">
+                                    ${listaCorreosHtml}
+                                </div>
+                            </td>
+                            <td style="padding: 15px; font-size: 12px; vertical-align: top;">${esAdminPrincipal && u.creado_por ? `ID Creador: ${u.creado_por}` : 'Tú'}</td>
+                            <td style="padding: 15px; vertical-align: top; text-align: center;">
+                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario y todos sus correos?');" style="margin:0;">
+                                    <input type="hidden" name="user_id" value="${u.id}">
+                                    <button type="submit" style="background:#fee2e2; color:#ef4444; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">Eliminar</button>
+                                </form>
+                            </td>
                         </tr>`;
                     });
                 }
@@ -440,18 +471,23 @@ app.get('/dash', async (req, res) => {
                         <a href="/admin/logout-todos" style="color:red; font-size:12px; text-decoration: none; font-weight: bold;">🛑 Desconectar a todos los usuarios</a>
                     </div>
 
-                    <!-- 🔥 NUEVO PANEL: BASE DE USUARIOS -->
                     <div id="panel-base-datos" class="main-card">
                         <h3>Base de Usuarios y Correos Asignados</h3>
-                        <p style="color:#64748b; font-size:13px; margin-bottom: 20px;">Resumen de clientes y fechas de asignación de cuentas.</p>
+                        <p style="color:#64748b; font-size:13px; margin-bottom: 15px;">Resumen de clientes y fechas de asignación de cuentas.</p>
                         
+                        <form action="/dash" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
+                            <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="🔍 Escribe un correo para buscar a su dueño..." style="margin:0; font-size:13px; padding: 10px 15px;">
+                            <button type="submit" style="background:var(--btn-dark); color:white; border:none; padding: 0 20px; border-radius:12px; font-weight:bold; cursor:pointer; font-size:13px;">Buscar</button>
+                        </form>
+
                         <div style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-soft); border-radius: 12px;">
                             <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
                                 <thead style="background: var(--btn-light);">
                                     <tr>
                                         <th style="padding: 15px; color: var(--text-dark);">Usuario</th>
-                                        <th style="padding: 15px; color: var(--text-dark);">Correos y Vencimiento (Asignación)</th>
+                                        <th style="padding: 15px; color: var(--text-dark); width: 50%;">Correos y Vencimiento (Con Scroll)</th>
                                         <th style="padding: 15px; color: var(--text-dark);">Creado Por</th>
+                                        <th style="padding: 15px; color: var(--text-dark); text-align: center;">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -492,7 +528,7 @@ app.get('/dash', async (req, res) => {
                     <div class="side-card">
                         <h4>Herramientas Globales</h4>
                         <div class="menu-list">
-                            <button class="menu-btn-item" onclick="openTab('panel-usuarios')">🔧 Buscar Dueño de Cuenta</button>
+                            <button class="menu-btn-item" onclick="openTab('panel-base-datos')">🔧 Buscar Dueño de Cuenta</button>
                         </div>
                     </div>
                 </div>
@@ -507,7 +543,6 @@ app.post('/admin/crear', async (req, res) => {
     try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 RUTA ACTUALIZADA: Asignación masiva de correos a clientes
 app.post('/admin/asignar-correo', async (req, res) => {
     if (req.session.rol === 'Cliente') return res.redirect('/dash');
     try {
@@ -521,21 +556,39 @@ app.post('/admin/asignar-correo', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 RUTA DE BÚSQUEDA ADAPTADA PARA MOSTRARSE DENTRO DEL IFRAME 
+app.post('/admin/eliminar-correo', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try {
+        await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/eliminar-usuario', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try {
+        const userId = req.body.user_id;
+        if (req.session.rol === 'Subadministrador') {
+            const u = await dbGet("SELECT creado_por FROM usuarios WHERE id = ?", [userId]);
+            if (!u || u.creado_por !== req.session.uid) return res.redirect('/dash');
+        }
+        await dbRun("DELETE FROM correos WHERE user_id = ?", [userId]);
+        await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     let messages = [];
     let connection = null;
     let mail = null;
-    let cuentaExitosa = null;
 
-    // ESTILOS BÁSICOS PARA EL INTERIOR DEL IFRAME
     const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #ffffff; color: #0f172a; padding: 20px; margin: 0; }</style>`;
 
     try {
         let correoIngresado = email_search.trim().toLowerCase();
         
-        // 🛡️ RESTRICCIÓN DE SEGURIDAD PARA CLIENTES
         if (req.session.rol === 'Cliente') {
             const permiso = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [correoIngresado, req.session.uid]);
             if (!permiso) {
@@ -573,7 +626,6 @@ app.post('/buscar', async (req, res) => {
             let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER'] });
 
             if (searchResults.length > 0) {
-                cuentaExitosa = correoSeleccionado;
                 searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
                 let latestUid = searchResults[0].attributes.uid;
                 messages = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
@@ -621,8 +673,6 @@ app.post('/buscar', async (req, res) => {
         }
 
         let contenidoFinal = mail.html || mail.text || "";
-
-        // Se envía el correo crudo para que se renderice dentro del Iframe
         res.send(contenidoFinal);
     } catch (e) { 
         res.send(`${cssIframe}<div style="text-align:center; padding:40px;"><h2 style="color:#ef4444;">⚠️ Error en el servidor</h2><p>${e.message}</p></div>`); 
@@ -630,4 +680,4 @@ app.post('/buscar', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`🚀 Panel V5 con Iframe funcionando en el puerto ${PORT}`); });
+app.listen(PORT, () => { console.log(`🚀 Panel V6 Optimizado funcionando en el puerto ${PORT}`); });
