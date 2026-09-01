@@ -43,11 +43,16 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
+// 🔥 INICIALIZACIÓN DE LA BASE DE DATOS ACTUALIZADA
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
-    db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER)");
+    db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    
+    // Intenta agregar columnas por si la BD ya existía previamente sin ellas
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
+    db.run("ALTER TABLE correos ADD COLUMN fecha_asignacion DATETIME DEFAULT (date('now', 'localtime'))", (err) => {});
+    
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
 
@@ -286,7 +291,7 @@ app.get('/dash', async (req, res) => {
 
     if (esAdminPrincipal || esSubAdmin || req.session.rol === 'Cliente') {
         try {
-            let query = esAdminPrincipal ? "SELECT * FROM usuarios WHERE user != 'ruben'" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
+            let query = esAdminPrincipal ? "SELECT * FROM usuarios" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
             const correos = await dbAll("SELECT * FROM correos", []);
@@ -315,7 +320,7 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // --- GENERAR PANELES CENTRALES (AHORA APUNTAN AL IFRAME CON target="marco_resultados") ---
+            // --- GENERAR PANELES CENTRALES (IFRAME) ---
             let plataformasPanelsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -351,6 +356,32 @@ app.get('/dash', async (req, res) => {
             
             // Lógica para poblar selector de clientes
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user}</option>`).join('');
+
+            // --- LÓGICA BASE DE USUARIOS ---
+            let tablaUsuariosHtml = "";
+            if (esAdminPrincipal || esSubAdmin) {
+                let usuariosVisibles = esAdminPrincipal 
+                    ? usuarios.filter(u => u.user !== 'ruben') 
+                    : usuarios.filter(u => u.creado_por === req.session.uid);
+
+                if (usuariosVisibles.length === 0) {
+                    tablaUsuariosHtml = "<tr><td colspan='3' style='padding: 15px; text-align: center;'>No tienes clientes asignados.</td></tr>";
+                } else {
+                    usuariosVisibles.forEach(u => {
+                        let correosDelUsuario = correos.filter(c => c.user_id === u.id);
+                        let listaCorreosHtml = correosDelUsuario.length > 0 
+                            ? correosDelUsuario.map(c => `<span style="background:#e2e8f0; padding:2px 8px; border-radius:12px; font-size:11px; margin-right:5px; display:inline-block; margin-bottom:4px;">${c.email} (Asig: ${c.fecha_asignacion || 'N/A'})</span>`).join('')
+                            : "<span style='color:var(--text-muted); font-size:11px;'>Sin correos</span>";
+
+                        tablaUsuariosHtml += `
+                        <tr style="border-bottom: 1px solid var(--border-soft);">
+                            <td style="padding: 15px; font-weight: 600;">${u.user} <br><small style="color:var(--text-muted); font-weight:400;">${u.rol}</small></td>
+                            <td style="padding: 15px;">${listaCorreosHtml}</td>
+                            <td style="padding: 15px; font-size: 12px;">${esAdminPrincipal && u.creado_por ? `ID Creador: ${u.creado_por}` : 'Tú'}</td>
+                        </tr>`;
+                    });
+                }
+            }
 
             res.send(`
             ${CSS_MODERNO}
@@ -395,21 +426,41 @@ app.get('/dash', async (req, res) => {
 
                     <div id="panel-usuarios" class="main-card">
                         <h3>Gestión de Accesos a Correos</h3>
-                        <p style="color:#64748b; font-size:13px; margin-bottom: 20px;">Asigna correos específicos para que solo puedan ser consultados por clientes autorizados.</p>
+                        <p style="color:#64748b; font-size:13px; margin-bottom: 20px;">Pega los correos separados por espacio para asignarlos de forma masiva (Hasta 500 correos).</p>
                         
                         <form action="/admin/asignar-correo" method="POST" style="margin-bottom: 25px;">
                             <select name="user_id" class="input-classic" required>
                                 <option value="" disabled selected>Selecciona un cliente...</option>
                                 ${clientesOpcionesHtml}
                             </select>
-                            <input type="email" name="email" class="input-classic" placeholder="Correo a asignar (ej: cliente@gmail.com)" required>
-                            <button type="submit" class="btn-submit">Asignar Correo a Cliente</button>
+                            <textarea name="email" class="input-classic" placeholder="ejemplo1@gmail.com ejemplo2@gmail.com ..." rows="4" required style="resize: vertical;"></textarea>
+                            <button type="submit" class="btn-submit">Asignar Correos al Cliente</button>
                         </form>
                         
-                        <a href="/admin/logout-todos" style="color:red; font-size:12px;">🛑 Desconectar a todos los usuarios</a>
+                        <a href="/admin/logout-todos" style="color:red; font-size:12px; text-decoration: none; font-weight: bold;">🛑 Desconectar a todos los usuarios</a>
                     </div>
 
-                    <!-- AQUÍ ESTÁ EL ESPACIO BLANCO (IFRAME) DONDE CARGARÁN LOS RESULTADOS -->
+                    <!-- 🔥 NUEVO PANEL: BASE DE USUARIOS -->
+                    <div id="panel-base-datos" class="main-card">
+                        <h3>Base de Usuarios y Correos Asignados</h3>
+                        <p style="color:#64748b; font-size:13px; margin-bottom: 20px;">Resumen de clientes y fechas de asignación de cuentas.</p>
+                        
+                        <div style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-soft); border-radius: 12px;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                                <thead style="background: var(--btn-light);">
+                                    <tr>
+                                        <th style="padding: 15px; color: var(--text-dark);">Usuario</th>
+                                        <th style="padding: 15px; color: var(--text-dark);">Correos y Vencimiento (Asignación)</th>
+                                        <th style="padding: 15px; color: var(--text-dark);">Creado Por</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tablaUsuariosHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <div class="iframe-container">
                         <div class="iframe-header">
                             <span>📑</span> Visor de Resultados
@@ -431,8 +482,8 @@ app.get('/dash', async (req, res) => {
                         <div class="menu-list">
                             ${(esAdminPrincipal || esSubAdmin) ? `
                             <button class="menu-btn-item" onclick="openTab('panel-crear-user')">🔍 Crear Nuevo Usuario</button>
-                            <button class="menu-btn-item" onclick="openTab('panel-crear-user')">👤 Crear Usuario</button>
                             <button class="menu-btn-item" onclick="openTab('panel-usuarios')">🗄️ Asignar Correos</button>
+                            <button class="menu-btn-item" onclick="openTab('panel-base-datos')">👥 Ver Base de Usuarios</button>
                             ` : ''}
                             <button class="menu-btn-item" onclick="alert('Historial completo en desarrollo')">🔒 Historial de Códigos</button>
                         </div>
@@ -456,11 +507,16 @@ app.post('/admin/crear', async (req, res) => {
     try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 RUTA NUEVA: Asignación de correos a clientes
+// 🔥 RUTA ACTUALIZADA: Asignación masiva de correos a clientes
 app.post('/admin/asignar-correo', async (req, res) => {
     if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try { 
-        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [req.body.email.trim().toLowerCase(), req.body.user_id]); 
+    try {
+        const correosBrutos = req.body.email.trim();
+        const listaCorreos = correosBrutos.split(/[\s,]+/).filter(e => e.includes('@'));
+
+        for (let email of listaCorreos) {
+            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [email.toLowerCase(), req.body.user_id]);
+        }
         res.redirect('/dash'); 
     } catch(err) { res.redirect('/dash'); }
 });
