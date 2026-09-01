@@ -27,11 +27,11 @@ const CUENTAS_GMAIL_MAP = {
     'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
 };
 
-// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS 
+// 🚀 SISTEMA ESCALABLE DE PLATAFORMAS (Logo Crunchyroll arreglado)
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' },
-    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Crunchyroll_Logo.svg/512px-Crunchyroll_Logo.svg.png', keyword_from: 'crunchyroll' },
+    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b3/Crunchyroll_Logo.svg', keyword_from: 'crunchyroll' },
     'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' }
 };
 
@@ -51,7 +51,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🔥 ESTILOS NUEVOS (Basados en la imagen Neumórfica proporcionada)
+// 🔥 ESTILOS NUEVOS
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -99,7 +99,7 @@ const CSS_MODERNO = `
     .user-pill .info strong { color: var(--text-dark); font-weight: 700; }
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
 
-    .brand-logo { font-size: 22px; font-weight: 800; display:flex; align-items:center; gap: 8px; letter-spacing: -0.5px; }
+    .brand-logo { font-size: 22px; font-weight: 800; display:flex; align-items:center; gap: 8px; letter-spacing: -0.5px; text-transform: uppercase;}
     .brand-logo .icon { color: #10b981; }
 
     .search-top {
@@ -125,7 +125,7 @@ const CSS_MODERNO = `
         align-items: start;
     }
 
-    /* COLUMNA 1: PLATAFORMAS (GRID 2x2) */
+    /* COLUMNA 1: PLATAFORMAS */
     .platforms-grid {
         display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
     }
@@ -135,7 +135,11 @@ const CSS_MODERNO = `
         position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.5);
     }
     .plat-header { display: flex; justify-content: space-between; align-items: flex-start; z-index: 2; position: relative; }
-    .plat-logo { height: 28px; max-width: 100px; object-fit: contain; }
+    
+    /* LOGOS CON LUZ LED */
+    .plat-logo { height: 28px; max-width: 100px; object-fit: contain; transition: 0.3s; }
+    .main-card-logo { height: 40px; max-width: 150px; object-fit: contain; transition: 0.3s; }
+
     .status-ok { background: var(--green-ok); color: white; font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 50px; box-shadow: 0 4px 10px rgba(34, 197, 94, 0.3); }
     
     .plat-stats { z-index: 2; position: relative; margin-top: 10px; }
@@ -159,7 +163,6 @@ const CSS_MODERNO = `
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     .main-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; }
-    .main-card-logo { height: 40px; max-width: 150px; object-fit: contain; }
     .main-card-title h3 { margin: 0; font-size: 22px; color: var(--text-dark); font-weight: 800; }
     .main-card-title p { margin: 5px 0 0 0; color: var(--text-muted); font-size: 13px; }
 
@@ -206,7 +209,6 @@ const CSS_MODERNO = `
     }
     .menu-btn-item:hover { background: #e2e8f0; transform: translateX(5px); }
 
-    /* Estilos extra para modales o paneles dentro del centro */
     .input-classic { width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--border-soft); background: var(--btn-light); font-family: 'Inter', sans-serif; box-sizing: border-box;}
     .btn-submit { background: var(--btn-dark); color: white; border: none; padding: 15px; border-radius: 12px; font-weight: 700; cursor: pointer; width: 100%; }
 </style>
@@ -243,7 +245,6 @@ app.use(async (req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-    // Pantalla de login (mantenida simple)
     res.send(`
     <style>
         body { background: #f4f6f9; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -252,7 +253,7 @@ app.get('/', (req, res) => {
         button { width: 100%; padding: 15px; border-radius: 50px; border: none; background: #1e293b; color: white; font-weight: bold; cursor: pointer; font-family: 'Inter', sans-serif; }
     </style>
     <div class="login-box">
-        <h2 style="margin-top:0;">⚡ BETFLIX</h2>
+        <h2 style="margin-top:0;">⚡ PLATAFORMAS STREAMING</h2>
         <p style="color:#64748b; font-size:14px; margin-bottom:30px;">Acceso al Panel Central</p>
         <form action="/login" method="POST">
             <input name="user" placeholder="Usuario" required>
@@ -289,14 +290,13 @@ app.get('/dash', async (req, res) => {
 
     if (esAdminPrincipal || esSubAdmin) {
         try {
-            // Consultas DB para paneles de admin
             let query = esAdminPrincipal ? "SELECT * FROM usuarios WHERE user != 'ruben'" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
             const correos = await dbAll("SELECT * FROM correos", []);
-            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []); // Limitado para el sidebar
+            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
 
-            // --- GENERAR TARJETAS DE PLATAFORMAS (IZQUIERDA) ---
+            // --- GENERAR TARJETAS DE PLATAFORMAS (Con filtro LED aplicado) ---
             let plataformasCardsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -304,7 +304,7 @@ app.get('/dash', async (req, res) => {
                 <div class="plat-card">
                     <div style="position:absolute; top:-50px; right:-50px; width:150px; height:150px; background:radial-gradient(circle, ${plat.alpha} 0%, transparent 70%); border-radius:50%; pointer-events:none;"></div>
                     <div class="plat-header">
-                        <img src="${plat.logo}" alt="${plat.nombre}" class="plat-logo">
+                        <img src="${plat.logo}" alt="${plat.nombre}" class="plat-logo" style="filter: drop-shadow(0px 0px 10px ${plat.color});">
                         <span class="status-ok">OK</span>
                     </div>
                     <div class="plat-stats">
@@ -319,14 +319,14 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // --- GENERAR PANELES CENTRALES (PLATAFORMAS) ---
+            // --- GENERAR PANELES CENTRALES (Con filtro LED aplicado al logo grande) ---
             let plataformasPanelsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
                 plataformasPanelsHtml += `
                 <div id="panel-${key}" class="main-card">
                     <div class="main-card-header">
-                        <img src="${plat.logo}" alt="${plat.nombre}" class="main-card-logo">
+                        <img src="${plat.logo}" alt="${plat.nombre}" class="main-card-logo" style="filter: drop-shadow(0px 0px 15px ${plat.color});">
                         <div class="main-card-title">
                             <h3>Gestor Central ${plat.nombre}</h3>
                             <p>Búsqueda avanzada de códigos y accesos cifrados de ${plat.nombre}.</p>
@@ -344,7 +344,6 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // --- LISTA DE ACTIVIDADES RECIENTES ---
             let actividadesHtml = "";
             if (registros.length > 0) {
                 registros.forEach(r => {
@@ -366,7 +365,7 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
                 
-                <div class="brand-logo"><span class="icon">⚡</span> BETFLIX</div>
+                <div class="brand-logo"><span class="icon">⚡</span> PLATAFORMAS STREAMING</div>
                 
                 <div class="search-top">
                     <input type="text" placeholder="Buscar correo general...">
@@ -397,7 +396,7 @@ app.get('/dash', async (req, res) => {
 
                     <div id="panel-usuarios" class="main-card">
                         <h3>Base de Usuarios</h3>
-                        <p style="color:#64748b; font-size:13px;">(Vista simplificada para diseño UI. Requiere adaptación completa si hay muchos usuarios).</p>
+                        <p style="color:#64748b; font-size:13px;">(Vista simplificada para diseño UI).</p>
                         <a href="/admin/logout-todos" style="color:red; font-size:12px;">🛑 Desconectar a todos</a>
                     </div>
 
@@ -433,7 +432,6 @@ app.get('/dash', async (req, res) => {
             `);
         } catch (err) { res.redirect('/'); }
     } else {
-        // PERFIL CLIENTE NORMAL (Reducido)
         res.send(`
         ${CSS_MODERNO}
         <div class="top-header">
@@ -441,7 +439,7 @@ app.get('/dash', async (req, res) => {
                 <img src="https://ui-avatars.com/api/?name=${req.session.user}&background=random" alt="Avatar">
                 <div class="info"><strong>${req.session.user}</strong><span>Salir</span></div>
             </div>
-            <div class="brand-logo"><span class="icon">⚡</span> BETFLIX</div>
+            <div class="brand-logo"><span class="icon">⚡</span> PLATAFORMAS STREAMING</div>
             <div></div>
         </div>
         <div style="padding: 50px; display:flex; justify-content:center;">
@@ -461,13 +459,11 @@ app.get('/dash', async (req, res) => {
     }
 });
 
-// Rutas de administración
 app.post('/admin/crear', async (req, res) => {
     let creado_por = (req.session.rol === 'Subadministrador') ? req.session.uid : null;
     try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
-// 🔥 SISTEMA DE BÚSQUEDA EXTREMA (Se mantiene intacto)
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     let messages = [];
@@ -537,7 +533,6 @@ app.post('/buscar', async (req, res) => {
             const reglasPais = [
                 { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
                 { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
-                // (Mantuve esto corto para el ejemplo, agrega tu array completo de países aquí si lo necesitas)
             ];
             for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
             let htmlRes = paisDetectado ? `<div style="font-size: 50px; margin: 40px auto; padding: 40px; background:#fff; border-radius:24px; display:inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">${paisDetectado}</div>` : `<div style="margin: 40px auto; padding: 30px; background:#fff0f2; border-radius:24px; display:inline-block;"><h3 style="color:#ef4444;">⚠️ País no detectado</h3></div>`;
@@ -573,4 +568,4 @@ app.post('/buscar', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`🚀 Panel V3 Neumórfico funcionando en el puerto ${PORT}`); });
+app.listen(PORT, () => { console.log(`🚀 Panel V4 con luz LED funcionando en el puerto ${PORT}`); });
