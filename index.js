@@ -8,10 +8,13 @@ const app = express();
 
 app.use(express.static('public'));
 
+// 💾 SISTEMA DE PERSISTENCIA
+// Nota para despliegues en la nube (ej. Render): 
+// Asegúrate de configurar un "Persistent Disk" y establecer la ruta aquí para evitar que el archivo se borre al actualizar.
 const dbPath = path.resolve(__dirname, 'betflix_mexico_v1.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
-        console.error("Error al abrir la base de datos", err.message);
+        console.error("Error al abrir la base de datos persistente", err.message);
     } else {
         console.log("💾 Base de datos conectada correctamente en:", dbPath);
     }
@@ -26,10 +29,10 @@ const CUENTAS_GMAIL_MAP = {
 };
 
 const PLATAFORMAS = {
-    'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
-    'disney': { nombre: 'Disney+', color: '#113CCF', alpha: 'rgba(17, 60, 207, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' },
-    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.08)', logo: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/crunchyroll.svg', keyword_from: 'crunchyroll' },
-    'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.08)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' }
+    'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.15)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
+    'disney': { nombre: 'Disney+', color: '#ffffff', alpha: 'rgba(255, 255, 255, 0.1)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' },
+    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.15)', logo: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/crunchyroll.svg', keyword_from: 'crunchyroll' },
+    'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.15)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' }
 };
 
 app.use(express.urlencoded({ extended: true }));
@@ -45,37 +48,43 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     
-    db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
-    db.run("ALTER TABLE correos ADD COLUMN fecha_asignacion DATETIME DEFAULT (date('now', 'localtime'))", (err) => {});
-    
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
+// 🎬 ESTILO CINEMATOGRÁFICO Y ELEGANTE
 const CSS_MODERNO = `
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
     :root {
-        --bg-main: #000000; 
-        --card-bg: rgba(10, 10, 10, 0.85); 
-        --text-dark: #ffffff;
+        --text-main: #f8fafc;
         --text-muted: #94a3b8;
-        --border-soft: #333333;
-        --btn-dark: #000000;
-        --btn-light: rgba(20, 20, 20, 0.9);
-        --green-ok: #00ffcc;
-        --neon-border: 0 0 5px rgba(0, 255, 255, 0.4), 0 0 15px rgba(0, 255, 255, 0.2);
-        --neon-accent: #00ffff;
-        --radius-pill: 50px;
-        --radius-card: 24px;
+        --card-bg: rgba(15, 23, 42, 0.65);
+        --card-border: rgba(255, 255, 255, 0.08);
+        --accent: #cbd5e1;
+        --accent-hover: #ffffff;
+        --btn-bg: rgba(255, 255, 255, 0.05);
+        --btn-hover: rgba(255, 255, 255, 0.15);
+        --shadow-elegant: 0 8px 32px rgba(0, 0, 0, 0.4);
+        --blur-effect: blur(20px);
+        --radius: 16px;
     }
 
     body { 
-        background: var(--bg-main);
-        color: var(--text-dark); 
+        /* Fondo Cinematográfico Moderno */
+        background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
+        background-color: #020617;
+        color: var(--text-main); 
         font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; 
         min-height: 100vh;
+    }
+
+    /* Capa de oscurecimiento para legibilidad */
+    body::before {
+        content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: radial-gradient(circle at center, rgba(2, 6, 23, 0.4) 0%, rgba(2, 6, 23, 0.9) 100%);
+        z-index: -1; pointer-events: none;
     }
 
     .goog-te-banner-frame.skiptranslate, #goog-gt-tt, .goog-te-gadget-tooltip { display: none !important; }
@@ -83,177 +92,165 @@ const CSS_MODERNO = `
 
     .top-header { 
         background: transparent; 
-        padding: 20px 40px; 
+        padding: 25px 40px; 
         display: flex; justify-content: space-between; align-items: center; 
     }
     
     .user-pill {
         display: flex; align-items: center; gap: 12px;
         background: var(--card-bg); padding: 8px 16px; 
-        border: 1px solid var(--neon-accent);
-        border-radius: var(--radius-pill); box-shadow: var(--neon-border);
-        font-size: 13px; cursor: pointer; color: #fff;
+        border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
+        border-radius: 50px; box-shadow: var(--shadow-elegant);
+        font-size: 13px; cursor: pointer; transition: 0.3s;
     }
-    .user-pill img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+    .user-pill:hover { background: var(--btn-hover); }
+    .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
-    .user-pill .info strong { color: var(--text-dark); font-weight: 700; }
+    .user-pill .info strong { color: var(--text-main); font-weight: 600; letter-spacing: 0.5px; }
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
 
-    .brand-logo { font-size: 22px; font-weight: 800; display:flex; align-items:center; gap: 8px; letter-spacing: -0.5px; text-transform: uppercase; color: #fff; text-shadow: 0 0 10px #00ffcc;}
-    .brand-logo .icon { color: #00ffcc; }
+    .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
+    .brand-logo strong { font-weight: 700; }
 
     .search-top { display: flex; align-items: center; gap: 15px; }
     .search-top input {
-        background: var(--card-bg); border: 1px solid var(--neon-accent); padding: 12px 20px; width: 300px;
-        border-radius: var(--radius-pill); box-shadow: var(--neon-border); color: #fff;
-        font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
+        background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
+        border-radius: 50px; box-shadow: var(--shadow-elegant); color: #fff; backdrop-filter: var(--blur-effect);
+        font-family: 'Inter', sans-serif; font-size: 13px; outline: none; transition: 0.3s;
     }
-    .search-top .menu-btn {
-        background: var(--card-bg); border: 1px solid var(--neon-accent); width: 42px; height: 42px; color: #00ffff;
-        border-radius: 50%; box-shadow: var(--neon-border); font-weight: bold;
-        cursor: pointer; display: flex; justify-content: center; align-items: center;
-    }
+    .search-top input:focus { border-color: rgba(255,255,255,0.3); width: 320px; }
 
     .dashboard-grid { 
-        display: grid; grid-template-columns: 420px 1fr 320px; gap: 30px; 
+        display: grid; grid-template-columns: 380px 1fr 300px; gap: 30px; 
         padding: 10px 40px 40px 40px; align-items: start;
     }
 
     .platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .plat-card {
-        background: var(--card-bg); border-radius: var(--radius-card); padding: 25px 20px;
-        box-shadow: var(--neon-border); display: flex; flex-direction: column; gap: 15px;
-        position: relative; overflow: hidden; border: 1px solid var(--neon-accent);
+        background: var(--card-bg); border-radius: var(--radius); padding: 25px 20px;
+        box-shadow: var(--shadow-elegant); display: flex; flex-direction: column; gap: 15px;
+        position: relative; overflow: hidden; border: 1px solid var(--card-border);
+        backdrop-filter: var(--blur-effect); transition: 0.3s;
     }
+    .plat-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.2); }
+    
     .plat-header { display: flex; justify-content: space-between; align-items: flex-start; z-index: 2; position: relative; }
-    
-    .plat-logo { height: 28px; max-width: 100px; object-fit: contain; transition: 0.3s; filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
-    .main-card-logo { height: 40px; max-width: 150px; object-fit: contain; transition: 0.3s; filter: drop-shadow(0 0 10px rgba(255,255,255,0.8)); }
+    .plat-logo { height: 24px; max-width: 90px; object-fit: contain; opacity: 0.9; }
+    .main-card-logo { height: 35px; max-width: 130px; object-fit: contain; }
 
-    .status-ok { background: transparent; border: 1px solid var(--green-ok); color: var(--green-ok); font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 50px; box-shadow: 0 0 10px rgba(0, 255, 204, 0.5); text-shadow: 0 0 5px var(--green-ok); }
+    .status-ok { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #e2e8f0; font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 50px; letter-spacing: 0.5px; }
     
-    .plat-stats { z-index: 2; position: relative; margin-top: 10px; }
-    .plat-stats span { display: block; font-size: 13px; font-weight: 600; color: var(--text-dark); margin-bottom: 5px; }
-    .plat-stats .line { height: 2px; width: 100%; border-radius: 2px; margin-bottom: 8px; box-shadow: 0 0 8px currentColor; }
-    .plat-stats small { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-
-    .plat-actions { display: flex; flex-direction: column; gap: 8px; z-index: 2; position: relative; margin-top: auto; }
-    .btn-dark-blue { background: transparent; color: var(--neon-accent); border: 1px solid var(--neon-accent); padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: var(--neon-border); text-transform: uppercase; }
-    .btn-dark-blue:hover { background: var(--neon-accent); color: #000; box-shadow: 0 0 20px var(--neon-accent); }
-    .btn-light-pill { background: transparent; color: #ff00ff; border: 1px solid #ff00ff; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: 0 0 5px rgba(255, 0, 255, 0.4); text-transform: uppercase; }
-    .btn-light-pill:hover { background: #ff00ff; color: #000; box-shadow: 0 0 20px #ff00ff; }
+    .plat-stats { z-index: 2; position: relative; margin-top: 15px; }
+    .plat-stats span { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;}
+    .plat-stats .line { height: 1px; width: 100%; margin-bottom: 12px; background: rgba(255,255,255,0.2); }
+    
+    .plat-actions { display: flex; flex-direction: column; gap: 10px; z-index: 2; position: relative; margin-top: auto; }
+    .btn-action-sm { background: var(--btn-bg); color: var(--text-main); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; }
+    .btn-action-sm:hover { background: var(--btn-hover); border-color: rgba(255,255,255,0.3); }
 
     .center-panel { display: flex; flex-direction: column; gap: 25px; }
     .main-card {
-        background: var(--card-bg); border-radius: var(--radius-card); padding: 40px;
-        box-shadow: var(--neon-border); display: none; animation: fadeIn 0.3s ease;
-        border: 1px solid var(--neon-accent);
+        background: var(--card-bg); border-radius: var(--radius); padding: 40px;
+        box-shadow: var(--shadow-elegant); display: none; animation: fadeIn 0.4s ease;
+        border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
     }
     .main-card.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
-    .main-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; }
-    .main-card-title h3 { margin: 0; font-size: 22px; color: var(--text-dark); font-weight: 800; text-shadow: 0 0 8px rgba(255,255,255,0.3); }
-    .main-card-title p { margin: 5px 0 0 0; color: var(--text-muted); font-size: 13px; }
+    .main-card-header { display: flex; align-items: center; gap: 25px; margin-bottom: 35px; }
+    .main-card-title h3 { margin: 0; font-size: 24px; color: var(--text-main); font-weight: 500; letter-spacing: -0.5px; }
+    .main-card-title p { margin: 6px 0 0 0; color: var(--text-muted); font-size: 13px; font-weight: 300; }
 
     .action-row { display: flex; gap: 15px; margin-bottom: 25px; }
     .action-btn-pill {
-        flex: 1; background: transparent; border: 1px solid var(--neon-accent); box-shadow: var(--neon-border);
-        padding: 15px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 700;
-        color: var(--neon-accent); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
-        transition: 0.2s; text-transform: uppercase;
+        flex: 1; background: var(--btn-bg); border: 1px solid var(--card-border);
+        padding: 16px; border-radius: 50px; font-size: 11px; font-weight: 600;
+        color: var(--text-main); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
+        transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
     }
-    .action-btn-pill:hover { background: var(--neon-accent); color: #000; box-shadow: 0 0 20px var(--neon-accent); }
+    .action-btn-pill:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.4); transform: translateY(-2px); }
 
     .search-input-large {
-        width: 100%; background: var(--btn-light); border: 1px solid var(--neon-accent); box-shadow: inset 0 0 5px rgba(0,255,255,0.2);
-        padding: 18px 25px; border-radius: var(--radius-pill); font-size: 14px;
-        color: var(--text-dark); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif;
+        width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); 
+        padding: 20px 30px; border-radius: 50px; font-size: 14px;
+        color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif;
+        transition: 0.3s; backdrop-filter: blur(10px);
     }
+    .search-input-large:focus { border-color: rgba(255,255,255,0.5); background: rgba(0,0,0,0.6); }
 
     .iframe-container {
-        background: var(--card-bg); border-radius: var(--radius-card); 
-        box-shadow: var(--neon-border); overflow: hidden; border: 1px solid var(--neon-accent);
-        height: 500px; display: flex; flex-direction: column;
+        background: var(--card-bg); border-radius: var(--radius); 
+        box-shadow: var(--shadow-elegant); overflow: hidden; border: 1px solid var(--card-border);
+        height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect);
     }
     .iframe-header {
-        padding: 15px 25px; background: rgba(0,0,0,0.5); 
-        border-bottom: 1px solid var(--border-soft); font-weight: 700; 
-        font-size: 13px; color: var(--text-dark); display: flex; align-items: center; gap: 8px;
+        padding: 16px 25px; background: rgba(0,0,0,0.3); 
+        border-bottom: 1px solid var(--card-border); font-weight: 500; 
+        font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;
     }
 
     .right-sidebar { display: flex; flex-direction: column; gap: 25px; }
     .side-card {
-        background: var(--card-bg); border-radius: var(--radius-card); padding: 25px;
-        box-shadow: var(--neon-border); border: 1px solid var(--neon-accent);
+        background: var(--card-bg); border-radius: var(--radius); padding: 25px;
+        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
     }
-    .side-card h4 { margin: 0 0 20px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--neon-accent); font-weight: 800; text-shadow: 0 0 5px var(--neon-accent); }
+    .side-card h4 { margin: 0 0 20px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 12px;}
     
     .activity-list { display: flex; flex-direction: column; gap: 15px; }
-    .activity-item { border-bottom: 1px solid var(--border-soft); padding-bottom: 12px; }
+    .activity-item { border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; }
     .activity-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .activity-item strong { display: block; font-size: 13px; color: var(--text-dark); }
-    .activity-item span { font-size: 11px; color: var(--text-muted); }
+    .activity-item strong { display: block; font-size: 13px; color: var(--text-main); font-weight: 500; }
+    .activity-item span { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;}
 
     .menu-list { display: flex; flex-direction: column; gap: 10px; }
     .menu-btn-item {
-        background: transparent; border: 1px solid var(--border-soft); padding: 14px 20px;
-        border-radius: var(--radius-pill); font-size: 13px; font-weight: 600;
-        color: var(--text-dark); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px;
-        transition: 0.2s; font-family: 'Inter', sans-serif;
+        background: transparent; border: 1px solid transparent; padding: 12px 16px;
+        border-radius: 8px; font-size: 13px; font-weight: 400;
+        color: var(--text-main); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px;
+        transition: 0.3s; font-family: 'Inter', sans-serif;
     }
-    .menu-btn-item:hover { border-color: var(--neon-accent); color: var(--neon-accent); box-shadow: var(--neon-border); transform: translateX(5px); }
+    .menu-btn-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); transform: translateX(5px); }
 
-    .input-classic { width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--neon-accent); background: var(--btn-light); color: white; font-family: 'Inter', sans-serif; box-sizing: border-box; }
-    .btn-submit { background: var(--neon-accent); color: #000; border: none; padding: 15px; border-radius: 12px; font-weight: 800; cursor: pointer; width: 100%; box-shadow: 0 0 15px var(--neon-accent); text-transform: uppercase; }
-    .btn-submit:hover { background: #fff; box-shadow: 0 0 25px #fff; }
+    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.3); color: white; font-family: 'Inter', sans-serif; box-sizing: border-box; transition: 0.3s; outline: none;}
+    .input-classic:focus { border-color: rgba(255,255,255,0.4); }
+    
+    .btn-submit { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 16px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; font-size: 12px;}
+    .btn-submit:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.5); }
 
-    .sugerencia-dominio {
-        background: #000; color: #00ffcc; padding: 8px 16px; border-radius: 50px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; transition: 0.2s ease; border: 1px solid #00ffcc; box-shadow: 0 0 8px rgba(0, 255, 204, 0.4);
-    }
-    .sugerencia-dominio:hover { background: #00ffcc; color: #000; box-shadow: 0 0 20px #00ffcc; transform: translateY(-2px); }
-
-    /* Forzar fondo oscuro en la tabla de usuarios */
-    table thead th { background: transparent !important; border-bottom: 1px solid var(--neon-accent); }
-    table tr td { border-bottom: 1px solid var(--border-soft); }
+    /* Estilos de tabla elegantes */
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    table thead th { background: rgba(0,0,0,0.3) !important; border-bottom: 1px solid var(--card-border); padding: 16px; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: var(--text-muted); }
+    table tr td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px; font-size: 13px; color: var(--text-main); }
+    table tr:last-child td { border-bottom: none; }
 </style>
 
 <script>
     function verificarHotmail(inputElem, platKey) {
         let valor = inputElem.value.toLowerCase();
         let sugerencia = document.getElementById('sugerencia_ghoulflix_' + platKey);
-        
-        if (valor.includes('@hotmail.com')) {
-            sugerencia.style.display = 'inline-flex';
-        } else {
-            sugerencia.style.display = 'none';
+        if (sugerencia) {
+            sugerencia.style.display = valor.includes('@hotmail.com') ? 'inline-flex' : 'none';
         }
     }
-
     function cambiarDominio(platKey) {
         let inputElem = document.getElementById('email_search_' + platKey);
         let valor = inputElem.value.toLowerCase();
-        
         if (valor.includes('@hotmail.com')) {
             inputElem.value = valor.replace('@hotmail.com', '@ghoulflix.com');
             document.getElementById('sugerencia_ghoulflix_' + platKey).style.display = 'none';
             inputElem.focus();
         }
     }
-
     function openTab(tabId) {
         document.querySelectorAll('.main-card').forEach(p => p.classList.remove('active'));
         let selectedTab = document.getElementById(tabId);
         if(selectedTab) selectedTab.classList.add('active');
         localStorage.setItem('activeBetflixTab', tabId);
     }
-    
     document.addEventListener('DOMContentLoaded', () => {
         let active = localStorage.getItem('activeBetflixTab');
         const urlParams = new URLSearchParams(window.location.search);
-        if(urlParams.has('buscar_dueno')) {
-            active = 'panel-base-datos';
-        }
+        if(urlParams.has('buscar_dueno')) { active = 'panel-base-datos'; }
         if(!active || !document.getElementById(active)) active = 'panel-netflix'; 
         openTab(active);
     });
@@ -275,9 +272,6 @@ app.use(async (req, res, next) => {
     } else { return res.redirect('/'); }
 });
 
-// ==========================================
-// RUTA LOGIN
-// ==========================================
 app.get('/', (req, res) => {
     res.send(`
     <!DOCTYPE html>
@@ -287,126 +281,65 @@ app.get('/', (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Acceso - stremin gunpreetsel</title>
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
             body {
-                margin: 0;
-                padding: 0;
-                font-family: 'Inter', sans-serif;
-                background-image: url('https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
-                background-size: cover;
-                background-position: center;
-                background-attachment: fixed;
-                height: 100vh;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                background-color: #000;
+                margin: 0; padding: 0; font-family: 'Inter', sans-serif;
+                background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
+                background-color: #020617; height: 100vh; display: flex; justify-content: center; align-items: center;
             }
-
-            .overlay {
-                position: absolute;
-                top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.5);
-                z-index: 1;
+            
+            body::before {
+                content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                background: radial-gradient(circle at center, rgba(2, 6, 23, 0.4) 0%, rgba(2, 6, 23, 0.95) 100%);
+                z-index: 1; pointer-events: none;
             }
 
             .login-box {
-                position: relative;
-                z-index: 2;
-                background: rgba(0, 0, 0, 0.75);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 16px;
-                padding: 50px;
-                width: 100%;
-                max-width: 380px;
-                box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
-                box-sizing: border-box;
-                text-align: center;
+                position: relative; z-index: 2;
+                background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px;
+                padding: 50px 40px; width: 100%; max-width: 400px;
+                box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); box-sizing: border-box; text-align: center;
             }
 
             .login-box h2 {
-                color: #ffffff;
-                font-size: 26px;
-                font-weight: 800;
-                margin-top: 0;
-                margin-bottom: 30px;
+                color: #ffffff; font-size: 24px; font-weight: 400; letter-spacing: 2px;
+                margin-top: 0; margin-bottom: 35px; text-transform: uppercase;
             }
 
-            .input-group {
-                margin-bottom: 20px;
-            }
-
+            .input-group { margin-bottom: 20px; }
             .input-group input {
-                width: 100%;
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.15);
-                color: #ffffff;
-                height: 52px;
-                padding: 0 16px;
-                box-sizing: border-box;
-                font-size: 15px;
-                border-radius: 8px;
-                outline: none;
-                transition: all 0.3s ease;
+                width: 100%; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15);
+                color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px;
+                border-radius: 8px; outline: none; transition: 0.3s;
             }
-
-            .input-group input:focus {
-                background: rgba(255, 255, 255, 0.12);
-                border-color: #E50914;
-            }
-
-            .input-group input::placeholder {
-                color: #94a3b8;
-            }
+            .input-group input:focus { border-color: rgba(255, 255, 255, 0.5); background: rgba(0,0,0,0.6); }
+            .input-group input::placeholder { color: #64748b; }
 
             .btn-submit {
-                width: 100%;
-                background: #E50914;
-                color: #ffffff;
-                font-size: 16px;
-                font-weight: 700;
-                padding: 16px;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                margin-top: 10px;
-                transition: 0.2s;
+                width: 100%; background: rgba(255, 255, 255, 0.1); color: #ffffff; font-size: 13px; font-weight: 600;
+                padding: 18px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer;
+                margin-top: 15px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
             }
+            .btn-submit:hover { background: rgba(255, 255, 255, 0.2); border-color: rgba(255,255,255,0.4); }
 
-            .btn-submit:hover {
-                background: #f40612;
-            }
-
-            .help-text {
-                color: #94a3b8;
-                font-size: 13px;
-                margin-top: 30px;
-                line-height: 1.5;
-            }
+            .help-text { color: #64748b; font-size: 12px; margin-top: 30px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
     <body>
-        <div class="overlay"></div>
-        
         <div class="login-box">
-            <h2>Iniciar Sesión</h2>
-            
+            <h2>Acceso Seguro</h2>
             <form action="/login" method="POST">
                 <div class="input-group">
-                    <input type="text" name="user" placeholder="Usuario (dueño)" required>
+                    <input type="text" name="user" placeholder="Usuario" required>
                 </div>
                 <div class="input-group">
                     <input type="password" name="pass" placeholder="Contraseña" required>
                 </div>
                 <button type="submit" class="btn-submit">Ingresar</button>
             </form>
-            
-            <div class="help-text">
-                Acceso cifrado. Panel Central protegido para la seguridad de la plataforma.
-            </div>
+            <div class="help-text">Panel de administración encriptado. Conexión segura.</div>
         </div>
     </body>
     </html>
@@ -452,36 +385,32 @@ app.get('/dash', async (req, res) => {
                 <div class="plat-card">
                     <div style="position:absolute; top:-50px; right:-50px; width:150px; height:150px; background:radial-gradient(circle, ${plat.alpha} 0%, transparent 70%); border-radius:50%; pointer-events:none;"></div>
                     <div class="plat-header">
-                        <img src="${plat.logo}" alt="${plat.nombre}" class="plat-logo" style="filter: drop-shadow(0px 0px 10px ${plat.color});">
-                        <span class="status-ok">DE ACUERDO</span>
+                        <img src="${plat.logo}" alt="${plat.nombre}" class="plat-logo">
+                        <span class="status-ok">OPERATIVO</span>
                     </div>
                     <div class="plat-stats">
                         <span>Estado</span>
-                        <div class="line" style="background: ${plat.color};"></div>
-                        <small>Códigos activos: 145/200</small>
+                        <div class="line"></div>
                     </div>
                     <div class="plat-actions">
-                        <button class="btn-dark-blue" onclick="openTab('panel-${key}')">Consulta tu plataforma</button>
-                        <button class="btn-light-pill" onclick="openTab('panel-${key}')">Consultar códigos</button>
+                        <button class="btn-action-sm" onclick="openTab('panel-${key}')">Consultar Plataforma</button>
                     </div>
                 </div>`;
             });
 
             plataformasCardsHtml += `
             <div class="plat-card">
-                <div style="position:absolute; top:-50px; right:-50px; width:150px; height:150px; background:radial-gradient(circle, rgba(234, 67, 53, 0.08) 0%, transparent 70%); border-radius:50%; pointer-events:none;"></div>
+                <div style="position:absolute; top:-50px; right:-50px; width:150px; height:150px; background:radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%); border-radius:50%; pointer-events:none;"></div>
                 <div class="plat-header">
-                    <span style="font-weight: 800; font-size: 16px; color: #ea4335;">GMAIL</span>
-                    <span class="status-ok">DE ACUERDO</span>
+                    <span style="font-weight: 300; font-size: 15px; color: #fff; letter-spacing: 1px;">GMAIL CENTRAL</span>
+                    <span class="status-ok">OPERATIVO</span>
                 </div>
                 <div class="plat-stats">
-                    <span>Buzón Central</span>
-                    <div class="line" style="background: #ea4335;"></div>
-                    <small>aniketseller2@gmail.com</small>
+                    <span>Buzón Principal</span>
+                    <div class="line"></div>
                 </div>
                 <div class="plat-actions">
-                    <button class="btn-dark-blue" onclick="openTab('panel-gmail')">Consulta tu plataforma</button>
-                    <button class="btn-light-pill" onclick="openTab('panel-gmail')">Consultar códigos</button>
+                    <button class="btn-action-sm" onclick="openTab('panel-gmail')">Consultar Bandeja</button>
                 </div>
             </div>`;
 
@@ -491,28 +420,23 @@ app.get('/dash', async (req, res) => {
                 plataformasPanelsHtml += `
                 <div id="panel-${key}" class="main-card">
                     <div class="main-card-header">
-                        <img src="${plat.logo}" alt="${plat.nombre}" class="main-card-logo" style="filter: drop-shadow(0px 0px 15px ${plat.color});">
+                        <img src="${plat.logo}" alt="${plat.nombre}" class="main-card-logo">
                         <div class="main-card-title">
                             <h3>Gestor Central ${plat.nombre}</h3>
-                            <p>Búsqueda avanzada de códigos y accesos cifrados de ${plat.nombre}.</p>
+                            <p>Búsqueda avanzada y extracción de códigos optimizada.</p>
                         </div>
                     </div>
                     <form action="/buscar" method="POST" target="marco_resultados">
                         <input type="hidden" name="plataforma" value="${key}">
                         <div class="action-row">
-                            <button type="submit" name="accion" value="mensaje" class="action-btn-pill">📩 LEER MENSAJE</button>
-                            <button type="submit" name="accion" value="pais" class="action-btn-pill">🌍 ANALIZAR PAÍS</button>
-                            <button type="submit" name="accion" value="ip" class="action-btn-pill">📡 BUSCAR IP</button>
+                            <button type="submit" name="accion" value="mensaje" class="action-btn-pill">Leer Mensaje</button>
+                            <button type="submit" name="accion" value="pais" class="action-btn-pill">Analizar País</button>
+                            <button type="submit" name="accion" value="ip" class="action-btn-pill">Buscar IP</button>
                         </div>
                         
                         <div style="position: relative; width: 100%;">
-                            <input type="text" id="email_search_${key}" name="email_search" class="search-input-large" placeholder="✉️ Buscar correo registrado en ${plat.nombre}..." oninput="verificarHotmail(this, '${key}')" required>
-                            
-                            <div id="sugerencia_ghoulflix_${key}" class="sugerencia-dominio" onclick="cambiarDominio('${key}')" style="display: none;">
-                                🔁 Usar <strong>@ghoulflix.com</strong>
-                            </div>
+                            <input type="text" id="email_search_${key}" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." oninput="verificarHotmail(this, '${key}')" required>
                         </div>
-
                     </form>
                 </div>`;
             });
@@ -520,25 +444,25 @@ app.get('/dash', async (req, res) => {
             plataformasPanelsHtml += `
             <div id="panel-gmail" class="main-card">
                 <div class="main-card-header">
-                    <div style="font-size: 32px; font-weight: 800; color: #ea4335;">GMAIL</div>
+                    <div style="font-size: 28px; font-weight: 300; color: #fff; letter-spacing: 2px;">GMAIL</div>
                     <div class="main-card-title">
-                        <h3>Gestor Buzón aniketseller2@gmail.com</h3>
-                        <p>Consulta directa del último correo recibido en el buzón central.</p>
+                        <h3>Buzón darciogarces@gmail.com</h3>
+                        <p>Consulta directa del último correo recibido en el buzón central autorizado.</p>
                     </div>
                 </div>
                 <form action="/buscar" method="POST" target="marco_resultados">
                     <input type="hidden" name="plataforma" value="gmail">
                     <div class="action-row">
-                        <button type="submit" name="accion" value="mensaje" class="action-btn-pill">📩 LEER ÚLTIMO MENSAJE</button>
+                        <button type="submit" name="accion" value="mensaje" class="action-btn-pill">Leer Último Mensaje</button>
                     </div>
-                    <input type="text" name="email_search" class="search-input-large" value="aniketseller2@gmail.com" readonly style="background:#e2e8f0; cursor:not-allowed;">
+                    <input type="text" name="email_search" class="search-input-large" value="darciogarces@gmail.com" readonly style="opacity: 0.5; cursor:not-allowed;">
                 </form>
             </div>`;
 
             let actividadesHtml = "";
             if (registros.length > 0) {
                 registros.forEach(r => {
-                    actividadesHtml += `<div class="activity-item"><strong>Consultar correo ${r.email_buscado}</strong><span>${r.fecha} - ${r.user}</span></div>`;
+                    actividadesHtml += `<div class="activity-item"><strong>${r.email_buscado}</strong><span>${r.fecha} - ${r.user}</span></div>`;
                 });
             } else {
                 actividadesHtml = `<div class="activity-item"><span>No hay actividades recientes.</span></div>`;
@@ -555,7 +479,7 @@ app.get('/dash', async (req, res) => {
                     : usuarios.filter(u => u.creado_por === req.session.uid);
 
                 if (usuariosVisibles.length === 0) {
-                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 15px; text-align: center;'>No tienes clientes asignados.</td></tr>";
+                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: var(--text-muted);'>No tienes clientes asignados en la base de datos.</td></tr>";
                 } else {
                     usuariosVisibles.forEach(u => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
@@ -564,33 +488,33 @@ app.get('/dash', async (req, res) => {
                         if (correosDelUsuario.length > 0) {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: #fee2e2; border: 1px solid #ef4444;" : "background: #f1f5f9;";
+                                let estiloFondo = esBuscado ? "background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);" : "background: rgba(0,0,0,0.2); border: 1px solid transparent;";
                                 
-                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:6px 10px; border-radius:8px; font-size:11px; margin-bottom:5px;">
-                                    <span>${c.email} <small style="color:var(--text-muted);">(Asig: ${c.fecha_asignacion || 'N/A'})</small></span>
+                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px; transition: 0.2s;">
+                                    <span>${c.email}</span>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;">
                                         <input type="hidden" name="correo_id" value="${c.id}">
-                                        <button type="submit" style="background:none; border:none; color:#ef4444; font-weight:bold; cursor:pointer; font-size:12px;" title="Eliminar correo">✕</button>
+                                        <button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:11px;" title="Eliminar correo">✕</button>
                                     </form>
                                 </div>`;
                             }).join('');
                         } else {
-                            listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px;'>Sin correos asignados</span>";
+                            listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados</span>";
                         }
 
                         tablaUsuariosHtml += `
-                        <tr style="border-bottom: 1px solid var(--border-soft);">
-                            <td style="padding: 15px; font-weight: 600; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:400;">${u.rol}</small></td>
-                            <td style="padding: 15px; vertical-align: top;">
-                                <div style="max-height: 150px; overflow-y: auto; padding-right: 5px;">
+                        <tr>
+                            <td style="font-weight: 500; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small></td>
+                            <td style="vertical-align: top;">
+                                <div style="max-height: 160px; overflow-y: auto; padding-right: 8px;">
                                     ${listaCorreosHtml}
                                 </div>
                             </td>
-                            <td style="padding: 15px; font-size: 12px; vertical-align: top;">${esAdminPrincipal && u.creado_por ? `ID Creador: ${u.creado_por}` : 'Tú'}</td>
-                            <td style="padding: 15px; vertical-align: top; text-align: center;">
-                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario y todos sus correos?');" style="margin:0;">
+                            <td style="font-size: 12px; color: var(--text-muted); vertical-align: top;">${esAdminPrincipal && u.creado_por ? `ID Creador: ${u.creado_por}` : 'Tú'}</td>
+                            <td style="vertical-align: top; text-align: center;">
+                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario y todos sus correos permanentemente?');" style="margin:0;">
                                     <input type="hidden" name="user_id" value="${u.id}">
-                                    <button type="submit" style="background:#fee2e2; color:#ef4444; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">Eliminar</button>
+                                    <button type="submit" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; transition:0.3s;" onmouseover="this.style.background='rgba(255,0,0,0.2)'; this.style.borderColor='rgba(255,0,0,0.5)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.2)'">Eliminar</button>
                                 </form>
                             </td>
                         </tr>`;
@@ -603,18 +527,17 @@ app.get('/dash', async (req, res) => {
             
             <div class="top-header">
                 <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
-                    <img src="https://ui-avatars.com/api/?name=${req.session.user}&background=random" alt="Avatar">
+                    <img src="https://ui-avatars.com/api/?name=${req.session.user}&background=1e293b&color=fff" alt="Avatar">
                     <div class="info">
                         <strong>${req.session.user}</strong>
                         <span>${req.session.rol} ▾</span>
                     </div>
                 </div>
                 
-                <div class="brand-logo"><span class="icon">⚡</span> stremin gunpreetsel</div>
+                <div class="brand-logo"><strong>STREMIN</strong> GUNPREETSEL</div>
                 
                 <div class="search-top">
-                    <input type="text" placeholder="Buscar correo general...">
-                    <button class="menu-btn">...</button>
+                    <input type="text" placeholder="Buscar en el sistema...">
                 </div>
             </div>
 
@@ -627,51 +550,62 @@ app.get('/dash', async (req, res) => {
                     ${plataformasPanelsHtml}
                     
                     <div id="panel-crear-user" class="main-card">
-                        <h3>Crear Nuevo Usuario</h3>
+                        <div class="main-card-header">
+                            <div class="main-card-title">
+                                <h3>Crear Nuevo Usuario</h3>
+                                <p>Agrega clientes a la base de datos persistente.</p>
+                            </div>
+                        </div>
                         <form action="/admin/crear" method="POST">
                             <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
                             <input name="c" class="input-classic" placeholder="Contraseña" required>
-                            <select name="r" class="input-classic">
+                            <select name="r" class="input-classic" style="appearance: none;">
                                 <option value="Cliente">Cliente Normal</option>
                                 ${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}
                             </select>
-                            <button class="btn-submit">Guardar Usuario</button>
+                            <button class="btn-submit">Guardar Usuario en DB</button>
                         </form>
                     </div>
 
                     <div id="panel-usuarios" class="main-card">
-                        <h3>Gestión de Accesos a Correos</h3>
-                        <p style="color:#64748b; font-size:13px; margin-bottom: 20px;">Pega los correos separados por espacio para asignarlos de forma masiva (Hasta 500 correos).</p>
+                        <div class="main-card-header">
+                            <div class="main-card-title">
+                                <h3>Asignación de Correos</h3>
+                                <p>Vincula correos masivos a cuentas de clientes específicos.</p>
+                            </div>
+                        </div>
                         
                         <form action="/admin/asignar-correo" method="POST" style="margin-bottom: 25px;">
-                            <select name="user_id" class="input-classic" required>
-                                <option value="" disabled selected>Selecciona un cliente...</option>
+                            <select name="user_id" class="input-classic" required style="appearance: none;">
+                                <option value="" disabled selected>Selecciona un cliente de la base de datos...</option>
                                 ${clientesOpcionesHtml}
                             </select>
-                            <textarea name="email" class="input-classic" placeholder="ejemplo1@gmail.com ejemplo2@gmail.com ..." rows="4" required style="resize: vertical;"></textarea>
-                            <button type="submit" class="btn-submit">Asignar Correos al Cliente</button>
+                            <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio (ej. correo1@gmail.com correo2@gmail.com)" rows="5" required style="resize: vertical;"></textarea>
+                            <button type="submit" class="btn-submit">Asignar Correos</button>
                         </form>
-                        
-                        <a href="/admin/logout-todos" style="color:red; font-size:12px; text-decoration: none; font-weight: bold;">🛑 Desconectar a todos los usuarios</a>
                     </div>
 
                     <div id="panel-base-datos" class="main-card">
-                        <h3>Base de Usuarios y Correos Asignados</h3>
-                        <p style="color:#64748b; font-size:13px; margin-bottom: 15px;">Resumen de clientes y fechas de asignación de cuentas.</p>
+                        <div class="main-card-header" style="margin-bottom: 20px;">
+                            <div class="main-card-title">
+                                <h3>Registro de Usuarios y Asignaciones</h3>
+                                <p>Datos persistentes del sistema.</p>
+                            </div>
+                        </div>
                         
-                        <form action="/dash" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
-                            <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="🔍 Escribe un correo para buscar a su dueño..." style="margin:0; font-size:13px; padding: 10px 15px;">
-                            <button type="submit" style="background:var(--btn-dark); color:white; border:none; padding: 0 20px; border-radius:12px; font-weight:bold; cursor:pointer; font-size:13px;">Buscar</button>
+                        <form action="/dash" method="GET" style="margin-bottom: 25px; display: flex; gap: 12px;">
+                            <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo para localizar al cliente..." style="margin:0; padding: 12px 20px;">
+                            <button type="submit" class="btn-action-sm" style="width: auto; padding: 0 25px;">Buscar</button>
                         </form>
 
-                        <div style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-soft); border-radius: 12px;">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
-                                <thead style="background: var(--btn-light);">
+                        <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
+                            <table>
+                                <thead>
                                     <tr>
-                                        <th style="padding: 15px; color: var(--text-dark);">Usuario</th>
-                                        <th style="padding: 15px; color: var(--text-dark); width: 50%;">Correos y Vencimiento (Con Scroll)</th>
-                                        <th style="padding: 15px; color: var(--text-dark);">Creado Por</th>
-                                        <th style="padding: 15px; color: var(--text-dark); text-align: center;">Acción</th>
+                                        <th>Usuario</th>
+                                        <th style="width: 50%;">Correos Vinculados</th>
+                                        <th>Creador</th>
+                                        <th style="text-align: center;">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -682,9 +616,7 @@ app.get('/dash', async (req, res) => {
                     </div>
 
                     <div class="iframe-container">
-                        <div class="iframe-header">
-                            <span>📑</span> Visor de Resultados
-                        </div>
+                        <div class="iframe-header">Visor de Resultados Integrado</div>
                         <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
                     </div>
                 </div>
@@ -692,7 +624,7 @@ app.get('/dash', async (req, res) => {
                 <div class="right-sidebar">
                     ${(esAdminPrincipal || esSubAdmin) ? `
                     <div class="side-card">
-                        <h4>Últimas Actividades</h4>
+                        <h4>Actividad Reciente</h4>
                         <div class="activity-list">
                             ${actividadesHtml}
                         </div>
@@ -700,21 +632,13 @@ app.get('/dash', async (req, res) => {
                     ` : ''}
 
                     <div class="side-card">
-                        <h4>Gestión del Sistema</h4>
+                        <h4>Administración</h4>
                         <div class="menu-list">
                             ${(esAdminPrincipal || esSubAdmin) ? `
-                            <button class="menu-btn-item" onclick="openTab('panel-crear-user')">🔍 Crear Nuevo Usuario</button>
-                            <button class="menu-btn-item" onclick="openTab('panel-usuarios')">🗄️ Asignar Correos</button>
-                            <button class="menu-btn-item" onclick="openTab('panel-base-datos')">👥 Ver Base de Usuarios</button>
+                            <button class="menu-btn-item" onclick="openTab('panel-crear-user')">Crear Usuario</button>
+                            <button class="menu-btn-item" onclick="openTab('panel-usuarios')">Asignar Correos</button>
+                            <button class="menu-btn-item" onclick="openTab('panel-base-datos')">Ver Base de Datos</button>
                             ` : ''}
-                            <button class="menu-btn-item" onclick="alert('Historial completo en desarrollo')">🔒 Historial de Códigos</button>
-                        </div>
-                    </div>
-
-                    <div class="side-card">
-                        <h4>Herramientas Globales</h4>
-                        <div class="menu-list">
-                            <button class="menu-btn-item" onclick="openTab('panel-base-datos')">🔧 Buscar Dueño de Cuenta</button>
                         </div>
                     </div>
                 </div>
@@ -734,7 +658,6 @@ app.post('/admin/asignar-correo', async (req, res) => {
     try {
         const correosBrutos = req.body.email.trim();
         const listaCorreos = correosBrutos.split(/[\s,]+/).filter(e => e.includes('@'));
-
         for (let email of listaCorreos) {
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [email.toLowerCase(), req.body.user_id]);
         }
@@ -764,14 +687,13 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
+// 🚀 BÚSQUEDA IMAP OPTIMIZADA (Fail-fast para mayor velocidad)
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
 
-    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 3000 } };
-    
-    let messages = [];
-    let mail = null;
+    // Timeout de autenticación ajustado y fetch rápido
+    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 2500 } };
     let connection = null;
 
     try {
@@ -780,48 +702,23 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         
         let keywordPlat = (plataforma && PLATAFORMAS[plataforma]) ? PLATAFORMAS[plataforma].keyword_from : '';
         let esConsultaGmailDirecta = (plataforma === 'gmail');
-        let esHotmailBuzonCompartido = false;
 
-        if (correoIngresado.includes('@hotmail.') || correoIngresado.includes('@outlook.')) {
-            esHotmailBuzonCompartido = true;
-        }
+        let messages = [];
+        let mail = null;
 
         if (esConsultaGmailDirecta) {
-            let searchResults = await connection.search([['ALL']], { bodies: ['HEADER', ''] });
+            // Optimización: Solo descargar el último mensaje rápidamente
+            let searchResults = await connection.search([['ALL']], { bodies: ['HEADER'] });
             if (searchResults.length > 0) {
-                searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
-                let latestUid = searchResults[0].attributes.uid;
+                let latestUid = searchResults[searchResults.length - 1].attributes.uid; // El último suele tener el mayor UID
                 let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
                 if (fetchedMsg.length > 0) {
                     messages = fetchedMsg;
                     mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
                 }
             }
-        } else if (esHotmailBuzonCompartido && correoBuzon === 'aniketseller2@gmail.com') {
-            let searchResults = await connection.search([['ALL']], { bodies: ['HEADER', ''] });
-            searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
-
-            for (let msg of searchResults.slice(0, 30)) {
-                let allParts = msg.parts.find(p => p.which === '') || msg.parts.find(p => p.which === 'BODY[]');
-                if (allParts) {
-                    let parsedTemp = await simpleParser(allParts.body);
-                    let cuerpoCompleto = ((parsedTemp.text || "") + " " + (parsedTemp.html || "") + " " + (parsedTemp.subject || "")).toLowerCase();
-                    let matchCorreo = cuerpoCompleto.includes(correoIngresado) || cuerpoCompleto.includes(partes[0]);
-                    let matchPlat = keywordPlat ? cuerpoCompleto.includes(keywordPlat) : true;
-                    if (matchCorreo && matchPlat) { messages = [msg]; mail = parsedTemp; break; }
-                }
-            }
-            if (messages.length === 0) {
-                for (let msg of searchResults.slice(0, 25)) {
-                    let allParts = msg.parts.find(p => p.which === '') || msg.parts.find(p => p.which === 'BODY[]');
-                    if (allParts) {
-                        let parsedTemp = await simpleParser(allParts.body);
-                        let cuerpoCompleto = ((parsedTemp.text || "") + " " + (parsedTemp.html || "") + " " + (parsedTemp.subject || "")).toLowerCase();
-                        if (cuerpoCompleto.includes(correoIngresado) || cuerpoCompleto.includes(partes[0])) { messages = [msg]; mail = parsedTemp; break; }
-                    }
-                }
-            }
         } else {
+            // Optimización usando X-GM-RAW de Gmail nativo para consultas de búsqueda súper rápidas
             let queryStr = `"${correoIngresado}"`;
             if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
@@ -836,14 +733,13 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
                 }
             }
         }
-        connection.end();
         
-        if (messages.length > 0 && mail) {
-            return { messages, mail, buzón: correoBuzon };
-        }
+        connection.end(); // Cerrar conexión rápido
+        if (messages.length > 0 && mail) { return { messages, mail, buzón: correoBuzon }; }
         return null;
+
     } catch (err) {
-        console.log(`⚠️ Error IMAP con ${correoBuzon}:`, err.message);
+        console.log(`⚠️ Advertencia IMAP (${correoBuzon}):`, err.message);
         if (connection) connection.end();
         return null;
     }
@@ -851,7 +747,9 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
-    const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #000000; color: #e2e8f0; padding: 20px; margin: 0; }</style>`;
+    
+    // Iframe con diseño oscuro y elegante
+    const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #020617; color: #cbd5e1; padding: 25px; margin: 0; line-height: 1.6; } h2, h3 { color: #f8fafc; font-weight: 400; }</style>`;
 
     try {
         let correoIngresado = (email_search || "").trim().toLowerCase();
@@ -859,33 +757,12 @@ app.post('/buscar', async (req, res) => {
         if (req.session.rol === 'Cliente' && plataforma !== 'gmail') {
             const permiso = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [correoIngresado, req.session.uid]);
             if (!permiso) {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px;"><h2 style="color:#ef4444;">⛔ Acceso Denegado</h2><p>No tienes autorización para buscar códigos o leer mensajes de este correo.</p></div>`);
+                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255,255,255,0.1); border-radius:12px; background: rgba(0,0,0,0.3);"><h2 style="color:#f87171;">⛔ Acceso Denegado</h2><p>No tienes autorización en la base de datos para consultar este correo.</p></div>`);
             }
         }
 
         let partes = correoIngresado.split('@');
-        let dominio = partes.length === 2 ? partes[1] : '';
-        let correoNormalizado = correoIngresado;
-
-        if (dominio === 'gmail.com') {
-            let usernamePuro = partes[0].replace(/\./g, '').split('+')[0];
-            correoNormalizado = `${usernamePuro}@${dominio}`;
-        }
-
-        let buzonesAbuscar = [];
-        let esConsultaGmailDirecta = (plataforma === 'gmail');
-        
-        if (esConsultaGmailDirecta) {
-            buzonesAbuscar = ['aniketseller2@gmail.com'];
-        } else if (dominio === 'gmail.com') {
-            let buzonAsignado = "darciogarces@gmail.com";
-            if (CUENTAS_GMAIL_MAP[correoNormalizado]) buzonAsignado = correoNormalizado;
-            else if (CUENTAS_GMAIL_MAP[correoIngresado]) buzonAsignado = correoNormalizado;
-            buzonesAbuscar = [buzonAsignado];
-        } else {
-            buzonesAbuscar = ['darciogarces@gmail.com', 'aniketseller2@gmail.com'];
-        }
-
+        let buzonesAbuscar = ['darciogarces@gmail.com']; 
         let resultadoExitoso = null;
 
         try {
@@ -893,56 +770,54 @@ app.post('/buscar', async (req, res) => {
             const resultados = await Promise.all(promesas);
             resultadoExitoso = resultados.find(res => res !== null);
         } catch (error) {
-            console.error("Error en búsqueda paralela:", error);
+            console.error("Error en búsqueda:", error);
         }
 
         if (!resultadoExitoso) { 
-            let nombrePlat = (plataforma && PLATAFORMAS[plataforma]) ? PLATAFORMAS[plataforma].nombre : (esConsultaGmailDirecta ? 'Gmail' : '');
-            return res.send(`${cssIframe}<div style="text-align:center; padding:40px;">
-                <h2 style="color:#ef4444;">❌ No se encontró correo reciente${nombrePlat ? ` de ${nombrePlat}` : ''}</h2>
-                <p>Para la cuenta: <strong>${email_search}</strong></p>
-                <p style="color:#64748b; font-size: 13px; margin-top:20px; font-weight:600;">🔍 <strong>Buzones consultados de forma paralela:</strong> <br>${buzonesAbuscar.join(' <br> ')}</p>
+            return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255,255,255,0.1); border-radius:12px; background: rgba(0,0,0,0.3);">
+                <h2 style="color:#f8fafc; font-weight:300;">Mensaje no encontrado</h2>
+                <p>No hay correos recientes en el buzón central para: <br><strong style="color:#fff;">${email_search}</strong></p>
             </div>`); 
         }
 
-        const messages = resultadoExitoso.messages;
-        const mail = resultadoExitoso.mail;
-
+        const { mail, buzón } = resultadoExitoso;
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        if (accion === 'pais' && !esConsultaGmailDirecta) {
+        if (accion === 'pais' && plataforma !== 'gmail') {
             let paisDetectado = null;
             const reglasPais = [
                 { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
                 { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
             ];
             for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 40px; margin: 20px auto; padding: 20px; background:#f8fafc; border-radius:16px; display:inline-block; border: 1px solid #e2e8f0;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 20px; background:#fef2f2; border-radius:16px; display:inline-block;"><h3 style="color:#ef4444; margin:0;">⚠️ País no detectado</h3></div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>🌍 Análisis de País</h2><p>${email_search}</p>${htmlRes}</div>`);
+            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:rgba(255,255,255,0.05); border-radius:12px; display:inline-block; border: 1px solid rgba(255,255,255,0.1); color:#fff;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:rgba(0,0,0,0.4); border-radius:12px; display:inline-block; border: 1px solid rgba(255,0,0,0.3);"><h3 style="color:#f87171; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
+            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
         }
 
-        if (accion === 'ip' && !esConsultaGmailDirecta) {
+        if (accion === 'ip' && plataforma !== 'gmail') {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 30px; font-weight:800; color:#ef4444; margin:10px 0;">${ip}</div>`).join('') : `<div style="font-size: 18px; color:#ef4444; margin: 20px 0;">❌ No se detectó ninguna IP pública.</div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>📡 Escáner de IP</h2><p>${email_search}</p><div style="margin: 20px auto; padding: 20px; background:#f8fafc; border-radius:16px; display:inline-block; border: 1px solid #e2e8f0;">${ipContenido}</div></div>`);
+            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#fff; margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
+            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:rgba(255,255,255,0.05); border-radius:12px; display:inline-block; border: 1px solid rgba(255,255,255,0.1);">${ipContenido}</div></div>`);
         }
 
         if (/\b\d{4}\b/.test(textoBruto) && (!accion || accion === 'mensaje')) {
-            try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) { console.error("Error registrando log:", err.message); }
+            try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
         res.send(`${cssIframe}
-            <div style="padding: 10px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px;">
-                <div style="font-weight: 800; font-size: 16px;">De: <span style="color:#64748b; font-weight:400;">${mail.from.text}</span></div>
-                <div style="font-weight: 800; font-size: 16px;">Asunto: <span style="color:#64748b; font-weight:400;">${mail.subject}</span></div>
-                <div style="font-weight: 800; font-size: 14px; margin-top:5px; color:#10b981;">Buzón consultado: ${resultadoExitoso.buzón}</div>
+            <div style="padding: 15px 20px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; background: rgba(0,0,0,0.3); margin-bottom: 25px;">
+                <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#94a3b8; font-weight:300;">${mail.from.text}</span></div>
+                <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Asunto: <span style="color:#94a3b8; font-weight:300;">${mail.subject}</span></div>
+                <div style="font-weight: 400; font-size: 11px; margin-top:10px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px;">Buzón consultado: ${buzón}</div>
             </div>
-            ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word;">${mail.text}</pre>`}
+            <div style="background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#e2e8f0;">${mail.text}</pre>`}
+            </div>
         `);
 
-    } catch (err) { res.send(`${cssIframe}<h2 style="color:red; text-align:center; padding:20px;">❌ Error Crítico de Búsqueda</h2>`); }
+    } catch (err) { res.send(`${cssIframe}<h2 style="color:#f87171; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
 });
 
 app.listen(10000, () => {
