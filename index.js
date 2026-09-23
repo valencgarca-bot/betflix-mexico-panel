@@ -6,6 +6,8 @@ const { simpleParser } = require('mailparser');
 const path = require('path');
 const app = express();
 
+app.use(express.static('public'));
+
 const dbPath = path.resolve(__dirname, 'betflix_mexico_v1.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
@@ -20,15 +22,7 @@ const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(qu
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
 const CUENTAS_GMAIL_MAP = {
-    'tokioappoficial@gmail.com': 'avzepljuczbawvoy',
-    'riandasnet@gmail.com': 'updchdcdsjnxvnyy',
-    'clubecampestrejp@gmail.com': 'ipmvedbivouzeudi',
-    'capoeirajpmg@gmail.com': 'nsadcogfhbxbmnac',
-    'darciogarces@gmail.com': 'wkcidkcgtuapcnkh',
-    'julianamjp1@gmail.com': 'lkambczcmvkddvcz',
-    'casu34jk@gmail.com': 'npbqnwucjkicsnow',
-    'santiagorevend@gmail.com': 'dqawfgnliyolqvjy',
-    'aniketseller2@gmail.com': 'eogzbxpttachdnf'
+    'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
 
 const PLATAFORMAS = {
@@ -54,7 +48,7 @@ db.serialize(() => {
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
     db.run("ALTER TABLE correos ADD COLUMN fecha_asignacion DATETIME DEFAULT (date('now', 'localtime'))", (err) => {});
     
-    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', 'teamo2020', 'Administrador', NULL)");
+    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
 const CSS_MODERNO = `
@@ -62,31 +56,33 @@ const CSS_MODERNO = `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
     :root {
-        --bg-main: #f4f6f9; 
-        --card-bg: #ffffff;
-        --text-dark: #0f172a;
-        --text-muted: #64748b;
-        --border-soft: #e2e8f0;
-        --btn-dark: #1e293b;
-        --btn-light: #f1f5f9;
-        --green-ok: #22c55e;
-        --shadow-soft: 0 8px 30px rgba(0,0,0,0.04);
+        --bg-main: #000000; 
+        --card-bg: rgba(10, 10, 10, 0.85); 
+        --text-dark: #ffffff;
+        --text-muted: #94a3b8;
+        --border-soft: #333333;
+        --btn-dark: #000000;
+        --btn-light: rgba(20, 20, 20, 0.9);
+        --green-ok: #00ffcc;
+        --neon-border: 0 0 5px rgba(0, 255, 255, 0.4), 0 0 15px rgba(0, 255, 255, 0.2);
+        --neon-accent: #00ffff;
         --radius-pill: 50px;
         --radius-card: 24px;
     }
 
     body { 
-        background-color: var(--bg-main); 
+        background: var(--bg-main);
         color: var(--text-dark); 
         font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; 
+        min-height: 100vh;
     }
 
     .goog-te-banner-frame.skiptranslate, #goog-gt-tt, .goog-te-gadget-tooltip { display: none !important; }
     body { top: 0px !important; }
 
     .top-header { 
-        background: var(--bg-main); 
+        background: transparent; 
         padding: 20px 40px; 
         display: flex; justify-content: space-between; align-items: center; 
     }
@@ -94,95 +90,94 @@ const CSS_MODERNO = `
     .user-pill {
         display: flex; align-items: center; gap: 12px;
         background: var(--card-bg); padding: 8px 16px; 
-        border-radius: var(--radius-pill); box-shadow: var(--shadow-soft);
-        font-size: 13px; cursor: pointer;
+        border: 1px solid var(--neon-accent);
+        border-radius: var(--radius-pill); box-shadow: var(--neon-border);
+        font-size: 13px; cursor: pointer; color: #fff;
     }
     .user-pill img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
     .user-pill .info strong { color: var(--text-dark); font-weight: 700; }
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
 
-    .brand-logo { font-size: 22px; font-weight: 800; display:flex; align-items:center; gap: 8px; letter-spacing: -0.5px; text-transform: uppercase;}
-    .brand-logo .icon { color: #10b981; }
+    .brand-logo { font-size: 22px; font-weight: 800; display:flex; align-items:center; gap: 8px; letter-spacing: -0.5px; text-transform: uppercase; color: #fff; text-shadow: 0 0 10px #00ffcc;}
+    .brand-logo .icon { color: #00ffcc; }
 
     .search-top { display: flex; align-items: center; gap: 15px; }
     .search-top input {
-        background: var(--card-bg); border: none; padding: 12px 20px; width: 300px;
-        border-radius: var(--radius-pill); box-shadow: var(--shadow-soft);
+        background: var(--card-bg); border: 1px solid var(--neon-accent); padding: 12px 20px; width: 300px;
+        border-radius: var(--radius-pill); box-shadow: var(--neon-border); color: #fff;
         font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
     }
     .search-top .menu-btn {
-        background: var(--card-bg); border: none; width: 42px; height: 42px;
-        border-radius: 50%; box-shadow: var(--shadow-soft); font-weight: bold;
+        background: var(--card-bg); border: 1px solid var(--neon-accent); width: 42px; height: 42px; color: #00ffff;
+        border-radius: 50%; box-shadow: var(--neon-border); font-weight: bold;
         cursor: pointer; display: flex; justify-content: center; align-items: center;
     }
 
     .dashboard-grid { 
-        display: grid; 
-        grid-template-columns: 420px 1fr 320px; 
-        gap: 30px; 
-        padding: 10px 40px 40px 40px; 
-        align-items: start;
+        display: grid; grid-template-columns: 420px 1fr 320px; gap: 30px; 
+        padding: 10px 40px 40px 40px; align-items: start;
     }
 
     .platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .plat-card {
         background: var(--card-bg); border-radius: var(--radius-card); padding: 25px 20px;
-        box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: 15px;
-        position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.5);
+        box-shadow: var(--neon-border); display: flex; flex-direction: column; gap: 15px;
+        position: relative; overflow: hidden; border: 1px solid var(--neon-accent);
     }
     .plat-header { display: flex; justify-content: space-between; align-items: flex-start; z-index: 2; position: relative; }
     
-    .plat-logo { height: 28px; max-width: 100px; object-fit: contain; transition: 0.3s; }
-    .main-card-logo { height: 40px; max-width: 150px; object-fit: contain; transition: 0.3s; }
+    .plat-logo { height: 28px; max-width: 100px; object-fit: contain; transition: 0.3s; filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
+    .main-card-logo { height: 40px; max-width: 150px; object-fit: contain; transition: 0.3s; filter: drop-shadow(0 0 10px rgba(255,255,255,0.8)); }
 
-    .status-ok { background: var(--green-ok); color: white; font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 50px; box-shadow: 0 4px 10px rgba(34, 197, 94, 0.3); }
+    .status-ok { background: transparent; border: 1px solid var(--green-ok); color: var(--green-ok); font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 50px; box-shadow: 0 0 10px rgba(0, 255, 204, 0.5); text-shadow: 0 0 5px var(--green-ok); }
     
     .plat-stats { z-index: 2; position: relative; margin-top: 10px; }
     .plat-stats span { display: block; font-size: 13px; font-weight: 600; color: var(--text-dark); margin-bottom: 5px; }
-    .plat-stats .line { height: 2px; width: 100%; border-radius: 2px; margin-bottom: 8px; }
+    .plat-stats .line { height: 2px; width: 100%; border-radius: 2px; margin-bottom: 8px; box-shadow: 0 0 8px currentColor; }
     .plat-stats small { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
     .plat-actions { display: flex; flex-direction: column; gap: 8px; z-index: 2; position: relative; margin-top: auto; }
-    .btn-dark-blue { background: var(--btn-dark); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-    .btn-dark-blue:hover { opacity: 0.9; transform: translateY(-2px); }
-    .btn-light-pill { background: var(--btn-light); color: var(--text-dark); border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-    .btn-light-pill:hover { background: #e2e8f0; }
+    .btn-dark-blue { background: transparent; color: var(--neon-accent); border: 1px solid var(--neon-accent); padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: var(--neon-border); text-transform: uppercase; }
+    .btn-dark-blue:hover { background: var(--neon-accent); color: #000; box-shadow: 0 0 20px var(--neon-accent); }
+    .btn-light-pill { background: transparent; color: #ff00ff; border: 1px solid #ff00ff; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: 0 0 5px rgba(255, 0, 255, 0.4); text-transform: uppercase; }
+    .btn-light-pill:hover { background: #ff00ff; color: #000; box-shadow: 0 0 20px #ff00ff; }
 
     .center-panel { display: flex; flex-direction: column; gap: 25px; }
     .main-card {
         background: var(--card-bg); border-radius: var(--radius-card); padding: 40px;
-        box-shadow: var(--shadow-soft); display: none; animation: fadeIn 0.3s ease;
+        box-shadow: var(--neon-border); display: none; animation: fadeIn 0.3s ease;
+        border: 1px solid var(--neon-accent);
     }
     .main-card.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     .main-card-header { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; }
-    .main-card-title h3 { margin: 0; font-size: 22px; color: var(--text-dark); font-weight: 800; }
+    .main-card-title h3 { margin: 0; font-size: 22px; color: var(--text-dark); font-weight: 800; text-shadow: 0 0 8px rgba(255,255,255,0.3); }
     .main-card-title p { margin: 5px 0 0 0; color: var(--text-muted); font-size: 13px; }
 
     .action-row { display: flex; gap: 15px; margin-bottom: 25px; }
     .action-btn-pill {
-        flex: 1; background: var(--btn-light); border: 1px solid var(--border-soft);
+        flex: 1; background: transparent; border: 1px solid var(--neon-accent); box-shadow: var(--neon-border);
         padding: 15px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 700;
-        color: var(--text-dark); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
-        transition: 0.2s;
+        color: var(--neon-accent); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
+        transition: 0.2s; text-transform: uppercase;
     }
-    .action-btn-pill:hover { background: #e2e8f0; }
+    .action-btn-pill:hover { background: var(--neon-accent); color: #000; box-shadow: 0 0 20px var(--neon-accent); }
 
     .search-input-large {
-        width: 100%; background: var(--btn-light); border: 1px solid var(--border-soft);
+        width: 100%; background: var(--btn-light); border: 1px solid var(--neon-accent); box-shadow: inset 0 0 5px rgba(0,255,255,0.2);
         padding: 18px 25px; border-radius: var(--radius-pill); font-size: 14px;
         color: var(--text-dark); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif;
     }
 
     .iframe-container {
         background: var(--card-bg); border-radius: var(--radius-card); 
-        box-shadow: var(--shadow-soft); overflow: hidden; 
+        box-shadow: var(--neon-border); overflow: hidden; border: 1px solid var(--neon-accent);
         height: 500px; display: flex; flex-direction: column;
     }
     .iframe-header {
-        padding: 15px 25px; background: var(--btn-light); 
+        padding: 15px 25px; background: rgba(0,0,0,0.5); 
         border-bottom: 1px solid var(--border-soft); font-weight: 700; 
         font-size: 13px; color: var(--text-dark); display: flex; align-items: center; gap: 8px;
     }
@@ -190,48 +185,37 @@ const CSS_MODERNO = `
     .right-sidebar { display: flex; flex-direction: column; gap: 25px; }
     .side-card {
         background: var(--card-bg); border-radius: var(--radius-card); padding: 25px;
-        box-shadow: var(--shadow-soft);
+        box-shadow: var(--neon-border); border: 1px solid var(--neon-accent);
     }
-    .side-card h4 { margin: 0 0 20px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dark); font-weight: 800; }
+    .side-card h4 { margin: 0 0 20px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--neon-accent); font-weight: 800; text-shadow: 0 0 5px var(--neon-accent); }
     
     .activity-list { display: flex; flex-direction: column; gap: 15px; }
-    .activity-item { border-bottom: 1px solid var(--btn-light); padding-bottom: 12px; }
+    .activity-item { border-bottom: 1px solid var(--border-soft); padding-bottom: 12px; }
     .activity-item:last-child { border-bottom: none; padding-bottom: 0; }
     .activity-item strong { display: block; font-size: 13px; color: var(--text-dark); }
     .activity-item span { font-size: 11px; color: var(--text-muted); }
 
     .menu-list { display: flex; flex-direction: column; gap: 10px; }
     .menu-btn-item {
-        background: var(--btn-light); border: none; padding: 14px 20px;
+        background: transparent; border: 1px solid var(--border-soft); padding: 14px 20px;
         border-radius: var(--radius-pill); font-size: 13px; font-weight: 600;
         color: var(--text-dark); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px;
         transition: 0.2s; font-family: 'Inter', sans-serif;
     }
-    .menu-btn-item:hover { background: #e2e8f0; transform: translateX(5px); }
+    .menu-btn-item:hover { border-color: var(--neon-accent); color: var(--neon-accent); box-shadow: var(--neon-border); transform: translateX(5px); }
 
-    .input-classic { width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--border-soft); background: var(--btn-light); font-family: 'Inter', sans-serif; box-sizing: border-box;}
-    .btn-submit { background: var(--btn-dark); color: white; border: none; padding: 15px; border-radius: 12px; font-weight: 700; cursor: pointer; width: 100%; }
+    .input-classic { width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--neon-accent); background: var(--btn-light); color: white; font-family: 'Inter', sans-serif; box-sizing: border-box; }
+    .btn-submit { background: var(--neon-accent); color: #000; border: none; padding: 15px; border-radius: 12px; font-weight: 800; cursor: pointer; width: 100%; box-shadow: 0 0 15px var(--neon-accent); text-transform: uppercase; }
+    .btn-submit:hover { background: #fff; box-shadow: 0 0 25px #fff; }
 
-    /* ESTILOS AÑADIDOS PARA SUGERENCIA DE DOMINIO */
     .sugerencia-dominio {
-        background: #1e293b;
-        color: white;
-        padding: 8px 16px;
-        border-radius: 50px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        margin-top: 10px;
-        transition: 0.2s ease;
-        border: 1px solid #334155;
+        background: #000; color: #00ffcc; padding: 8px 16px; border-radius: 50px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; transition: 0.2s ease; border: 1px solid #00ffcc; box-shadow: 0 0 8px rgba(0, 255, 204, 0.4);
     }
-    .sugerencia-dominio:hover {
-        background: #334155;
-        transform: translateY(-2px);
-    }
+    .sugerencia-dominio:hover { background: #00ffcc; color: #000; box-shadow: 0 0 20px #00ffcc; transform: translateY(-2px); }
+
+    /* Forzar fondo oscuro en la tabla de usuarios */
+    table thead th { background: transparent !important; border-bottom: 1px solid var(--neon-accent); }
+    table tr td { border-bottom: 1px solid var(--border-soft); }
 </style>
 
 <script>
@@ -291,23 +275,141 @@ app.use(async (req, res, next) => {
     } else { return res.redirect('/'); }
 });
 
+// ==========================================
+// RUTA LOGIN
+// ==========================================
 app.get('/', (req, res) => {
     res.send(`
-    <style>
-        body { background: #f4f6f9; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .login-box { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; width: 100%; max-width: 350px; }
-        input { width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 50px; border: 1px solid #e2e8f0; background: #f1f5f9; box-sizing: border-box; text-align: center; font-family: 'Inter', sans-serif; outline: none; }
-        button { width: 100%; padding: 15px; border-radius: 50px; border: none; background: #1e293b; color: white; font-weight: bold; cursor: pointer; font-family: 'Inter', sans-serif; }
-    </style>
-    <div class="login-box">
-        <h2 style="margin-top:0;">⚡ PLATAFORMAS STREAMING</h2>
-        <p style="color:#64748b; font-size:14px; margin-bottom:30px;">Acceso al Panel Central</p>
-        <form action="/login" method="POST">
-            <input name="user" placeholder="Usuario" required>
-            <input type="password" name="pass" placeholder="Contraseña" required>
-            <button>Iniciar Sesión</button>
-        </form>
-    </div>
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Acceso - stremin gunpreetsel</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
+
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: 'Inter', sans-serif;
+                background-image: url('https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+                background-size: cover;
+                background-position: center;
+                background-attachment: fixed;
+                height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                background-color: #000;
+            }
+
+            .overlay {
+                position: absolute;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 1;
+            }
+
+            .login-box {
+                position: relative;
+                z-index: 2;
+                background: rgba(0, 0, 0, 0.75);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+                padding: 50px;
+                width: 100%;
+                max-width: 380px;
+                box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+                box-sizing: border-box;
+                text-align: center;
+            }
+
+            .login-box h2 {
+                color: #ffffff;
+                font-size: 26px;
+                font-weight: 800;
+                margin-top: 0;
+                margin-bottom: 30px;
+            }
+
+            .input-group {
+                margin-bottom: 20px;
+            }
+
+            .input-group input {
+                width: 100%;
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                color: #ffffff;
+                height: 52px;
+                padding: 0 16px;
+                box-sizing: border-box;
+                font-size: 15px;
+                border-radius: 8px;
+                outline: none;
+                transition: all 0.3s ease;
+            }
+
+            .input-group input:focus {
+                background: rgba(255, 255, 255, 0.12);
+                border-color: #E50914;
+            }
+
+            .input-group input::placeholder {
+                color: #94a3b8;
+            }
+
+            .btn-submit {
+                width: 100%;
+                background: #E50914;
+                color: #ffffff;
+                font-size: 16px;
+                font-weight: 700;
+                padding: 16px;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                margin-top: 10px;
+                transition: 0.2s;
+            }
+
+            .btn-submit:hover {
+                background: #f40612;
+            }
+
+            .help-text {
+                color: #94a3b8;
+                font-size: 13px;
+                margin-top: 30px;
+                line-height: 1.5;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="overlay"></div>
+        
+        <div class="login-box">
+            <h2>Iniciar Sesión</h2>
+            
+            <form action="/login" method="POST">
+                <div class="input-group">
+                    <input type="text" name="user" placeholder="Usuario (dueño)" required>
+                </div>
+                <div class="input-group">
+                    <input type="password" name="pass" placeholder="Contraseña" required>
+                </div>
+                <button type="submit" class="btn-submit">Ingresar</button>
+            </form>
+            
+            <div class="help-text">
+                Acceso cifrado. Panel Central protegido para la seguridad de la plataforma.
+            </div>
+        </div>
+    </body>
+    </html>
     `);
 });
 
@@ -508,7 +610,7 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
                 
-                <div class="brand-logo"><span class="icon">⚡</span> PLATAFORMAS STREAMING</div>
+                <div class="brand-logo"><span class="icon">⚡</span> stremin gunpreetsel</div>
                 
                 <div class="search-top">
                     <input type="text" placeholder="Buscar correo general...">
@@ -588,12 +690,14 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div class="right-sidebar">
+                    ${(esAdminPrincipal || esSubAdmin) ? `
                     <div class="side-card">
                         <h4>Últimas Actividades</h4>
                         <div class="activity-list">
                             ${actividadesHtml}
                         </div>
                     </div>
+                    ` : ''}
 
                     <div class="side-card">
                         <h4>Gestión del Sistema</h4>
@@ -660,9 +764,6 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// ==========================================
-// NUEVA LÓGICA DE BÚSQUEDA ABSTRAÍDA IMAP
-// ==========================================
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
@@ -748,12 +849,9 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
     }
 }
 
-// ==========================================
-// RUTA MODIFICADA: MULTI-BÚSQUEDA 
-// ==========================================
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
-    const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #ffffff; color: #0f172a; padding: 20px; margin: 0; }</style>`;
+    const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #000000; color: #e2e8f0; padding: 20px; margin: 0; }</style>`;
 
     try {
         let correoIngresado = (email_search || "").trim().toLowerCase();
@@ -777,28 +875,22 @@ app.post('/buscar', async (req, res) => {
         let buzonesAbuscar = [];
         let esConsultaGmailDirecta = (plataforma === 'gmail');
         
-        // CONDICIÓN PRINCIPAL DEL DOMINIO
         if (esConsultaGmailDirecta) {
             buzonesAbuscar = ['aniketseller2@gmail.com'];
         } else if (dominio === 'gmail.com') {
-            // Lógica intacta: solo en el buzón de Gmail que corresponda
             let buzonAsignado = "darciogarces@gmail.com";
             if (CUENTAS_GMAIL_MAP[correoNormalizado]) buzonAsignado = correoNormalizado;
             else if (CUENTAS_GMAIL_MAP[correoIngresado]) buzonAsignado = correoNormalizado;
             buzonesAbuscar = [buzonAsignado];
         } else {
-            // Nueva lógica universal: Todo lo que no sea Gmail, se busca en ambos.
             buzonesAbuscar = ['darciogarces@gmail.com', 'aniketseller2@gmail.com'];
         }
 
         let resultadoExitoso = null;
 
         try {
-            // Ejecutamos las búsquedas de forma paralela
             const promesas = buzonesAbuscar.map(buzon => buscarEnBuzonImap(buzon, correoIngresado, plataforma, partes));
             const resultados = await Promise.all(promesas);
-            
-            // Encontramos el primero que nos haya devuelto el correo (es decir, que no sea null)
             resultadoExitoso = resultados.find(res => res !== null);
         } catch (error) {
             console.error("Error en búsqueda paralela:", error);
@@ -813,15 +905,12 @@ app.post('/buscar', async (req, res) => {
             </div>`); 
         }
 
-        // Asignamos la información recuperada del buzón exitoso a las variables originales
         const messages = resultadoExitoso.messages;
         const mail = resultadoExitoso.mail;
-        const correoSeleccionado = resultadoExitoso.buzón;
 
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        // El resto del procesamiento (país, IP, base de datos) queda exactamente igual
         if (accion === 'pais' && !esConsultaGmailDirecta) {
             let paisDetectado = null;
             const reglasPais = [
@@ -841,15 +930,21 @@ app.post('/buscar', async (req, res) => {
         }
 
         if (/\b\d{4}\b/.test(textoBruto) && (!accion || accion === 'mensaje')) {
-            try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
+            try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) { console.error("Error registrando log:", err.message); }
         }
+        
+        res.send(`${cssIframe}
+            <div style="padding: 10px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px;">
+                <div style="font-weight: 800; font-size: 16px;">De: <span style="color:#64748b; font-weight:400;">${mail.from.text}</span></div>
+                <div style="font-weight: 800; font-size: 16px;">Asunto: <span style="color:#64748b; font-weight:400;">${mail.subject}</span></div>
+                <div style="font-weight: 800; font-size: 14px; margin-top:5px; color:#10b981;">Buzón consultado: ${resultadoExitoso.buzón}</div>
+            </div>
+            ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word;">${mail.text}</pre>`}
+        `);
 
-        let contenidoFinal = mail.html || mail.text || "";
-        res.send(contenidoFinal);
-    } catch (e) { 
-        res.send(`${cssIframe}<div style="text-align:center; padding:40px;"><h2 style="color:#ef4444;">⚠️ Error en el servidor</h2><p>${e.message}</p></div>`); 
-    }
+    } catch (err) { res.send(`${cssIframe}<h2 style="color:red; text-align:center; padding:20px;">❌ Error Crítico de Búsqueda</h2>`); }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`🚀 Panel V6 Optimizado funcionando en el puerto ${PORT}`); });
+app.listen(10000, () => {
+    console.log("🚀 SISTEMA CENTRAL INICIADO EN EL PUERTO 10000");
+});
