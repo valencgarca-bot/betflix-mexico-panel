@@ -589,16 +589,19 @@ app.post('/admin/asignar-correo', async (req, res) => {
             const existente = await dbGet("SELECT c.id, c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [email]);
             
             if (existente) {
-                // Si la cuenta ya existe, evaluamos si el usuario actual tiene derecho a REASIGNARLA
-                // Se puede reasignar si es Admin, o si el Subadmin actual es el dueño de la cuenta, o si fue creada por él
-                const puedeReasignar = esAdminPrincipal || (existente.user_id === req.session.uid) || (existente.creado_por === req.session.uid);
-                
-                if (puedeReasignar) {
-                    // Mueve la cuenta (reasignación / transferencia) de Eliel a su cliente
-                    await dbRun("UPDATE correos SET user_id = ? WHERE id = ?", [targetUserId, existente.id]);
+                if (esAdminPrincipal) {
+                    // Alerta específica para el Administrador Principal si intenta duplicar
+                    return res.send(`<script>alert('Esta cuenta ya está asignada. Cliente actual: ${existente.user} | Correo: ${email}'); window.location='/dash';</script>`);
+                } else if (req.session.rol === 'Subadministrador') {
+                    // El subadministrador transfiere la cuenta SOLO si la tiene en su propio stock actual
+                    if (existente.user_id === req.session.uid) {
+                        await dbRun("UPDATE correos SET user_id = ? WHERE id = ?", [targetUserId, existente.id]);
+                    } else {
+                        // Bloqueo si intenta reasignar una cuenta que ya entregó a su cliente
+                        return res.send(`<script>alert('La cuenta ${email} ya está ocupada o ya fue asignada a un cliente final.'); window.location='/dash';</script>`);
+                    }
                 } else {
-                    // Bloquea el robo de cuentas entre subadministradores diferentes
-                    return res.send(`<script>alert('El correo ${email} ya está asignado a ${existente.user} y no tienes permisos sobre esa cuenta.'); window.location='/dash';</script>`);
+                    return res.send(`<script>alert('No tienes permisos sobre la cuenta ${email}.'); window.location='/dash';</script>`);
                 }
             } else {
                 // Es una cuenta completamente nueva, se inserta normalmente
