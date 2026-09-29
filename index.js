@@ -631,7 +631,8 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
 
-    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 2500 } };
+    // Reducir el timeout para fallar rápido si la conexión es inestable
+    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 1500 } };
     let connection = null;
 
     try {
@@ -644,8 +645,13 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let messages = [];
         let mail = null;
 
+        // OPTIMIZACIÓN: Solo buscar en los correos de los últimos 2 días
+        let fechaLimite = new Date();
+        fechaLimite.setDate(fechaLimite.getDate() - 2);
+
         if (esConsultaGmailDirecta) {
-            let searchResults = await connection.search([['ALL']], { bodies: ['HEADER.FIELDS (DATE)'] });
+            // Se agregó ['SINCE', fechaLimite] para evitar escanear todo el buzón
+            let searchResults = await connection.search([['ALL'], ['SINCE', fechaLimite]], { bodies: ['HEADER.FIELDS (DATE)'] });
             if (searchResults.length > 0) {
                 searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
                 let latestUid = searchResults[0].attributes.uid;
@@ -659,7 +665,8 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
             let queryStr = `"${correoIngresado}"`;
             if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
-            let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
+            // Se agregó ['SINCE', fechaLimite] a la búsqueda por texto RAW
+            let searchResults = await connection.search([['X-GM-RAW', queryStr], ['SINCE', fechaLimite]], { bodies: ['HEADER.FIELDS (DATE)'] });
             if (searchResults.length > 0) {
                 searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
                 let latestUid = searchResults[0].attributes.uid; 
