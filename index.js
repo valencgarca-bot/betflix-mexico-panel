@@ -27,8 +27,8 @@ const CUENTAS_GMAIL_MAP = {
 };
 
 const PLATAFORMAS = {
-    'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.15)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
-    'disney': { nombre: 'Disney+', color: '#ffffff', alpha: 'rgba(255, 255, 255, 0.1)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
+    'netflix': { nombre: 'Netflix', color: '#E50914', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
+    'disney': { nombre: 'Disney+', color: '#ffffff', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
 };
 
 app.use(express.urlencoded({ extended: true }));
@@ -46,6 +46,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
+// 🎬 ESTILO MODERNO SYNCBOX (Estructura Corregida)
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -58,7 +59,6 @@ const CSS_MODERNO = `
         --accent: #00D2FF;
         --accent-hover: #0099CC;
         --btn-bg: rgba(0, 210, 255, 0.1);
-        --btn-hover: rgba(0, 210, 255, 0.3);
         --shadow-elegant: 0 10px 40px rgba(0, 0, 0, 0.8);
         --blur-effect: blur(20px);
         --radius: 16px;
@@ -67,161 +67,131 @@ const CSS_MODERNO = `
     body { 
         background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
         background-color: #000205;
-        color: var(--text-main); 
-        font-family: 'Inter', sans-serif; 
-        margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; 
-        min-height: 100vh;
+        color: var(--text-main); font-family: 'Inter', sans-serif; 
+        margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh;
     }
 
     body::before {
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.2) 0%, rgba(0, 0, 5, 0.95) 80%);
+        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.15) 0%, rgba(0, 0, 5, 0.95) 80%);
         z-index: -1; pointer-events: none;
     }
-
-    .goog-te-banner-frame.skiptranslate, #goog-gt-tt, .goog-te-gadget-tooltip { display: none !important; }
-    body { top: 0px !important; }
 
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
     
     .user-pill {
-        display: flex; align-items: center; gap: 12px;
-        background: var(--card-bg); padding: 8px 16px; 
+        display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; 
         border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
-        border-radius: 50px; box-shadow: var(--shadow-elegant);
-        font-size: 13px; cursor: pointer; transition: 0.3s;
+        border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s;
     }
-    .user-pill:hover { background: var(--btn-hover); border-color: rgba(0, 210, 255, 0.5); }
+    .user-pill:hover { border-color: rgba(0, 210, 255, 0.5); }
     .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
-    .user-pill .info strong { color: var(--text-main); font-weight: 600; letter-spacing: 0.5px; }
+    .user-pill .info strong { color: var(--text-main); font-size: 13px; font-weight: 600; }
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
 
     .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
     .brand-logo strong { font-weight: 700; color: var(--accent); }
 
-    .search-top { display: flex; align-items: center; gap: 15px; }
     .search-top input {
         background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
-        border-radius: 50px; box-shadow: var(--shadow-elegant); color: #fff; backdrop-filter: var(--blur-effect);
-        font-family: 'Inter', sans-serif; font-size: 13px; outline: none; transition: 0.3s;
+        border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s;
     }
     .search-top input:focus { border-color: var(--accent); width: 320px; }
 
+    /* ESTRUCTURA GRID 3 COLUMNAS */
     .dashboard-grid { 
-        display: grid; 
-        grid-template-columns: 300px 1fr 300px; 
-        gap: 30px; 
-        padding: 10px 40px 40px 40px; 
-        align-items: start; 
+        display: grid; grid-template-columns: 280px 1fr 280px; gap: 30px; 
+        padding: 10px 40px 40px 40px; align-items: start; 
     }
 
-    .left-sidebar { display: flex; flex-direction: column; gap: 25px; }
-    
+    .left-sidebar, .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
+    .center-panel { display: flex; flex-direction: column; gap: 20px; }
+
+    /* PANELES DE ACCIÓN (IZQUIERDA) */
     .action-panel {
-        background: var(--card-bg); border-radius: var(--radius); padding: 40px 25px;
+        background: var(--card-bg); border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
-        backdrop-filter: var(--blur-effect); display: flex; flex-direction: column; gap: 15px;
-        justify-content: center; min-height: 250px; display: none;
+        backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px;
     }
-    .action-panel.active { display: flex; }
+    .action-panel.active { display: flex; animation: fadeIn 0.4s ease; }
 
-    .center-panel { display: flex; flex-direction: column; gap: 25px; }
-    
+    /* PANELES PRINCIPALES (CENTRO) */
     .main-card {
-        background: var(--card-bg); border-radius: var(--radius); padding: 40px;
-        box-shadow: var(--shadow-elegant); display: none; animation: fadeIn 0.4s ease;
-        border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
+        background: var(--card-bg); border-radius: var(--radius); padding: 35px;
+        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
+        backdrop-filter: var(--blur-effect); display: none;
     }
-    .main-card.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-
-    .main-card-header { display: flex; align-items: center; gap: 25px; margin-bottom: 35px; }
-    .main-card-title h3 { margin: 0; font-size: 24px; color: var(--text-main); font-weight: 500; letter-spacing: -0.5px; }
-    .main-card-title p { margin: 6px 0 0 0; color: var(--text-muted); font-size: 13px; font-weight: 300; }
+    .main-card.active { display: block; animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     .action-btn-pill {
         width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border);
-        padding: 16px; border-radius: 50px; font-size: 11px; font-weight: 600;
-        color: var(--text-main); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
-        transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
+        padding: 15px; border-radius: 50px; font-size: 12px; font-weight: 600;
+        color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
     }
     .action-btn-pill:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-2px); }
 
     .search-input-large {
         width: 100%; background: rgba(0,0,0,0.6); border: 1px solid rgba(0, 210, 255, 0.3); 
-        padding: 20px 30px; border-radius: 50px; font-size: 14px;
-        color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif;
-        transition: 0.3s; backdrop-filter: blur(10px);
+        padding: 20px 30px; border-radius: 50px; font-size: 14px; margin-top: 15px;
+        color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
     }
     .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.8); }
 
     .iframe-container {
-        background: var(--card-bg); border-radius: var(--radius); 
-        box-shadow: var(--shadow-elegant); overflow: hidden; border: 1px solid var(--card-border);
-        height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect);
+        background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
+        border: 1px solid var(--card-border); height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
     }
     .iframe-header {
-        padding: 16px 25px; background: rgba(0,0,0,0.5); 
-        border-bottom: 1px solid var(--card-border); font-weight: 500; 
-        font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
+        padding: 16px 25px; background: rgba(0,0,0,0.5); border-bottom: 1px solid var(--card-border); 
+        font-weight: 500; font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
     }
 
-    .right-sidebar { display: flex; flex-direction: column; gap: 25px; }
     .side-card {
         background: var(--card-bg); border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
     }
-    .side-card h4 { margin: 0 0 20px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 12px;}
+    .side-card h4 { margin: 0 0 15px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;}
     
-    /* BOTONES DE PLATAFORMA EN BARRA DERECHA */
-    .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+    /* BOTONES DE PLATAFORMAS (DERECHA ABAJO DE ADMIN) */
+    .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
     .plat-mini-btn {
-        background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); padding: 15px 10px;
-        border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
-        transition: 0.3s; height: 50px;
+        background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); padding: 12px;
+        border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center;
+        height: 55px; transition: 0.3s;
     }
     .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.1); border-color: var(--accent); transform: translateY(-2px); }
-    .plat-mini-btn img { max-height: 20px; max-width: 80%; object-fit: contain; }
+    .plat-mini-btn img { max-height: 25px; max-width: 90%; object-fit: contain; }
 
-    .menu-list { display: flex; flex-direction: column; gap: 10px; }
+    .menu-list { display: flex; flex-direction: column; gap: 8px; }
     .menu-btn-item {
-        background: transparent; border: 1px solid transparent; padding: 12px 16px;
-        border-radius: 8px; font-size: 13px; font-weight: 400;
-        color: var(--text-main); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px;
-        transition: 0.3s; font-family: 'Inter', sans-serif;
+        background: transparent; border: 1px solid transparent; padding: 10px 12px;
+        border-radius: 8px; font-size: 13px; color: var(--text-main); cursor: pointer; 
+        text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif;
     }
-    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.3); transform: translateX(5px); }
+    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.3); padding-left: 18px; }
 
-    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.5); color: white; font-family: 'Inter', sans-serif; box-sizing: border-box; transition: 0.3s; outline: none;}
+    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.5); color: white; box-sizing: border-box; outline: none;}
     .input-classic:focus { border-color: var(--accent); }
-    select.input-classic option { background: #0a0a0a; color: #fff; }
-    
-    .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; font-size: 12px;}
+    .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); color: #fff; }
 
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    table thead th { background: rgba(0,0,0,0.5) !important; border-bottom: 1px solid var(--card-border); padding: 16px; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: var(--text-muted); }
-    table tr td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px; font-size: 13px; color: var(--text-main); }
-    table tr:last-child td { border-bottom: none; }
-    
-    .activity-list { display: flex; flex-direction: column; gap: 15px; }
-    .activity-item { border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; }
-    .activity-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .activity-item strong { display: block; font-size: 13px; color: var(--text-main); font-weight: 500; }
-    .activity-item span { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;}
+    table th { background: rgba(0,0,0,0.5); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
+    table td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px; font-size: 13px; }
 </style>
 
 <script>
-    function triggerAction(actionName) {
-        let activeForm = document.querySelector('.main-card.active form');
-        if(activeForm) {
+    function triggerAction(platKey, actionName) {
+        let form = document.getElementById('form-' + platKey);
+        if(form) {
             let actionInput = document.createElement('input');
             actionInput.type = 'hidden';
             actionInput.name = 'accion';
             actionInput.value = actionName;
-            activeForm.appendChild(actionInput);
-            activeForm.submit();
+            form.appendChild(actionInput);
+            form.submit();
             actionInput.remove();
         }
     }
@@ -274,15 +244,15 @@ app.get('/', (req, res) => {
         <title>Acceso - SyncBox</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-            body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; }
+            body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; }
             body::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.3) 0%, rgba(0, 0, 10, 0.95) 80%); z-index: 1; pointer-events: none; }
-            .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); box-sizing: border-box; text-align: center; }
-            .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; }
+            .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); text-align: center; }
+            .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; gap: 10px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
             .input-group input:focus { border-color: #00D2FF; background: rgba(0,0,0,0.9); }
             .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
-            .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 15px rgba(0, 210, 255, 0.5); }
+            .btn-submit:hover { background: #0099CC; color: #fff; }
             .help-text { color: #888; font-size: 12px; margin-top: 30px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
@@ -332,68 +302,73 @@ app.get('/dash', async (req, res) => {
             const correos = await dbAll("SELECT * FROM correos", []);
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
 
-            // BOTONES DE PLATAFORMA LATERALES DERECHOS
+            // 1. BOTONES DE PLATAFORMA (Barra Derecha)
             let botonesPlataformaHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
                 botonesPlataformaHtml += `
-                <div class="plat-mini-btn" onclick="openTab('${key}')" title="${plat.nombre}">
+                <div class="plat-mini-btn" onclick="openTab('${key}')" title="Abrir ${plat.nombre}">
                     <img src="${plat.logo}" alt="${plat.nombre}">
                 </div>`;
             });
 
-            // PANELES CENTRALES Y PANELES DE ACCIÓN IZQUIERDOS
+            // 2. PANELES CENTRALES Y DE ACCIÓN
             let panelesCentroHtml = "";
             let panelesIzquierdosHtml = "";
 
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
                 
-                // Botones para la barra izquierda
+                // Botones en la columna izquierda
                 let controlesIzquierda = "";
                 if (key === 'netflix') {
                     controlesIzquierda = `
-                        <button onclick="triggerAction('mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; font-size: 13px;">🔎 Consultar lo último que pidió</button>
+                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none;">🔎 Consultar lo último que pidió</button>
                     `;
                 } else {
                     controlesIzquierda = `
-                        <button onclick="triggerAction('mensaje')" class="action-btn-pill">Leer Mensaje</button>
-                        <button onclick="triggerAction('pais')" class="action-btn-pill">Analizar País</button>
-                        <button onclick="triggerAction('ip')" class="action-btn-pill">Buscar IP</button>
+                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill">Leer Mensaje</button>
+                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill">Analizar País</button>
+                        <button onclick="triggerAction('${key}', 'ip')" class="action-btn-pill">Buscar IP</button>
                     `;
                 }
 
-                // Generar panel izquierdo
                 panelesIzquierdosHtml += `
                 <div id="action-${key}" class="action-panel">
+                    <h4 style="margin:0 0 10px 0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Acciones ${plat.nombre}</h4>
                     ${controlesIzquierda}
                 </div>`;
 
-                // Generar panel central (Buscador)
+                // Panel Central de Búsqueda
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
-                    <div class="main-card-header">
-                        <img src="${plat.logo}" alt="${plat.nombre}" class="main-card-logo">
-                        <div class="main-card-title">
-                            <h3>SyncBox | ${plat.nombre}</h3>
-                            <p>Búsqueda rápida del último mensaje recibido.</p>
+                    <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
+                        <div style="background:rgba(255,255,255,0.05); padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
+                            <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:30px; width:auto; max-width:120px; object-fit:contain;">
+                        </div>
+                        <div>
+                            <h3 style="margin:0; font-size:18px; font-weight:500;">Búsqueda en ${plat.nombre}</h3>
+                            <p style="margin:5px 0 0 0; font-size:12px; color:var(--text-muted);">Ingresa el correo para consultar resultados.</p>
                         </div>
                     </div>
-                    <form action="/buscar" method="POST" target="marco_resultados">
+                    <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;">
                         <input type="hidden" name="plataforma" value="${key}">
-                        <div style="position: relative; width: 100%;">
-                            <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required>
-                        </div>
+                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required>
                     </form>
                 </div>`;
             });
 
+            // Paneles de acción vacíos para las herramientas de admin (para mantener la estructura visual)
+            panelesIzquierdosHtml += `
+            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Crea nuevas cuentas de clientes para darles acceso.</p></div>
+            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de streaming al perfil de un cliente.</p></div>
+            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y borra registros.</p></div>
+            `;
+
             let actividadesHtml = "";
             if (registros.length > 0) {
                 registros.forEach(r => { actividadesHtml += `<div class="activity-item"><strong>${r.email_buscado}</strong><span>${r.fecha} - ${r.user}</span></div>`; });
-            } else {
-                actividadesHtml = `<div class="activity-item"><span>No hay actividades recientes.</span></div>`;
-            }
+            } else { actividadesHtml = `<div class="activity-item"><span>No hay actividades recientes.</span></div>`; }
             
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
@@ -467,9 +442,9 @@ app.get('/dash', async (req, res) => {
                     <div class="center-panel">
                         ${panelesCentroHtml}
                         
-                        <!-- Paneles Administrativos -->
+                        <!-- Paneles Administrativos Ocultos -->
                         <div id="main-crear-user" class="main-card">
-                            <div class="main-card-header"><div class="main-card-title"><h3>Crear Nuevo Usuario</h3></div></div>
+                            <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Crear Nuevo Usuario</h3>
                             <form action="/admin/crear" method="POST">
                                 <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
                                 <input name="c" class="input-classic" placeholder="Contraseña" required>
@@ -478,7 +453,7 @@ app.get('/dash', async (req, res) => {
                             </form>
                         </div>
                         <div id="main-usuarios" class="main-card">
-                            <div class="main-card-header"><div class="main-card-title"><h3>Asignación de Correos</h3></div></div>
+                            <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Asignación de Correos</h3>
                             <form action="/admin/asignar-correo" method="POST">
                                 <select name="user_id" class="input-classic" required><option value="" disabled selected>Selecciona un usuario...</option>${clientesOpcionesHtml}</select>
                                 <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio" rows="5" required></textarea>
@@ -486,13 +461,13 @@ app.get('/dash', async (req, res) => {
                             </form>
                         </div>
                         <div id="main-base-datos" class="main-card">
-                            <div class="main-card-header"><div class="main-card-title"><h3>Base de Datos SyncBox</h3></div></div>
+                            <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Base de Datos SyncBox</h3>
                             <form action="/dash" method="GET" style="display:flex; gap:12px; margin-bottom:20px;">
                                 <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0;">
-                                <button type="submit" class="btn-action-sm">Buscar</button>
+                                <button type="submit" class="btn-action-sm" style="padding: 0 20px;">Buscar</button>
                             </form>
                             <div style="background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
-                                <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th>Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
+                                <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align:center;">Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
                             </div>
                         </div>
 
@@ -514,7 +489,9 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
                                 ` : ''}
                             </div>
-                            <!-- BOTONES DE PLATAFORMA MOVIDOS AQUÍ -->
+                            
+                            <!-- SECCIÓN PLATAFORMAS (Abajo de Administración) -->
+                            <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
                             <div class="plat-mini-grid">
                                 ${botonesPlataformaHtml}
                             </div>
