@@ -46,7 +46,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX CON FONDO DE PELÍCULAS FUNCIONAL
+// 🎬 ESTILO MODERNO SYNCBOX CON FONDOS ANIMADOS Y EFECTOS EN MOVIMIENTO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -54,14 +54,14 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #a3a3a3;
-        --card-bg: rgba(10, 14, 20, 0.85);
-        --card-border: rgba(0, 210, 255, 0.25);
+        --card-bg: rgba(10, 14, 20, 0.75);
+        --card-border: rgba(0, 210, 255, 0.35);
         --accent: #00D2FF;
         --accent-hover: #0099CC;
-        --btn-bg: rgba(0, 210, 255, 0.1);
-        --shadow-elegant: 0 10px 40px rgba(0, 0, 0, 0.9);
-        --blur-effect: blur(15px);
-        --radius: 16px;
+        --btn-bg: rgba(0, 210, 255, 0.12);
+        --shadow-elegant: 0 15px 50px rgba(0, 0, 0, 0.95);
+        --blur-effect: blur(20px);
+        --radius: 18px;
     }
 
     body { 
@@ -73,9 +73,22 @@ const CSS_MODERNO = `
 
     body::before {
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.15) 0%, rgba(0, 5, 15, 0.92) 85%);
-        backdrop-filter: blur(5px);
+        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.2) 0%, rgba(0, 5, 15, 0.95) 90%);
+        backdrop-filter: blur(6px);
         z-index: -1; pointer-events: none;
+    }
+
+    /* 🌀 ANIMACIÓN DE DEGRADADO FLUIDO PARA LAS TARJETAS */
+    @keyframes gradientBG {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    @keyframes neonGlow {
+        0% { border-color: rgba(0, 210, 255, 0.3); box-shadow: 0 0 10px rgba(0,210,255,0.1); }
+        50% { border-color: rgba(229, 9, 20, 0.6); box-shadow: 0 0 25px rgba(229,9,20,0.3); }
+        100% { border-color: rgba(0, 210, 255, 0.3); box-shadow: 0 0 10px rgba(0,210,255,0.1); }
     }
 
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
@@ -85,7 +98,7 @@ const CSS_MODERNO = `
         border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
         border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s;
     }
-    .user-pill:hover { border-color: rgba(0, 210, 255, 0.5); transform: translateY(-2px); }
+    .user-pill:hover { border-color: rgba(0, 210, 255, 0.7); transform: translateY(-2px); }
     .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
     .user-pill .info strong { color: var(--text-main); font-size: 13px; font-weight: 600; }
@@ -108,19 +121,27 @@ const CSS_MODERNO = `
     .left-sidebar, .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
+    /* FONDOS ANIMADOS PARA LOS PANELES DE ACCIÓN */
     .action-panel {
-        background: var(--card-bg); border-radius: var(--radius); padding: 25px;
+        background: linear-gradient(135deg, rgba(10, 14, 20, 0.9), rgba(20, 10, 30, 0.9), rgba(0, 30, 50, 0.9));
+        background-size: 300% 300%;
+        animation: gradientBG 10s ease infinite, neonGlow 6s ease infinite;
+        border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px;
     }
-    .action-panel.active { display: flex; animation: fadeIn 0.4s ease; }
+    .action-panel.active { display: flex; }
 
+    /* FONDOS ANIMADOS PARA LAS TARJETAS PRINCIPALES */
     .main-card {
-        background: var(--card-bg); border-radius: var(--radius); padding: 35px;
+        background: linear-gradient(120deg, rgba(10, 14, 20, 0.88), rgba(15, 25, 40, 0.88), rgba(25, 10, 25, 0.88));
+        background-size: 250% 250%;
+        animation: gradientBG 12s ease infinite;
+        border-radius: var(--radius); padding: 35px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none;
     }
-    .main-card.active { display: block; animation: fadeIn 0.4s ease; }
+    .main-card.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     .action-btn-pill {
@@ -128,37 +149,45 @@ const CSS_MODERNO = `
         padding: 15px; border-radius: 50px; font-size: 11px; font-weight: 600;
         color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
     }
-    .action-btn-pill:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,210,255,0.2);}
+    .action-btn-pill:hover { background: rgba(0, 210, 255, 0.25); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,210,255,0.4);}
 
     .search-input-large {
-        width: 100%; background: rgba(0,0,0,0.7); border: 1px solid rgba(0, 210, 255, 0.3); 
+        width: 100%; background: rgba(0,0,0,0.75); border: 1px solid rgba(0, 210, 255, 0.4); 
         padding: 20px 30px; border-radius: 50px; font-size: 14px; margin-top: 15px;
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
     }
-    .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.9); box-shadow: 0 0 20px rgba(0,210,255,0.2); }
+    .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.95); box-shadow: 0 0 25px rgba(0,210,255,0.35); }
 
+    /* VISOR DE RESULTADOS CON FONDO ANIMADO SUTIL */
     .iframe-container {
-        background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
+        background: linear-gradient(135deg, rgba(8, 12, 18, 0.95), rgba(15, 8, 22, 0.95));
+        background-size: 200% 200%;
+        animation: gradientBG 15s ease infinite;
+        border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
         border: 1px solid var(--card-border); height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
     }
     .iframe-header {
-        padding: 16px 25px; background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--card-border); 
+        padding: 16px 25px; background: rgba(0,0,0,0.7); border-bottom: 1px solid var(--card-border); 
         font-weight: 500; font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
     }
 
+    /* TARJETAS LATERALES CON ANIMACIÓN DE FONDO */
     .side-card {
-        background: var(--card-bg); border-radius: var(--radius); padding: 25px;
+        background: linear-gradient(145deg, rgba(10, 14, 20, 0.85), rgba(18, 12, 28, 0.85));
+        background-size: 200% 200%;
+        animation: gradientBG 14s ease infinite;
+        border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
     }
     .side-card h4 { margin: 0 0 15px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;}
     
     .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
     .plat-mini-btn {
-        background: rgba(0,0,0,0.6); border: 1px solid var(--card-border); padding: 12px;
+        background: rgba(0,0,0,0.65); border: 1px solid var(--card-border); padding: 12px;
         border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
         height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.15); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.3);}
+    .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
     .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
 
     .menu-list { display: flex; flex-direction: column; gap: 8px; }
@@ -167,27 +196,27 @@ const CSS_MODERNO = `
         border-radius: 8px; font-size: 13px; color: var(--text-main); cursor: pointer; 
         text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif;
     }
-    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.3); padding-left: 18px; }
+    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
 
-    /* ESTILOS DE ACTIVIDAD RECIENTE ORDENADA */
+    /* ESTILOS DE ACTIVIDAD RECIENTE ORDENADA Y FLUIDA */
     .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
     .activity-item {
-        background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 210, 255, 0.15);
+        background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(0, 210, 255, 0.2);
         padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s;
     }
-    .activity-item:hover { border-color: rgba(0, 210, 255, 0.4); background: rgba(0, 210, 255, 0.05); }
+    .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.08); }
     .activity-item strong { color: var(--text-main); font-weight: 500; word-break: break-all; font-size: 12px; }
     .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
     .activity-user { color: var(--accent); font-weight: 600; }
 
-    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.7); color: white; box-sizing: border-box; outline: none;}
-    .input-classic:focus { border-color: var(--accent); }
+    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.75); color: white; box-sizing: border-box; outline: none;}
+    .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,210,255,0.25); }
     .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
-    .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); color: #fff; }
+    .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.6); color: #fff; }
 
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    table th { background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
-    table td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px; font-size: 13px; }
+    table th { background: rgba(0,0,0,0.7); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
+    table td { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 16px; font-size: 13px; }
 </style>
 
 <script>
@@ -197,7 +226,7 @@ const CSS_MODERNO = `
             let emailInput = form.querySelector('input[name="email_search"]');
             if(!emailInput.value.trim()) {
                 emailInput.style.borderColor = "#E50914";
-                emailInput.style.boxShadow = "0 0 15px rgba(229,9,20,0.5)";
+                emailInput.style.boxShadow = "0 0 15px rgba(229,9,20,0.6)";
                 emailInput.placeholder = "¡ESCRIBE EL CORREO PRIMERO!";
                 emailInput.focus();
                 return;
