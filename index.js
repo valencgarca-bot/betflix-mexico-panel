@@ -65,7 +65,6 @@ const CSS_MODERNO = `
     }
 
     body { 
-        /* FONDO DE PELÍCULAS RESTAURADO */
         background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
         background-color: #000205;
         color: var(--text-main); font-family: 'Inter', sans-serif; 
@@ -169,6 +168,17 @@ const CSS_MODERNO = `
         text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif;
     }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.3); padding-left: 18px; }
+
+    /* ESTILOS MEJORADOS PARA ACTIVIDAD RECIENTE */
+    .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+    .activity-item {
+        background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 210, 255, 0.15);
+        padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s;
+    }
+    .activity-item:hover { border-color: rgba(0, 210, 255, 0.4); background: rgba(0, 210, 255, 0.05); }
+    .activity-item strong { color: var(--text-main); font-weight: 500; word-break: break-all; font-size: 12px; }
+    .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
+    .activity-user { color: var(--accent); font-weight: 600; }
 
     .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.7); color: white; box-sizing: border-box; outline: none;}
     .input-classic:focus { border-color: var(--accent); }
@@ -381,8 +391,19 @@ app.get('/dash', async (req, res) => {
 
             let actividadesHtml = "";
             if (registros.length > 0) {
-                registros.forEach(r => { actividadesHtml += `<div class="activity-item"><strong>${r.email_buscado}</strong><span>${r.fecha} - ${r.user}</span></div>`; });
-            } else { actividadesHtml = `<div class="activity-item"><span>No hay actividades recientes.</span></div>`; }
+                registros.forEach(r => { 
+                    actividadesHtml += `
+                    <div class="activity-item">
+                        <strong>${r.email_buscado}</strong>
+                        <div class="activity-meta">
+                            <span>${r.fecha}</span>
+                            <span class="activity-user">@${r.user}</span>
+                        </div>
+                    </div>`; 
+                });
+            } else { 
+                actividadesHtml = `<div class="activity-item"><span style="color:var(--text-muted);">No hay actividades recientes.</span></div>`; 
+            }
             
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
@@ -619,7 +640,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
-    // 🔒 AQUÍ SE OCULTA TU CORREO EN EL VISOR DE RESULTADOS PARA QUE NUNCA APAREZCA PÚBLICO
     const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #cbd5e1; padding: 25px; margin: 0; line-height: 1.6; } h2, h3 { color: #f8fafc; font-weight: 400; }</style>`;
 
     try {
@@ -684,8 +704,18 @@ app.post('/buscar', async (req, res) => {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
-        // AQUÍ SE MUESTRA LA INFORMACIÓN OBLIGATORIAMENTE PERO OCULTANDO EL BUZÓN DE ORIGEN
+        // 🌟 MENSAJE MOTIVADOR Y DE BIENVENIDA AÑADIDO AL CONSULTAR NETFLIX
+        let bannerMotivador = "";
+        if (plataforma === 'netflix') {
+            bannerMotivador = `
+            <div style="background: linear-gradient(135deg, rgba(0, 210, 255, 0.15), rgba(229, 9, 20, 0.15)); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 12px; padding: 18px 22px; margin-bottom: 20px; text-align: center;">
+                <h3 style="margin: 0 0 5px 0; color: #00D2FF; font-size: 16px; font-weight: 600;">✨ ¡Bienvenido a tu consulta, ${req.session.user}!</h3>
+                <p style="margin: 0; color: #cbd5e1; font-size: 13px;">Aquí tienes lo que has pedido. Solo revisa el código o la información solicitada abajo y dale continuidad a tu acceso.</p>
+            </div>`;
+        }
+
         res.send(`${cssIframe}
+            ${bannerMotivador}
             <div style="padding: 15px 20px; border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 12px; background: rgba(0,0,0,0.6); margin-bottom: 25px;">
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#a3a3a3; font-weight:300;">${mail.from.text}</span></div>
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Asunto: <span style="color:#a3a3a3; font-weight:300;">${mail.subject}</span></div>
