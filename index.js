@@ -108,7 +108,6 @@ const CSS_MODERNO = `
     }
     .search-top input:focus { border-color: var(--accent); width: 320px; }
 
-    /* NUEVA ESTRUCTURA GRID */
     .dashboard-grid { 
         display: grid; 
         grid-template-columns: 300px 1fr 300px; 
@@ -419,10 +418,12 @@ app.get('/dash', async (req, res) => {
                             }).join('');
                         } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados</span>"; }
 
+                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : 'Tú';
+
                         tablaUsuariosHtml += `<tr>
                             <td style="font-weight: 500; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small></td>
                             <td style="vertical-align: top;"><div style="max-height: 160px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
-                            <td style="font-size: 12px; color: var(--text-muted); vertical-align: top;">${esAdminPrincipal && u.creado_por ? \`ID Creador: \${u.creado_por}\` : 'Tú'}</td>
+                            <td style="font-size: 12px; color: var(--text-muted); vertical-align: top;">${idCreadorTexto}</td>
                             <td style="vertical-align: top; text-align: center;"><form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario?');" style="margin:0;"><input type="hidden" name="user_id" value="${u.id}"><button type="submit" style="background:rgba(0, 210, 255, 0.1); border:1px solid rgba(0, 210, 255, 0.3); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer;">Eliminar</button></form></td>
                         </tr>`;
                     });
