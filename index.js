@@ -6,8 +6,6 @@ const { simpleParser } = require('mailparser');
 const path = require('path');
 const app = express();
 
-app.use(express.static('public'));
-
 // 💾 SISTEMA DE PERSISTENCIA (Adaptado para Render Disk)
 const dbDirectory = process.env.RENDER ? '/var/data' : __dirname;
 const dbPath = path.resolve(dbDirectory, 'betflix_mexico_v1.db');
@@ -28,7 +26,6 @@ const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
 
-// 📌 PLATAFORMAS ACTIVAS
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.15)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#ffffff', alpha: 'rgba(255, 255, 255, 0.1)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
@@ -50,7 +47,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX (TEMA AZUL CIAN/NEÓN)
+// 🎬 ESTILO MODERNO SYNCBOX
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -104,7 +101,6 @@ const CSS_MODERNO = `
 
     .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
     .brand-logo strong { font-weight: 700; color: var(--accent); }
-    .brand-logo img { height: 35px; border-radius: 50%; }
 
     .search-top { display: flex; align-items: center; gap: 15px; }
     .search-top input {
@@ -262,7 +258,6 @@ app.get('/', (req, res) => {
             
             .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); box-sizing: border-box; text-align: center; }
             .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; }
-            .login-box h2 img { height: 40px; border-radius: 50%; }
             
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
@@ -276,7 +271,14 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="login-box">
-            <h2><img src="/logo.jpg" alt="Logo"> SYNCBOX</h2>
+            <h2>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg> 
+                SYNCBOX
+            </h2>
             <form action="/login" method="POST">
                 <div class="input-group">
                     <input type="text" name="user" placeholder="Usuario" required>
@@ -453,7 +455,11 @@ app.get('/dash', async (req, res) => {
                         <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
                     </div>
                     <div class="brand-logo">
-                        <img src="/logo.jpg" alt="Logo">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
                         <strong>SYNC</strong>BOX
                     </div>
                     <div class="search-top"><input type="text" placeholder="Buscar en el sistema..."></div>
@@ -547,7 +553,6 @@ app.post('/admin/asignar-correo', async (req, res) => {
     try {
         const targetUserId = req.body.user_id;
 
-        // Validar que un subadmin solo manipule cuentas propias o clientes que él mismo creó
         if (req.session.rol === 'Subadministrador') {
             const verificaPropietario = await dbGet("SELECT id FROM usuarios WHERE id = ? AND (creado_por = ? OR id = ?)", [targetUserId, req.session.uid, req.session.uid]);
             if (!verificaPropietario) {
@@ -561,19 +566,15 @@ app.post('/admin/asignar-correo', async (req, res) => {
         for (let email of listaCorreos) { 
             email = email.toLowerCase();
             
-            // Verificamos si el correo ya existe en toda la base de datos
             const existente = await dbGet("SELECT c.id, c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [email]);
             
             if (existente) {
-                // Si es el Subadministrador y la cuenta está actualmente en SU inventario, permitimos transferirla
                 if (req.session.rol === 'Subadministrador' && existente.user_id === req.session.uid) {
                     await dbRun("UPDATE correos SET user_id = ? WHERE id = ?", [targetUserId, existente.id]);
                 } else {
-                    // BLOQUEO INMEDIATO: Muestra exactamente el mensaje solicitado para cualquier intento de duplicar la cuenta.
                     return res.send(`<script>alert('Esta cuenta ya está asignada. Cliente actual: ${existente.user} | Correo: ${email}'); window.location='/dash';</script>`);
                 }
             } else {
-                // Es una cuenta completamente nueva, se inserta normalmente
                 await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [email, targetUserId]); 
             }
         }
