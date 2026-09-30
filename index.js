@@ -6,7 +6,6 @@ const { simpleParser } = require('mailparser');
 const path = require('path');
 const app = express();
 
-// 💾 SISTEMA DE PERSISTENCIA
 const dbDirectory = process.env.RENDER ? '/var/data' : __dirname;
 const dbPath = path.resolve(dbDirectory, 'betflix_mexico_v1.db');
 
@@ -22,9 +21,9 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 🔒 CORREO OCULTO POR SEGURIDAD (REEMPLAZAR CON EL REAL ANTES DE SUBIR)
+// 📌 CORREO REAL RESTAURADO PARA QUE FUNCIONE EL IMAP Y DEVUELVA LA INFORMACIÓN
 const CUENTAS_GMAIL_MAP = {
-    'correo_oculto@gmail.com': 'wkcidkcgtuapcnkh'
+    'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
 
 const PLATAFORMAS = {
@@ -47,7 +46,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX CON FONDO DE PELÍCULAS
+// 🎬 ESTILO MODERNO SYNCBOX CON FONDO DE PELÍCULAS FUNCIONAL
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -66,18 +65,17 @@ const CSS_MODERNO = `
     }
 
     body { 
-        /* FONDO LLENO DE PELÍCULAS */
-        background: url('https://assets.nflxext.com/ffe/siteui/vlv3/9d3533b2-0e2b-40b2-95e0-eca7979c7096/2be1ddc5-6548-4fb7-85fb-26154b732fb8/US-en-20231120-popsignuptwoweeks-perspective_alpha_website_large.jpg') center/cover fixed;
+        /* FONDO DE PELÍCULAS RESTAURADO */
+        background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
         background-color: #000205;
         color: var(--text-main); font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh;
     }
 
-    /* FILTRO CRISTAL OSCURO PARA QUE RESALTE EL PANEL */
     body::before {
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.1) 0%, rgba(0, 5, 15, 0.9) 80%);
-        backdrop-filter: blur(4px);
+        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.15) 0%, rgba(0, 5, 15, 0.92) 85%);
+        backdrop-filter: blur(5px);
         z-index: -1; pointer-events: none;
     }
 
@@ -103,7 +101,6 @@ const CSS_MODERNO = `
     }
     .search-top input:focus { border-color: var(--accent); width: 320px; background: rgba(0,0,0,0.8); }
 
-    /* ESTRUCTURA GRID 3 COLUMNAS */
     .dashboard-grid { 
         display: grid; grid-template-columns: 280px 1fr 280px; gap: 30px; 
         padding: 10px 40px 40px 40px; align-items: start; 
@@ -112,7 +109,6 @@ const CSS_MODERNO = `
     .left-sidebar, .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
-    /* PANELES DE ACCIÓN (IZQUIERDA) */
     .action-panel {
         background: var(--card-bg); border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
@@ -120,7 +116,6 @@ const CSS_MODERNO = `
     }
     .action-panel.active { display: flex; animation: fadeIn 0.4s ease; }
 
-    /* PANELES PRINCIPALES (CENTRO) */
     .main-card {
         background: var(--card-bg); border-radius: var(--radius); padding: 35px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
@@ -158,7 +153,6 @@ const CSS_MODERNO = `
     }
     .side-card h4 { margin: 0 0 15px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;}
     
-    /* BOTONES DE PLATAFORMAS (DERECHA ABAJO DE ADMIN) */
     .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
     .plat-mini-btn {
         background: rgba(0,0,0,0.6); border: 1px solid var(--card-border); padding: 12px;
@@ -190,19 +184,17 @@ const CSS_MODERNO = `
     function triggerAction(platKey, actionName) {
         let form = document.getElementById('form-' + platKey);
         if(form) {
-            // Validación corregida: Si el campo está vacío, te avisa y no envía el formulario en blanco.
             let emailInput = form.querySelector('input[name="email_search"]');
             if(!emailInput.value.trim()) {
                 emailInput.style.borderColor = "#E50914";
                 emailInput.style.boxShadow = "0 0 15px rgba(229,9,20,0.5)";
                 emailInput.placeholder = "¡ESCRIBE EL CORREO PRIMERO!";
                 emailInput.focus();
-                return; // Detiene la ejecución aquí
+                return;
             }
             emailInput.style.borderColor = "var(--accent)";
             emailInput.style.boxShadow = "none";
             
-            // Inyecta la acción de forma segura y envía el formulario
             let actionInput = form.querySelector('input[name="accion"]');
             if(!actionInput) {
                 actionInput = document.createElement('input');
@@ -265,13 +257,13 @@ app.get('/', (req, res) => {
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
             body { 
                 margin: 0; font-family: 'Inter', sans-serif; 
-                background: url('https://assets.nflxext.com/ffe/siteui/vlv3/9d3533b2-0e2b-40b2-95e0-eca7979c7096/2be1ddc5-6548-4fb7-85fb-26154b732fb8/US-en-20231120-popsignuptwoweeks-perspective_alpha_website_large.jpg') center/cover fixed; 
+                background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; 
                 background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; 
             }
             body::before { 
                 content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
                 background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.2) 0%, rgba(0, 5, 15, 0.95) 80%); 
-                backdrop-filter: blur(4px); z-index: 1; pointer-events: none; 
+                backdrop-filter: blur(5px); z-index: 1; pointer-events: none; 
             }
             .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); text-align: center; }
             .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -329,7 +321,6 @@ app.get('/dash', async (req, res) => {
             const correos = await dbAll("SELECT * FROM correos", []);
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
 
-            // 1. BOTONES DE PLATAFORMA (Barra Derecha)
             let botonesPlataformaHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -339,14 +330,12 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // 2. PANELES CENTRALES Y DE ACCIÓN
             let panelesCentroHtml = "";
             let panelesIzquierdosHtml = "";
 
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
                 
-                // Botones en la columna izquierda
                 let controlesIzquierda = "";
                 if (key === 'netflix') {
                     controlesIzquierda = `
@@ -366,7 +355,6 @@ app.get('/dash', async (req, res) => {
                     ${controlesIzquierda}
                 </div>`;
 
-                // Panel Central de Búsqueda
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
                     <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
@@ -385,7 +373,6 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // Paneles de acción vacíos para las herramientas de admin (para mantener la estructura visual)
             panelesIzquierdosHtml += `
             <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Crea nuevas cuentas de clientes para darles acceso al panel SyncBox.</p></div>
             <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de las plataformas de streaming al perfil de un cliente autorizado.</p></div>
@@ -460,16 +447,13 @@ app.get('/dash', async (req, res) => {
 
                 <div class="dashboard-grid">
                     
-                    <!-- COLUMNA IZQUIERDA: CONTROLES DE ACCIÓN -->
                     <div class="left-sidebar">
                         ${panelesIzquierdosHtml}
                     </div>
 
-                    <!-- COLUMNA CENTRAL: BUSCADOR Y VISOR -->
                     <div class="center-panel">
                         ${panelesCentroHtml}
                         
-                        <!-- Paneles Administrativos Ocultos -->
                         <div id="main-crear-user" class="main-card">
                             <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Crear Nuevo Usuario</h3>
                             <form action="/admin/crear" method="POST">
@@ -498,14 +482,12 @@ app.get('/dash', async (req, res) => {
                             </div>
                         </div>
 
-                        <!-- VISOR PERMANENTE -->
                         <div class="iframe-container">
                             <div class="iframe-header">Data Vortex - VISOR DE RESULTADOS EN VIVO</div>
                             <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
                         </div>
                     </div>
 
-                    <!-- COLUMNA DERECHA: ADMINISTRACIÓN Y PLATAFORMAS -->
                     <div class="right-sidebar">
                         <div class="side-card">
                             <h4>Administración</h4>
@@ -517,7 +499,6 @@ app.get('/dash', async (req, res) => {
                                 ` : ''}
                             </div>
                             
-                            <!-- SECCIÓN PLATAFORMAS -->
                             <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
                             <div class="plat-mini-grid">
                                 ${botonesPlataformaHtml}
@@ -637,6 +618,8 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
+    
+    // 🔒 AQUÍ SE OCULTA TU CORREO EN EL VISOR DE RESULTADOS PARA QUE NUNCA APAREZCA PÚBLICO
     const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #cbd5e1; padding: 25px; margin: 0; line-height: 1.6; } h2, h3 { color: #f8fafc; font-weight: 400; }</style>`;
 
     try {
@@ -659,7 +642,7 @@ app.post('/buscar', async (req, res) => {
         }
 
         let partes = correoIngresado.split('@');
-        let buzonesAbuscar = ['correo_oculto@gmail.com']; 
+        let buzonesAbuscar = ['darciogarces@gmail.com']; 
         let resultadoExitoso = null;
 
         try {
@@ -675,7 +658,7 @@ app.post('/buscar', async (req, res) => {
             </div>`); 
         }
 
-        const { mail, buzón } = resultadoExitoso;
+        const { mail } = resultadoExitoso;
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
@@ -701,11 +684,12 @@ app.post('/buscar', async (req, res) => {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
+        // AQUÍ SE MUESTRA LA INFORMACIÓN OBLIGATORIAMENTE PERO OCULTANDO EL BUZÓN DE ORIGEN
         res.send(`${cssIframe}
             <div style="padding: 15px 20px; border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 12px; background: rgba(0,0,0,0.6); margin-bottom: 25px;">
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#a3a3a3; font-weight:300;">${mail.from.text}</span></div>
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Asunto: <span style="color:#a3a3a3; font-weight:300;">${mail.subject}</span></div>
-                <div style="font-weight: 400; font-size: 11px; margin-top:10px; color:rgba(0, 210, 255, 0.8); text-transform:uppercase; letter-spacing:1px;">Buzón consultado: ${buzón}</div>
+                <div style="font-weight: 400; font-size: 11px; margin-top:10px; color:rgba(0, 210, 255, 0.8); text-transform:uppercase; letter-spacing:1px;">Buzón consultado: [SISTEMA ENCRIPTADO SYNCBOX]</div>
             </div>
             <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
                 ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#e2e8f0;">${mail.text}</pre>`}
