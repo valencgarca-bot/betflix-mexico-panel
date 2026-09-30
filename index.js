@@ -46,7 +46,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX CON FONDOS ANIMADOS Y EFECTOS EN MOVIMIENTO
+// 🎬 ESTILO MODERNO SYNCBOX CON FONDOS DE STRANGER THINGS, LA CASA DE PAPEL Y SEX EDUCATION
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -54,13 +54,12 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #a3a3a3;
-        --card-bg: rgba(10, 14, 20, 0.75);
         --card-border: rgba(0, 210, 255, 0.35);
         --accent: #00D2FF;
         --accent-hover: #0099CC;
         --btn-bg: rgba(0, 210, 255, 0.12);
         --shadow-elegant: 0 15px 50px rgba(0, 0, 0, 0.95);
-        --blur-effect: blur(20px);
+        --blur-effect: blur(15px);
         --radius: 18px;
     }
 
@@ -78,23 +77,18 @@ const CSS_MODERNO = `
         z-index: -1; pointer-events: none;
     }
 
-    /* 🌀 ANIMACIÓN DE DEGRADADO FLUIDO PARA LAS TARJETAS */
-    @keyframes gradientBG {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-    }
-
-    @keyframes neonGlow {
-        0% { border-color: rgba(0, 210, 255, 0.3); box-shadow: 0 0 10px rgba(0,210,255,0.1); }
-        50% { border-color: rgba(229, 9, 20, 0.6); box-shadow: 0 0 25px rgba(229,9,20,0.3); }
-        100% { border-color: rgba(0, 210, 255, 0.3); box-shadow: 0 0 10px rgba(0,210,255,0.1); }
+    /* 🌀 ANIMACIÓN DE ROTACIÓN DE FONDOS DE SERIES ICONICAS */
+    @keyframes seriesSlideshow {
+        0% { background-image: linear-gradient(rgba(10, 14, 20, 0.88), rgba(10, 14, 20, 0.88)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1000&auto=format&fit=crop'); } /* Stranger Things vibe / Oscuro neón */
+        33% { background-image: linear-gradient(rgba(15, 10, 15, 0.88), rgba(15, 10, 15, 0.88)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=1000&auto=format&fit=crop'); } /* La Casa de Papel vibe / Rojo intensivo */
+        66% { background-image: linear-gradient(rgba(10, 20, 25, 0.88), rgba(10, 20, 25, 0.88)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop'); } /* Sex Education vibe / Estilo juvenil retro */
+        100% { background-image: linear-gradient(rgba(10, 14, 20, 0.88), rgba(10, 14, 20, 0.88)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1000&auto=format&fit=crop'); }
     }
 
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
     
     .user-pill {
-        display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; 
+        display: flex; align-items: center; gap: 12px; background: rgba(10, 14, 20, 0.85); padding: 8px 16px; 
         border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
         border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s;
     }
@@ -108,10 +102,10 @@ const CSS_MODERNO = `
     .brand-logo strong { font-weight: 700; color: var(--accent); }
 
     .search-top input {
-        background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
+        background: rgba(10, 14, 20, 0.85); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
         border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s;
     }
-    .search-top input:focus { border-color: var(--accent); width: 320px; background: rgba(0,0,0,0.8); }
+    .search-top input:focus { border-color: var(--accent); width: 320px; background: rgba(0,0,0,0.9); }
 
     .dashboard-grid { 
         display: grid; grid-template-columns: 280px 1fr 280px; gap: 30px; 
@@ -121,28 +115,27 @@ const CSS_MODERNO = `
     .left-sidebar, .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
-    /* FONDOS ANIMADOS PARA LOS PANELES DE ACCIÓN */
+    /* FONDOS ANIMADOS CON SERIES EN LAS TARJETAS DE ACCIÓN */
     .action-panel {
-        background: linear-gradient(135deg, rgba(10, 14, 20, 0.9), rgba(20, 10, 30, 0.9), rgba(0, 30, 50, 0.9));
-        background-size: 300% 300%;
-        animation: gradientBG 10s ease infinite, neonGlow 6s ease infinite;
+        background-size: cover;
+        background-position: center;
+        animation: seriesSlideshow 18s ease infinite;
         border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px;
     }
     .action-panel.active { display: flex; }
 
-    /* FONDOS ANIMADOS PARA LAS TARJETAS PRINCIPALES */
+    /* FONDOS ANIMADOS CON SERIES EN LAS TARJETAS PRINCIPALES */
     .main-card {
-        background: linear-gradient(120deg, rgba(10, 14, 20, 0.88), rgba(15, 25, 40, 0.88), rgba(25, 10, 25, 0.88));
-        background-size: 250% 250%;
-        animation: gradientBG 12s ease infinite;
+        background-size: cover;
+        background-position: center;
+        animation: seriesSlideshow 18s ease infinite;
         border-radius: var(--radius); padding: 35px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none;
     }
     .main-card.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     .action-btn-pill {
         width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border);
@@ -152,30 +145,28 @@ const CSS_MODERNO = `
     .action-btn-pill:hover { background: rgba(0, 210, 255, 0.25); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,210,255,0.4);}
 
     .search-input-large {
-        width: 100%; background: rgba(0,0,0,0.75); border: 1px solid rgba(0, 210, 255, 0.4); 
+        width: 100%; background: rgba(0,0,0,0.8); border: 1px solid rgba(0, 210, 255, 0.4); 
         padding: 20px 30px; border-radius: 50px; font-size: 14px; margin-top: 15px;
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
     }
     .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.95); box-shadow: 0 0 25px rgba(0,210,255,0.35); }
 
-    /* VISOR DE RESULTADOS CON FONDO ANIMADO SUTIL */
+    /* VISOR DE RESULTADOS */
     .iframe-container {
-        background: linear-gradient(135deg, rgba(8, 12, 18, 0.95), rgba(15, 8, 22, 0.95));
-        background-size: 200% 200%;
-        animation: gradientBG 15s ease infinite;
+        background: rgba(10, 14, 20, 0.9);
         border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
         border: 1px solid var(--card-border); height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
     }
     .iframe-header {
-        padding: 16px 25px; background: rgba(0,0,0,0.7); border-bottom: 1px solid var(--card-border); 
+        padding: 16px 25px; background: rgba(0,0,0,0.8); border-bottom: 1px solid var(--card-border); 
         font-weight: 500; font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
     }
 
-    /* TARJETAS LATERALES CON ANIMACIÓN DE FONDO */
+    /* TARJETAS LATERALES CON SERIES DE FONDO */
     .side-card {
-        background: linear-gradient(145deg, rgba(10, 14, 20, 0.85), rgba(18, 12, 28, 0.85));
-        background-size: 200% 200%;
-        animation: gradientBG 14s ease infinite;
+        background-size: cover;
+        background-position: center;
+        animation: seriesSlideshow 18s ease infinite;
         border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
     }
@@ -183,7 +174,7 @@ const CSS_MODERNO = `
     
     .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
     .plat-mini-btn {
-        background: rgba(0,0,0,0.65); border: 1px solid var(--card-border); padding: 12px;
+        background: rgba(0,0,0,0.7); border: 1px solid var(--card-border); padding: 12px;
         border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
         height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
@@ -198,24 +189,24 @@ const CSS_MODERNO = `
     }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
 
-    /* ESTILOS DE ACTIVIDAD RECIENTE ORDENADA Y FLUIDA */
+    /* ACTIVIDAD RECIENTE ORDENADA */
     .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
     .activity-item {
-        background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(0, 210, 255, 0.2);
+        background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(0, 210, 255, 0.25);
         padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s;
     }
-    .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.08); }
+    .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.1); }
     .activity-item strong { color: var(--text-main); font-weight: 500; word-break: break-all; font-size: 12px; }
     .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
     .activity-user { color: var(--accent); font-weight: 600; }
 
-    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.75); color: white; box-sizing: border-box; outline: none;}
+    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.8); color: white; box-sizing: border-box; outline: none;}
     .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,210,255,0.25); }
     .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.6); color: #fff; }
 
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    table th { background: rgba(0,0,0,0.7); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
+    table th { background: rgba(0,0,0,0.8); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
     table td { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 16px; font-size: 13px; }
 </style>
 
@@ -378,7 +369,7 @@ app.get('/dash', async (req, res) => {
                 let controlesIzquierda = "";
                 if (key === 'netflix') {
                     controlesIzquierda = `
-                        <div style="background: rgba(0, 210, 255, 0.08); border: 1px dashed rgba(0, 210, 255, 0.4); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 5px;">
+                        <div style="background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(0, 210, 255, 0.4); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 5px;">
                             <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
                                 ¡Bienvenido! Presiona en <strong style="color: var(--accent);">Consultar lo último que pidió</strong> y el sistema te dará exactamente lo que has pedido al instante. ✨
                             </p>
@@ -402,7 +393,7 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
                     <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
-                        <div style="background:rgba(255,255,255,0.05); padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
+                        <div style="background:rgba(0,0,0,0.6); padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
                             <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:30px; width:auto; max-width:120px; object-fit:contain;">
                         </div>
                         <div>
@@ -454,7 +445,7 @@ app.get('/dash', async (req, res) => {
                         if (correosDelUsuario.length > 0) {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.3);" : "background: rgba(0,0,0,0.4); border: 1px solid transparent;";
+                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.3);" : "background: rgba(0,0,0,0.5); border: 1px solid transparent;";
                                 return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px;">
                                     <span>${c.email}</span>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
@@ -532,7 +523,7 @@ app.get('/dash', async (req, res) => {
                                 <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0;">
                                 <button type="submit" class="btn-action-sm" style="padding: 0 20px;">Buscar</button>
                             </form>
-                            <div style="background: rgba(0,0,0,0.5); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
+                            <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
                                 <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align:center;">Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
                             </div>
                         </div>
