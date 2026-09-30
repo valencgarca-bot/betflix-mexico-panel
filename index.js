@@ -46,7 +46,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX CON FONDOS DE STRANGER THINGS, LA CASA DE PAPEL Y SEX EDUCATION
+// 🎬 ESTILO TOTALMENTE ANIMADO CON SERIES EN TODO EL FONDO Y TEMA OSCURO INTENSO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -54,17 +54,29 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #a3a3a3;
+        --card-bg: rgba(8, 11, 16, 0.88);
         --card-border: rgba(0, 210, 255, 0.35);
         --accent: #00D2FF;
         --accent-hover: #0099CC;
         --btn-bg: rgba(0, 210, 255, 0.12);
         --shadow-elegant: 0 15px 50px rgba(0, 0, 0, 0.95);
-        --blur-effect: blur(15px);
+        --blur-effect: blur(18px);
         --radius: 18px;
     }
 
+    /* 🌀 ANIMACIÓN DE ROTACIÓN DE FONDOS DE SERIES EN TODA LA WEB */
+    @keyframes globalSeriesSlideshow {
+        0% { background-image: linear-gradient(rgba(0, 2, 5, 0.92), rgba(0, 2, 5, 0.92)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
+        33% { background-image: linear-gradient(rgba(5, 0, 2, 0.92), rgba(5, 0, 2, 0.92)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2000&auto=format&fit=crop'); }
+        66% { background-image: linear-gradient(rgba(0, 5, 8, 0.92), rgba(0, 5, 8, 0.92)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
+        100% { background-image: linear-gradient(rgba(0, 2, 5, 0.92), rgba(0, 2, 5, 0.92)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
+    }
+
     body { 
-        background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        animation: globalSeriesSlideshow 20s ease infinite;
         background-color: #000205;
         color: var(--text-main); font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh;
@@ -72,23 +84,15 @@ const CSS_MODERNO = `
 
     body::before {
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.2) 0%, rgba(0, 5, 15, 0.95) 90%);
-        backdrop-filter: blur(6px);
+        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.1) 0%, rgba(0, 2, 5, 0.95) 90%);
+        backdrop-filter: blur(4px);
         z-index: -1; pointer-events: none;
-    }
-
-    /* 🌀 ANIMACIÓN DE ROTACIÓN DE FONDOS DE SERIES ICONICAS */
-    @keyframes seriesSlideshow {
-        0% { background-image: linear-gradient(rgba(10, 14, 20, 0.88), rgba(10, 14, 20, 0.88)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1000&auto=format&fit=crop'); } /* Stranger Things vibe / Oscuro neón */
-        33% { background-image: linear-gradient(rgba(15, 10, 15, 0.88), rgba(15, 10, 15, 0.88)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=1000&auto=format&fit=crop'); } /* La Casa de Papel vibe / Rojo intensivo */
-        66% { background-image: linear-gradient(rgba(10, 20, 25, 0.88), rgba(10, 20, 25, 0.88)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop'); } /* Sex Education vibe / Estilo juvenil retro */
-        100% { background-image: linear-gradient(rgba(10, 14, 20, 0.88), rgba(10, 14, 20, 0.88)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1000&auto=format&fit=crop'); }
     }
 
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
     
     .user-pill {
-        display: flex; align-items: center; gap: 12px; background: rgba(10, 14, 20, 0.85); padding: 8px 16px; 
+        display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; 
         border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
         border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s;
     }
@@ -102,10 +106,10 @@ const CSS_MODERNO = `
     .brand-logo strong { font-weight: 700; color: var(--accent); }
 
     .search-top input {
-        background: rgba(10, 14, 20, 0.85); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
+        background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
         border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s;
     }
-    .search-top input:focus { border-color: var(--accent); width: 320px; background: rgba(0,0,0,0.9); }
+    .search-top input:focus { border-color: var(--accent); width: 320px; background: rgba(0,0,0,0.95); }
 
     .dashboard-grid { 
         display: grid; grid-template-columns: 280px 1fr 280px; gap: 30px; 
@@ -115,22 +119,16 @@ const CSS_MODERNO = `
     .left-sidebar, .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
-    /* FONDOS ANIMADOS CON SERIES EN LAS TARJETAS DE ACCIÓN */
     .action-panel {
-        background-size: cover;
-        background-position: center;
-        animation: seriesSlideshow 18s ease infinite;
+        background: var(--card-bg);
         border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px;
     }
     .action-panel.active { display: flex; }
 
-    /* FONDOS ANIMADOS CON SERIES EN LAS TARJETAS PRINCIPALES */
     .main-card {
-        background-size: cover;
-        background-position: center;
-        animation: seriesSlideshow 18s ease infinite;
+        background: var(--card-bg);
         border-radius: var(--radius); padding: 35px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none;
@@ -145,28 +143,25 @@ const CSS_MODERNO = `
     .action-btn-pill:hover { background: rgba(0, 210, 255, 0.25); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,210,255,0.4);}
 
     .search-input-large {
-        width: 100%; background: rgba(0,0,0,0.8); border: 1px solid rgba(0, 210, 255, 0.4); 
+        width: 100%; background: rgba(0,0,0,0.85); border: 1px solid rgba(0, 210, 255, 0.4); 
         padding: 20px 30px; border-radius: 50px; font-size: 14px; margin-top: 15px;
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
     }
-    .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.95); box-shadow: 0 0 25px rgba(0,210,255,0.35); }
+    .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.98); box-shadow: 0 0 25px rgba(0,210,255,0.35); }
 
-    /* VISOR DE RESULTADOS */
+    /* VISOR DE RESULTADOS COMPLETAMENTE OSCURO Y CLARO */
     .iframe-container {
-        background: rgba(10, 14, 20, 0.9);
+        background: rgba(5, 7, 10, 0.95);
         border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
         border: 1px solid var(--card-border); height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
     }
     .iframe-header {
-        padding: 16px 25px; background: rgba(0,0,0,0.8); border-bottom: 1px solid var(--card-border); 
+        padding: 16px 25px; background: rgba(0,0,0,0.85); border-bottom: 1px solid var(--card-border); 
         font-weight: 500; font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
     }
 
-    /* TARJETAS LATERALES CON SERIES DE FONDO */
     .side-card {
-        background-size: cover;
-        background-position: center;
-        animation: seriesSlideshow 18s ease infinite;
+        background: var(--card-bg);
         border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
     }
@@ -174,9 +169,9 @@ const CSS_MODERNO = `
     
     .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
     .plat-mini-btn {
-        background: rgba(0,0,0,0.7); border: 1px solid var(--card-border); padding: 12px;
+        background: rgba(0,0,0,0.75); border: 1px solid var(--card-border); padding: 12px;
         border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
-        height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.6);
     }
     .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
     .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
@@ -189,10 +184,9 @@ const CSS_MODERNO = `
     }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
 
-    /* ACTIVIDAD RECIENTE ORDENADA */
     .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
     .activity-item {
-        background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(0, 210, 255, 0.25);
+        background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(0, 210, 255, 0.25);
         padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s;
     }
     .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.1); }
@@ -200,13 +194,13 @@ const CSS_MODERNO = `
     .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
     .activity-user { color: var(--accent); font-weight: 600; }
 
-    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.8); color: white; box-sizing: border-box; outline: none;}
+    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.85); color: white; box-sizing: border-box; outline: none;}
     .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,210,255,0.25); }
     .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.6); color: #fff; }
 
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    table th { background: rgba(0,0,0,0.8); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
+    table th { background: rgba(0,0,0,0.85); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
     table td { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 16px; font-size: 13px; }
 </style>
 
@@ -369,7 +363,7 @@ app.get('/dash', async (req, res) => {
                 let controlesIzquierda = "";
                 if (key === 'netflix') {
                     controlesIzquierda = `
-                        <div style="background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(0, 210, 255, 0.4); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 5px;">
+                        <div style="background: rgba(0, 0, 0, 0.75); border: 1px solid rgba(0, 210, 255, 0.4); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 5px;">
                             <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
                                 ¡Bienvenido! Presiona en <strong style="color: var(--accent);">Consultar lo último que pidió</strong> y el sistema te dará exactamente lo que has pedido al instante. ✨
                             </p>
@@ -393,7 +387,7 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
                     <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
-                        <div style="background:rgba(0,0,0,0.6); padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
+                        <div style="background:rgba(0,0,0,0.7); padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
                             <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:30px; width:auto; max-width:120px; object-fit:contain;">
                         </div>
                         <div>
@@ -445,7 +439,7 @@ app.get('/dash', async (req, res) => {
                         if (correosDelUsuario.length > 0) {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.3);" : "background: rgba(0,0,0,0.5); border: 1px solid transparent;";
+                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.3);" : "background: rgba(0,0,0,0.6); border: 1px solid transparent;";
                                 return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px;">
                                     <span>${c.email}</span>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
@@ -523,7 +517,7 @@ app.get('/dash', async (req, res) => {
                                 <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0;">
                                 <button type="submit" class="btn-action-sm" style="padding: 0 20px;">Buscar</button>
                             </form>
-                            <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
+                            <div style="background: rgba(0,0,0,0.7); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
                                 <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align:center;">Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
                             </div>
                         </div>
@@ -656,7 +650,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         return null;
 
     } catch (err) {
-        console.log(`⚠️ Advertencia IMAP (${correoBuzon}):`, err.message);
+        console.log(`⚠️️ Advertencia IMAP (${correoBuzon}):`, err.message);
         if (connection) connection.end();
         return null;
     }
