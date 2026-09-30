@@ -28,7 +28,7 @@ const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
 
-// 📌 SE DEJARON ÚNICAMENTE NETFLIX Y DISNEY+
+// 📌 PLATAFORMAS ACTIVAS
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.15)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#ffffff', alpha: 'rgba(255, 255, 255, 0.1)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
@@ -365,7 +365,7 @@ app.get('/dash', async (req, res) => {
                     <div class="main-card-header">
                         <img src="${plat.logo}" alt="${plat.nombre}" class="main-card-logo">
                         <div class="main-card-title">
-                            <h3>Gestor Central ${plat.nombre}</h3>
+                            <h3>SyncBox | ${plat.nombre}</h3>
                             <p>Búsqueda rápida del último mensaje recibido.</p>
                         </div>
                     </div>
@@ -438,90 +438,100 @@ app.get('/dash', async (req, res) => {
             }
 
             res.send(`
-            ${CSS_MODERNO}
-            <div class="top-header">
-                <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
-                    <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
-                    <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
-                </div>
-                <div class="brand-logo">
-                    <img src="/logo.jpg" alt="Logo">
-                    <strong>SYNC</strong>BOX
-                </div>
-                <div class="search-top"><input type="text" placeholder="Buscar en el sistema..."></div>
-            </div>
-
-            <div class="dashboard-grid">
-                <div class="platforms-grid">
-                    ${plataformasCardsHtml}
-                </div>
-                <div class="center-panel">
-                    ${plataformasPanelsHtml}
-                    
-                    <div id="panel-crear-user" class="main-card">
-                        <div class="main-card-header"><div class="main-card-title"><h3>Crear Nuevo Usuario</h3><p>Agrega clientes a la base de datos persistente.</p></div></div>
-                        <form action="/admin/crear" method="POST">
-                            <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
-                            <input name="c" class="input-classic" placeholder="Contraseña" required>
-                            <select name="r" class="input-classic" style="appearance: none;">
-                                <option value="Cliente">Cliente Normal</option>
-                                ${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}
-                            </select>
-                            <button class="btn-submit">Guardar Usuario en DB</button>
-                        </form>
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Panel - SyncBox</title>
+                ${CSS_MODERNO}
+            </head>
+            <body>
+                <div class="top-header">
+                    <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
+                        <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
+                        <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
                     </div>
-
-                    <div id="panel-usuarios" class="main-card">
-                        <div class="main-card-header"><div class="main-card-title"><h3>Asignación de Correos</h3><p>Vincula correos masivos a cuentas específicas.</p></div></div>
-                        <form action="/admin/asignar-correo" method="POST" style="margin-bottom: 25px;">
-                            <select name="user_id" class="input-classic" required style="appearance: none;"><option value="" disabled selected>Selecciona un usuario de la base de datos...</option>${clientesOpcionesHtml}</select>
-                            <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio (ej. correo1@gmail.com correo2@gmail.com)" rows="5" required style="resize: vertical;"></textarea>
-                            <button type="submit" class="btn-submit">Asignar Correos</button>
-                        </form>
+                    <div class="brand-logo">
+                        <img src="/logo.jpg" alt="Logo">
+                        <strong>SYNC</strong>BOX
                     </div>
+                    <div class="search-top"><input type="text" placeholder="Buscar en el sistema..."></div>
+                </div>
 
-                    <div id="panel-base-datos" class="main-card">
-                        <div class="main-card-header" style="margin-bottom: 20px;"><div class="main-card-title"><h3>Registro de Usuarios y Asignaciones</h3><p>Datos persistentes del sistema.</p></div></div>
-                        <form action="/dash" method="GET" style="margin-bottom: 25px; display: flex; gap: 12px;">
-                            <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo para localizar al usuario..." style="margin:0; padding: 12px 20px;">
-                            <button type="submit" class="btn-action-sm" style="width: auto; padding: 0 25px;">Buscar</button>
-                        </form>
-                        <div style="background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
-                            <table>
-                                <thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align: center;">Acción</th></tr></thead>
-                                <tbody>${tablaUsuariosHtml}</tbody>
-                            </table>
+                <div class="dashboard-grid">
+                    <div class="platforms-grid">
+                        ${plataformasCardsHtml}
+                    </div>
+                    <div class="center-panel">
+                        ${plataformasPanelsHtml}
+                        
+                        <div id="panel-crear-user" class="main-card">
+                            <div class="main-card-header"><div class="main-card-title"><h3>Crear Nuevo Usuario</h3><p>Agrega clientes a la base de datos persistente.</p></div></div>
+                            <form action="/admin/crear" method="POST">
+                                <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
+                                <input name="c" class="input-classic" placeholder="Contraseña" required>
+                                <select name="r" class="input-classic" style="appearance: none;">
+                                    <option value="Cliente">Cliente Normal</option>
+                                    ${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}
+                                </select>
+                                <button class="btn-submit">Guardar Usuario en DB</button>
+                            </form>
+                        </div>
+
+                        <div id="panel-usuarios" class="main-card">
+                            <div class="main-card-header"><div class="main-card-title"><h3>Asignación de Correos</h3><p>Vincula correos masivos a cuentas específicas.</p></div></div>
+                            <form action="/admin/asignar-correo" method="POST" style="margin-bottom: 25px;">
+                                <select name="user_id" class="input-classic" required style="appearance: none;"><option value="" disabled selected>Selecciona un usuario de la base de datos...</option>${clientesOpcionesHtml}</select>
+                                <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio (ej. correo1@gmail.com correo2@gmail.com)" rows="5" required style="resize: vertical;"></textarea>
+                                <button type="submit" class="btn-submit">Asignar Correos</button>
+                            </form>
+                        </div>
+
+                        <div id="panel-base-datos" class="main-card">
+                            <div class="main-card-header" style="margin-bottom: 20px;"><div class="main-card-title"><h3>Base de Datos SyncBox</h3><p>Datos persistentes del sistema.</p></div></div>
+                            <form action="/dash" method="GET" style="margin-bottom: 25px; display: flex; gap: 12px;">
+                                <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo para localizar al usuario..." style="margin:0; padding: 12px 20px;">
+                                <button type="submit" class="btn-action-sm" style="width: auto; padding: 0 25px;">Buscar</button>
+                            </form>
+                            <div style="background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
+                                <table>
+                                    <thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align: center;">Acción</th></tr></thead>
+                                    <tbody>${tablaUsuariosHtml}</tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="iframe-container">
+                            <div class="iframe-header">SyncBox - Visor de Resultados</div>
+                            <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
                         </div>
                     </div>
 
-                    <div class="iframe-container">
-                        <div class="iframe-header">Visor de Resultados Integrado</div>
-                        <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
-                    </div>
-                </div>
-
-                <div class="right-sidebar">
-                    ${esAdminPrincipal ? `
-                    <div class="side-card">
-                        <h4>Actividad Reciente</h4>
-                        <div class="activity-list">
-                            ${actividadesHtml}
+                    <div class="right-sidebar">
+                        ${esAdminPrincipal ? `
+                        <div class="side-card">
+                            <h4>Actividad Reciente</h4>
+                            <div class="activity-list">
+                                ${actividadesHtml}
+                            </div>
                         </div>
-                    </div>
-                    ` : ''}
+                        ` : ''}
 
-                    <div class="side-card">
-                        <h4>Administración</h4>
-                        <div class="menu-list">
-                            ${(esAdminPrincipal || esSubAdmin) ? `
-                            <button class="menu-btn-item" onclick="openTab('panel-crear-user')">Crear Usuario</button>
-                            <button class="menu-btn-item" onclick="openTab('panel-usuarios')">Asignar Correos</button>
-                            <button class="menu-btn-item" onclick="openTab('panel-base-datos')">Ver Base de Datos</button>
-                            ` : ''}
+                        <div class="side-card">
+                            <h4>Administración</h4>
+                            <div class="menu-list">
+                                ${(esAdminPrincipal || esSubAdmin) ? `
+                                <button class="menu-btn-item" onclick="openTab('panel-crear-user')">Crear Usuario</button>
+                                <button class="menu-btn-item" onclick="openTab('panel-usuarios')">Asignar Correos</button>
+                                <button class="menu-btn-item" onclick="openTab('panel-base-datos')">Ver Base de Datos</button>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </body>
+            </html>
             `);
         } catch (err) { res.redirect('/'); }
     }
@@ -602,36 +612,22 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         await connection.openBox('INBOX');
         
         let keywordPlat = (plataforma && PLATAFORMAS[plataforma]) ? PLATAFORMAS[plataforma].keyword_from : '';
-        let esConsultaGmailDirecta = (plataforma === 'gmail');
 
         let messages = [];
         let mail = null;
 
-        if (esConsultaGmailDirecta) {
-            let searchResults = await connection.search([['ALL']], { bodies: ['HEADER.FIELDS (DATE)'] });
-            if (searchResults.length > 0) {
-                searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
-                let latestUid = searchResults[0].attributes.uid;
-                let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
-                if (fetchedMsg.length > 0) {
-                    messages = fetchedMsg;
-                    mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
-                }
-            }
-        } else {
-            let queryStr = `"${correoIngresado}"`;
-            if (keywordPlat) queryStr += ` ${keywordPlat}`;
+        let queryStr = `"${correoIngresado}"`;
+        if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
-            let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
-            if (searchResults.length > 0) {
-                searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
-                let latestUid = searchResults[0].attributes.uid; 
-                
-                let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
-                if (fetchedMsg.length > 0) {
-                    messages = fetchedMsg;
-                    mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
-                }
+        let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
+        if (searchResults.length > 0) {
+            searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
+            let latestUid = searchResults[0].attributes.uid; 
+            
+            let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
+            if (fetchedMsg.length > 0) {
+                messages = fetchedMsg;
+                mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
             }
         }
         
@@ -654,7 +650,7 @@ app.post('/buscar', async (req, res) => {
         let correoIngresado = (email_search || "").trim().toLowerCase();
         
         const esAdminPrincipal = (req.session.user === 'dueño' || req.session.user === 'ruben');
-        if (!esAdminPrincipal && plataforma !== 'gmail') {
+        if (!esAdminPrincipal) {
             const dueñocuenta = await dbGet("SELECT c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [correoIngresado]);
             
             if (dueñocuenta) {
@@ -690,7 +686,7 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        if (accion === 'pais' && (plataforma !== 'gmail')) {
+        if (accion === 'pais') {
             let paisDetectado = null;
             const reglasPais = [
                 { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
@@ -701,7 +697,7 @@ app.post('/buscar', async (req, res) => {
             return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
         }
 
-        if (accion === 'ip' && plataforma !== 'gmail') {
+        if (accion === 'ip') {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
             let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#fff; margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
