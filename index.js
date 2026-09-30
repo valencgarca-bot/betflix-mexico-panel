@@ -22,8 +22,9 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
+// 🔒 CORREO OCULTO POR SEGURIDAD (REEMPLAZAR CON EL REAL ANTES DE SUBIR)
 const CUENTAS_GMAIL_MAP = {
-    'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
+    'correo_oculto@gmail.com': 'wkcidkcgtuapcnkh'
 };
 
 const PLATAFORMAS = {
@@ -46,7 +47,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX (Estructura Corregida)
+// 🎬 ESTILO MODERNO SYNCBOX CON FONDO DE PELÍCULAS
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -54,26 +55,29 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #a3a3a3;
-        --card-bg: rgba(10, 14, 20, 0.75);
-        --card-border: rgba(0, 210, 255, 0.2);
+        --card-bg: rgba(10, 14, 20, 0.85);
+        --card-border: rgba(0, 210, 255, 0.25);
         --accent: #00D2FF;
         --accent-hover: #0099CC;
         --btn-bg: rgba(0, 210, 255, 0.1);
-        --shadow-elegant: 0 10px 40px rgba(0, 0, 0, 0.8);
-        --blur-effect: blur(20px);
+        --shadow-elegant: 0 10px 40px rgba(0, 0, 0, 0.9);
+        --blur-effect: blur(15px);
         --radius: 16px;
     }
 
     body { 
-        background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
+        /* FONDO LLENO DE PELÍCULAS */
+        background: url('https://assets.nflxext.com/ffe/siteui/vlv3/9d3533b2-0e2b-40b2-95e0-eca7979c7096/2be1ddc5-6548-4fb7-85fb-26154b732fb8/US-en-20231120-popsignuptwoweeks-perspective_alpha_website_large.jpg') center/cover fixed;
         background-color: #000205;
         color: var(--text-main); font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh;
     }
 
+    /* FILTRO CRISTAL OSCURO PARA QUE RESALTE EL PANEL */
     body::before {
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.15) 0%, rgba(0, 0, 5, 0.95) 80%);
+        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.1) 0%, rgba(0, 5, 15, 0.9) 80%);
+        backdrop-filter: blur(4px);
         z-index: -1; pointer-events: none;
     }
 
@@ -84,7 +88,7 @@ const CSS_MODERNO = `
         border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
         border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s;
     }
-    .user-pill:hover { border-color: rgba(0, 210, 255, 0.5); }
+    .user-pill:hover { border-color: rgba(0, 210, 255, 0.5); transform: translateY(-2px); }
     .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
     .user-pill .info strong { color: var(--text-main); font-size: 13px; font-weight: 600; }
@@ -97,7 +101,7 @@ const CSS_MODERNO = `
         background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
         border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s;
     }
-    .search-top input:focus { border-color: var(--accent); width: 320px; }
+    .search-top input:focus { border-color: var(--accent); width: 320px; background: rgba(0,0,0,0.8); }
 
     /* ESTRUCTURA GRID 3 COLUMNAS */
     .dashboard-grid { 
@@ -127,24 +131,24 @@ const CSS_MODERNO = `
 
     .action-btn-pill {
         width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border);
-        padding: 15px; border-radius: 50px; font-size: 12px; font-weight: 600;
+        padding: 15px; border-radius: 50px; font-size: 11px; font-weight: 600;
         color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
     }
-    .action-btn-pill:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-2px); }
+    .action-btn-pill:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,210,255,0.2);}
 
     .search-input-large {
-        width: 100%; background: rgba(0,0,0,0.6); border: 1px solid rgba(0, 210, 255, 0.3); 
+        width: 100%; background: rgba(0,0,0,0.7); border: 1px solid rgba(0, 210, 255, 0.3); 
         padding: 20px 30px; border-radius: 50px; font-size: 14px; margin-top: 15px;
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
     }
-    .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.8); }
+    .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.9); box-shadow: 0 0 20px rgba(0,210,255,0.2); }
 
     .iframe-container {
         background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
         border: 1px solid var(--card-border); height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
     }
     .iframe-header {
-        padding: 16px 25px; background: rgba(0,0,0,0.5); border-bottom: 1px solid var(--card-border); 
+        padding: 16px 25px; background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--card-border); 
         font-weight: 500; font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
     }
 
@@ -157,12 +161,12 @@ const CSS_MODERNO = `
     /* BOTONES DE PLATAFORMAS (DERECHA ABAJO DE ADMIN) */
     .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
     .plat-mini-btn {
-        background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); padding: 12px;
-        border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center;
-        height: 55px; transition: 0.3s;
+        background: rgba(0,0,0,0.6); border: 1px solid var(--card-border); padding: 12px;
+        border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
+        height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.1); border-color: var(--accent); transform: translateY(-2px); }
-    .plat-mini-btn img { max-height: 25px; max-width: 90%; object-fit: contain; }
+    .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.15); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.3);}
+    .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
 
     .menu-list { display: flex; flex-direction: column; gap: 8px; }
     .menu-btn-item {
@@ -172,13 +176,13 @@ const CSS_MODERNO = `
     }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.3); padding-left: 18px; }
 
-    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.5); color: white; box-sizing: border-box; outline: none;}
+    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.7); color: white; box-sizing: border-box; outline: none;}
     .input-classic:focus { border-color: var(--accent); }
     .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); color: #fff; }
 
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    table th { background: rgba(0,0,0,0.5); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
+    table th { background: rgba(0,0,0,0.6); border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
     table td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px; font-size: 13px; }
 </style>
 
@@ -186,13 +190,28 @@ const CSS_MODERNO = `
     function triggerAction(platKey, actionName) {
         let form = document.getElementById('form-' + platKey);
         if(form) {
-            let actionInput = document.createElement('input');
-            actionInput.type = 'hidden';
-            actionInput.name = 'accion';
+            // Validación corregida: Si el campo está vacío, te avisa y no envía el formulario en blanco.
+            let emailInput = form.querySelector('input[name="email_search"]');
+            if(!emailInput.value.trim()) {
+                emailInput.style.borderColor = "#E50914";
+                emailInput.style.boxShadow = "0 0 15px rgba(229,9,20,0.5)";
+                emailInput.placeholder = "¡ESCRIBE EL CORREO PRIMERO!";
+                emailInput.focus();
+                return; // Detiene la ejecución aquí
+            }
+            emailInput.style.borderColor = "var(--accent)";
+            emailInput.style.boxShadow = "none";
+            
+            // Inyecta la acción de forma segura y envía el formulario
+            let actionInput = form.querySelector('input[name="accion"]');
+            if(!actionInput) {
+                actionInput = document.createElement('input');
+                actionInput.type = 'hidden';
+                actionInput.name = 'accion';
+                form.appendChild(actionInput);
+            }
             actionInput.value = actionName;
-            form.appendChild(actionInput);
             form.submit();
-            actionInput.remove();
         }
     }
 
@@ -244,15 +263,23 @@ app.get('/', (req, res) => {
         <title>Acceso - SyncBox</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-            body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; }
-            body::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.3) 0%, rgba(0, 0, 10, 0.95) 80%); z-index: 1; pointer-events: none; }
-            .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); text-align: center; }
+            body { 
+                margin: 0; font-family: 'Inter', sans-serif; 
+                background: url('https://assets.nflxext.com/ffe/siteui/vlv3/9d3533b2-0e2b-40b2-95e0-eca7979c7096/2be1ddc5-6548-4fb7-85fb-26154b732fb8/US-en-20231120-popsignuptwoweeks-perspective_alpha_website_large.jpg') center/cover fixed; 
+                background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; 
+            }
+            body::before { 
+                content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+                background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.2) 0%, rgba(0, 5, 15, 0.95) 80%); 
+                backdrop-filter: blur(4px); z-index: 1; pointer-events: none; 
+            }
+            .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); text-align: center; }
             .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; gap: 10px; }
             .input-group { margin-bottom: 20px; }
-            .input-group input { width: 100%; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
-            .input-group input:focus { border-color: #00D2FF; background: rgba(0,0,0,0.9); }
+            .input-group input { width: 100%; background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.15); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
+            .input-group input:focus { border-color: #00D2FF; background: rgba(0,0,0,0.9); box-shadow: 0 0 15px rgba(0,210,255,0.2);}
             .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
-            .btn-submit:hover { background: #0099CC; color: #fff; }
+            .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
             .help-text { color: #888; font-size: 12px; margin-top: 30px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
@@ -360,9 +387,9 @@ app.get('/dash', async (req, res) => {
 
             // Paneles de acción vacíos para las herramientas de admin (para mantener la estructura visual)
             panelesIzquierdosHtml += `
-            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Crea nuevas cuentas de clientes para darles acceso.</p></div>
-            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de streaming al perfil de un cliente.</p></div>
-            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y borra registros.</p></div>
+            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Crea nuevas cuentas de clientes para darles acceso al panel SyncBox.</p></div>
+            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de las plataformas de streaming al perfil de un cliente autorizado.</p></div>
+            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y borra registros que ya no necesites en el sistema.</p></div>
             `;
 
             let actividadesHtml = "";
@@ -466,7 +493,7 @@ app.get('/dash', async (req, res) => {
                                 <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0;">
                                 <button type="submit" class="btn-action-sm" style="padding: 0 20px;">Buscar</button>
                             </form>
-                            <div style="background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
+                            <div style="background: rgba(0,0,0,0.5); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
                                 <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align:center;">Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
                             </div>
                         </div>
@@ -490,7 +517,7 @@ app.get('/dash', async (req, res) => {
                                 ` : ''}
                             </div>
                             
-                            <!-- SECCIÓN PLATAFORMAS (Abajo de Administración) -->
+                            <!-- SECCIÓN PLATAFORMAS -->
                             <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
                             <div class="plat-mini-grid">
                                 ${botonesPlataformaHtml}
@@ -632,7 +659,7 @@ app.post('/buscar', async (req, res) => {
         }
 
         let partes = correoIngresado.split('@');
-        let buzonesAbuscar = ['darciogarces@gmail.com']; 
+        let buzonesAbuscar = ['correo_oculto@gmail.com']; 
         let resultadoExitoso = null;
 
         try {
