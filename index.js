@@ -21,7 +21,6 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 📌 CORREO REAL RESTAURADO PARA QUE FUNCIONE EL IMAP Y DEVUELVA LA INFORMACIÓN
 const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
@@ -46,7 +45,6 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX CON FONDO DE PELÍCULAS FUNCIONAL
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -65,7 +63,6 @@ const CSS_MODERNO = `
     }
 
     body { 
-        /* FONDO DE PELÍCULAS RESTAURADO */
         background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
         background-color: #000205;
         color: var(--text-main); font-family: 'Inter', sans-serif; 
@@ -102,7 +99,7 @@ const CSS_MODERNO = `
     .search-top input:focus { border-color: var(--accent); width: 320px; background: rgba(0,0,0,0.8); }
 
     .dashboard-grid { 
-        display: grid; grid-template-columns: 280px 1fr 280px; gap: 30px; 
+        display: grid; grid-template-columns: 310px 1fr 280px; gap: 30px; 
         padding: 10px 40px 40px 40px; align-items: start; 
     }
 
@@ -126,8 +123,8 @@ const CSS_MODERNO = `
 
     .action-btn-pill {
         width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border);
-        padding: 15px; border-radius: 50px; font-size: 11px; font-weight: 600;
-        color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
+        padding: 12px 15px; border-radius: 12px; font-size: 11px; font-weight: 500;
+        color: var(--text-main); cursor: pointer; transition: 0.3s; text-align: left; line-height: 1.4;
     }
     .action-btn-pill:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,210,255,0.2);}
 
@@ -336,22 +333,24 @@ app.get('/dash', async (req, res) => {
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
                 
+                // 📌 LAS 4 OPCIONES EXACTAS EN LA BARRA IZQUIERDA
                 let controlesIzquierda = "";
                 if (key === 'netflix') {
                     controlesIzquierda = `
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none;">🔎 Consultar lo último que pidió</button>
+                        <button onclick="triggerAction('${key}', 'opt_restablecer')" class="action-btn-pill">📥 Completa tu solicitud de restablecimiento de contraseña</button>
+                        <button onclick="triggerAction('${key}', 'opt_temporal')" class="action-btn-pill">🔑 Su código de acceso temporal de Netflix</button>
+                        <button onclick="triggerAction('${key}', 'opt_vence')" class="action-btn-pill">⏳ Este código vence en 15 minutos</button>
+                        <button onclick="triggerAction('${key}', 'opt_inicio')" class="action-btn-pill">🎬 Netflix: Tu código de inicio de sesión</button>
                     `;
                 } else {
                     controlesIzquierda = `
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill">Leer Mensaje</button>
-                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill">Analizar País</button>
-                        <button onclick="triggerAction('${key}', 'ip')" class="action-btn-pill">Buscar IP</button>
+                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill">📥 Leer Último Mensaje</button>
                     `;
                 }
 
                 panelesIzquierdosHtml += `
                 <div id="action-${key}" class="action-panel">
-                    <h4 style="margin:0 0 10px 0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Acciones ${plat.nombre}</h4>
+                    <h4 style="margin:0 0 10px 0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Opciones ${plat.nombre}</h4>
                     ${controlesIzquierda}
                 </div>`;
 
@@ -578,7 +577,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
 
-    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 2500 } };
+    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 3500 } };
     let connection = null;
 
     try {
@@ -590,14 +589,31 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let messages = [];
         let mail = null;
 
+        // BÚSQUEDA MULTILINGÜE UNIVERSAL (Busca el correo sin importar el idioma del asunto o cuerpo)
         let queryStr = `"${correoIngresado}"`;
         if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
         let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
         if (searchResults.length > 0) {
             searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
-            let latestUid = searchResults[0].attributes.uid; 
             
+            // Si el usuario eligió una opción específica de Netflix, filtramos los mensajes que coincidan con la intención multilingüe
+            let targetMsg = searchResults[0];
+            
+            for (let resMsg of searchResults) {
+                let fetchedTest = await connection.search([['UID', resMsg.attributes.uid]], { bodies: ['HEADER.FIELDS (SUBJECT)'], struct: true });
+                if(fetchedTest.length > 0) {
+                    let parsedHeader = await simpleParser(fetchedTest[0].parts.find(p => p.which === '').body);
+                    let subject = (parsedHeader.subject || "").toLowerCase();
+                    
+                    if (accion === 'opt_restablecer' && (subject.includes('restablec') || subject.includes('redefinir') || subject.includes('reset') || subject.includes('password'))) { targetMsg = resMsg; break; }
+                    if (accion === 'opt_temporal' && (subject.includes('temporal') || subject.includes('temporary') || subject.includes('acesso') || subject.includes('access'))) { targetMsg = resMsg; break; }
+                    if (accion === 'opt_vence' && (subject.includes('vence') || subject.includes('expires') || subject.includes('15') || subject.includes('minutos'))) { targetMsg = resMsg; break; }
+                    if (accion === 'opt_inicio' && (subject.includes('inicio') || subject.includes('login') || subject.includes('session') || subject.includes('código') || subject.includes('codigo'))) { targetMsg = resMsg; break; }
+                }
+            }
+
+            let latestUid = targetMsg.attributes.uid; 
             let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
             if (fetchedMsg.length > 0) {
                 messages = fetchedMsg;
@@ -610,7 +626,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         return null;
 
     } catch (err) {
-        console.log(`⚠️ Advertencia IMAP (${correoBuzon}):`, err.message);
+        console.log(`⚠ Advertencia IMAP (${correoBuzon}):`, err.message);
         if (connection) connection.end();
         return null;
     }
@@ -618,8 +634,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
-    
-    // 🔒 AQUÍ SE OCULTA TU CORREO EN EL VISOR DE RESULTADOS PARA QUE NUNCA APAREZCA PÚBLICO
     const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #cbd5e1; padding: 25px; margin: 0; line-height: 1.6; } h2, h3 { color: #f8fafc; font-weight: 400; }</style>`;
 
     try {
@@ -660,31 +674,12 @@ app.post('/buscar', async (req, res) => {
 
         const { mail } = resultadoExitoso;
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
-        const textoCorreo = textoBruto.toLowerCase();
-
-        if (accion === 'pais') {
-            let paisDetectado = null;
-            const reglasPais = [
-                { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
-                { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
-            ];
-            for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:rgba(0, 210, 255, 0.1); border-radius:12px; display:inline-block; border: 1px solid rgba(0, 210, 255, 0.3); color:#fff;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:rgba(0,0,0,0.6); border-radius:12px; display:inline-block; border: 1px solid rgba(0, 210, 255, 0.5);"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
-        }
-
-        if (accion === 'ip') {
-            const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
-            let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#fff; margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:rgba(0, 210, 255, 0.1); border-radius:12px; display:inline-block; border: 1px solid rgba(0, 210, 255, 0.3);">${ipContenido}</div></div>`);
-        }
 
         if (/\b\d{4,6}\b/.test(textoBruto) && plataforma === 'netflix') {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
-        // AQUÍ SE MUESTRA LA INFORMACIÓN OBLIGATORIAMENTE PERO OCULTANDO EL BUZÓN DE ORIGEN
+        // 🔒 INFORMACIÓN MOSTRADA OBLIGATORIAMENTE OCULTANDO TU CORREO PERSONAL DE ORIGEN
         res.send(`${cssIframe}
             <div style="padding: 15px 20px; border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 12px; background: rgba(0,0,0,0.6); margin-bottom: 25px;">
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#a3a3a3; font-weight:300;">${mail.from.text}</span></div>
