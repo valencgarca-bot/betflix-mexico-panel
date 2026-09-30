@@ -51,7 +51,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO CINEMATOGRÁFICO Y ELEGANTE (TEMA NETFLIX)
+// 🎬 ESTILO MODERNO SYNCBOX (TEMA AZUL CIAN/NEÓN)
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -59,12 +59,12 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #a3a3a3;
-        --card-bg: rgba(10, 10, 10, 0.75);
-        --card-border: rgba(229, 9, 20, 0.15);
-        --accent: #E50914;
-        --accent-hover: #b80710;
-        --btn-bg: rgba(229, 9, 20, 0.1);
-        --btn-hover: rgba(229, 9, 20, 0.3);
+        --card-bg: rgba(10, 14, 20, 0.75);
+        --card-border: rgba(0, 210, 255, 0.2);
+        --accent: #00D2FF;
+        --accent-hover: #0099CC;
+        --btn-bg: rgba(0, 210, 255, 0.1);
+        --btn-hover: rgba(0, 210, 255, 0.3);
         --shadow-elegant: 0 10px 40px rgba(0, 0, 0, 0.8);
         --blur-effect: blur(20px);
         --radius: 16px;
@@ -72,7 +72,7 @@ const CSS_MODERNO = `
 
     body { 
         background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed;
-        background-color: #000000;
+        background-color: #000205;
         color: var(--text-main); 
         font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; 
@@ -81,18 +81,14 @@ const CSS_MODERNO = `
 
     body::before {
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: radial-gradient(circle at top center, rgba(229, 9, 20, 0.25) 0%, rgba(0, 0, 0, 0.95) 80%);
+        background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.2) 0%, rgba(0, 0, 5, 0.95) 80%);
         z-index: -1; pointer-events: none;
     }
 
     .goog-te-banner-frame.skiptranslate, #goog-gt-tt, .goog-te-gadget-tooltip { display: none !important; }
     body { top: 0px !important; }
 
-    .top-header { 
-        background: transparent; 
-        padding: 25px 40px; 
-        display: flex; justify-content: space-between; align-items: center; 
-    }
+    .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
     
     .user-pill {
         display: flex; align-items: center; gap: 12px;
@@ -101,14 +97,15 @@ const CSS_MODERNO = `
         border-radius: 50px; box-shadow: var(--shadow-elegant);
         font-size: 13px; cursor: pointer; transition: 0.3s;
     }
-    .user-pill:hover { background: var(--btn-hover); border-color: rgba(229, 9, 20, 0.4); }
+    .user-pill:hover { background: var(--btn-hover); border-color: rgba(0, 210, 255, 0.5); }
     .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
     .user-pill .info strong { color: var(--text-main); font-weight: 600; letter-spacing: 0.5px; }
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
 
     .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
-    .brand-logo strong { font-weight: 700; color: #E50914; }
+    .brand-logo strong { font-weight: 700; color: var(--accent); }
+    .brand-logo img { height: 35px; border-radius: 50%; }
 
     .search-top { display: flex; align-items: center; gap: 15px; }
     .search-top input {
@@ -116,27 +113,24 @@ const CSS_MODERNO = `
         border-radius: 50px; box-shadow: var(--shadow-elegant); color: #fff; backdrop-filter: var(--blur-effect);
         font-family: 'Inter', sans-serif; font-size: 13px; outline: none; transition: 0.3s;
     }
-    .search-top input:focus { border-color: #E50914; width: 320px; }
+    .search-top input:focus { border-color: var(--accent); width: 320px; }
 
-    .dashboard-grid { 
-        display: grid; grid-template-columns: 380px 1fr 300px; gap: 30px; 
-        padding: 10px 40px 40px 40px; align-items: start;
-    }
-
+    .dashboard-grid { display: grid; grid-template-columns: 380px 1fr 300px; gap: 30px; padding: 10px 40px 40px 40px; align-items: start; }
     .platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    
     .plat-card {
         background: var(--card-bg); border-radius: var(--radius); padding: 25px 20px;
         box-shadow: var(--shadow-elegant); display: flex; flex-direction: column; gap: 15px;
         position: relative; overflow: hidden; border: 1px solid var(--card-border);
         backdrop-filter: var(--blur-effect); transition: 0.3s;
     }
-    .plat-card:hover { transform: translateY(-3px); border-color: #E50914; box-shadow: 0 10px 30px rgba(229, 9, 20, 0.15); }
+    .plat-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 10px 30px rgba(0, 210, 255, 0.2); }
     
     .plat-header { display: flex; justify-content: space-between; align-items: flex-start; z-index: 2; position: relative; }
     .plat-logo { height: 24px; max-width: 90px; object-fit: contain; opacity: 0.9; }
     .main-card-logo { height: 35px; max-width: 130px; object-fit: contain; }
 
-    .status-ok { background: rgba(229, 9, 20, 0.15); border: 1px solid rgba(229, 9, 20, 0.3); color: #ffebec; font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 50px; letter-spacing: 0.5px; }
+    .status-ok { background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.4); color: #e0f7fa; font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 50px; letter-spacing: 0.5px; }
     
     .plat-stats { z-index: 2; position: relative; margin-top: 15px; }
     .plat-stats span { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;}
@@ -144,7 +138,7 @@ const CSS_MODERNO = `
     
     .plat-actions { display: flex; flex-direction: column; gap: 10px; z-index: 2; position: relative; margin-top: auto; }
     .btn-action-sm { background: var(--btn-bg); color: var(--text-main); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; }
-    .btn-action-sm:hover { background: var(--btn-hover); border-color: #E50914; }
+    .btn-action-sm:hover { background: var(--btn-hover); border-color: var(--accent); }
 
     .center-panel { display: flex; flex-direction: column; gap: 25px; }
     .main-card {
@@ -166,15 +160,15 @@ const CSS_MODERNO = `
         color: var(--text-main); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
         transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
     }
-    .action-btn-pill:hover { background: rgba(229, 9, 20, 0.2); border-color: #E50914; transform: translateY(-2px); }
+    .action-btn-pill:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-2px); }
 
     .search-input-large {
-        width: 100%; background: rgba(0,0,0,0.6); border: 1px solid rgba(229, 9, 20, 0.3); 
+        width: 100%; background: rgba(0,0,0,0.6); border: 1px solid rgba(0, 210, 255, 0.3); 
         padding: 20px 30px; border-radius: 50px; font-size: 14px;
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif;
         transition: 0.3s; backdrop-filter: blur(10px);
     }
-    .search-input-large:focus { border-color: #E50914; background: rgba(0,0,0,0.8); }
+    .search-input-large:focus { border-color: var(--accent); background: rgba(0,0,0,0.8); }
 
     .iframe-container {
         background: var(--card-bg); border-radius: var(--radius); 
@@ -184,7 +178,7 @@ const CSS_MODERNO = `
     .iframe-header {
         padding: 16px 25px; background: rgba(0,0,0,0.5); 
         border-bottom: 1px solid var(--card-border); font-weight: 500; 
-        font-size: 12px; color: #E50914; text-transform: uppercase; letter-spacing: 1px;
+        font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
     }
 
     .right-sidebar { display: flex; flex-direction: column; gap: 25px; }
@@ -207,14 +201,14 @@ const CSS_MODERNO = `
         color: var(--text-main); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px;
         transition: 0.3s; font-family: 'Inter', sans-serif;
     }
-    .menu-btn-item:hover { background: rgba(229, 9, 20, 0.1); border-color: rgba(229, 9, 20, 0.3); transform: translateX(5px); }
+    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.3); transform: translateX(5px); }
 
     .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.5); color: white; font-family: 'Inter', sans-serif; box-sizing: border-box; transition: 0.3s; outline: none;}
-    .input-classic:focus { border-color: #E50914; }
+    .input-classic:focus { border-color: var(--accent); }
     select.input-classic option { background: #0a0a0a; color: #fff; }
     
-    .btn-submit { background: #E50914; color: #fff; border: none; padding: 16px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; font-size: 12px;}
-    .btn-submit:hover { background: #b80710; box-shadow: 0 0 15px rgba(229, 9, 20, 0.4); }
+    .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; font-size: 12px;}
+    .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); color: #fff; }
 
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
     table thead th { background: rgba(0,0,0,0.5) !important; border-bottom: 1px solid var(--card-border); padding: 16px; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: var(--text-muted); }
@@ -261,28 +255,29 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Acceso - stremin gunpreetsel</title>
+        <title>Acceso - SyncBox</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
             body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; }
-            body::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at top center, rgba(229, 9, 20, 0.35) 0%, rgba(0, 0, 0, 0.95) 80%); z-index: 1; pointer-events: none; }
+            body::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.3) 0%, rgba(0, 0, 10, 0.95) 80%); z-index: 1; pointer-events: none; }
             
-            .login-box { position: relative; z-index: 2; background: rgba(10, 10, 10, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(229, 9, 20, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8); box-sizing: border-box; text-align: center; }
-            .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 400; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; text-transform: uppercase; }
+            .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); box-sizing: border-box; text-align: center; }
+            .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; }
+            .login-box h2 img { height: 40px; border-radius: 50%; }
             
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
-            .input-group input:focus { border-color: #E50914; background: rgba(0,0,0,0.9); }
+            .input-group input:focus { border-color: #00D2FF; background: rgba(0,0,0,0.9); }
             
-            .btn-submit { width: 100%; background: #E50914; color: #ffffff; font-size: 13px; font-weight: 600; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
-            .btn-submit:hover { background: #b80710; box-shadow: 0 0 15px rgba(229, 9, 20, 0.5); }
+            .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
+            .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 15px rgba(0, 210, 255, 0.5); }
             
             .help-text { color: #888; font-size: 12px; margin-top: 30px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
     <body>
         <div class="login-box">
-            <h2>Acceso Seguro</h2>
+            <h2><img src="/image_09a63a.jpg" alt="Logo"> SYNCBOX</h2>
             <form action="/login" method="POST">
                 <div class="input-group">
                     <input type="text" name="user" placeholder="Usuario" required>
@@ -371,7 +366,7 @@ app.get('/dash', async (req, res) => {
                 if (key === 'netflix') {
                     controlesNavegacion = `
                     <div class="action-row">
-                        <button type="submit" name="accion" value="mensaje" class="action-btn-pill" style="background: #E50914; color: white; border: none; font-size: 13px;">🔎 Consultar lo último que pidió</button>
+                        <button type="submit" name="accion" value="mensaje" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; font-size: 13px;">🔎 Consultar lo último que pidió</button>
                     </div>`;
                 } else {
                     controlesNavegacion = `
@@ -448,7 +443,7 @@ app.get('/dash', async (req, res) => {
                         if (correosDelUsuario.length > 0) {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: rgba(229, 9, 20, 0.15); border: 1px solid rgba(229, 9, 20, 0.3);" : "background: rgba(0,0,0,0.4); border: 1px solid transparent;";
+                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.3);" : "background: rgba(0,0,0,0.4); border: 1px solid transparent;";
                                 return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px; transition: 0.2s;">
                                     <span>${c.email}</span>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;">
@@ -469,7 +464,7 @@ app.get('/dash', async (req, res) => {
                             <td style="vertical-align: top; text-align: center;">
                                 <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario y todos sus correos permanentemente?');" style="margin:0;">
                                     <input type="hidden" name="user_id" value="${u.id}">
-                                    <button type="submit" style="background:rgba(229,9,20,0.1); border:1px solid rgba(229,9,20,0.3); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; transition:0.3s;" onmouseover="this.style.background='rgba(229,9,20,0.3)'; this.style.borderColor='rgba(229,9,20,0.6)'" onmouseout="this.style.background='rgba(229,9,20,0.1)'; this.style.borderColor='rgba(229,9,20,0.3)'">Eliminar</button>
+                                    <button type="submit" style="background:rgba(0, 210, 255, 0.1); border:1px solid rgba(0, 210, 255, 0.3); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; transition:0.3s;" onmouseover="this.style.background='rgba(0, 210, 255, 0.3)'; this.style.borderColor='rgba(0, 210, 255, 0.6)'" onmouseout="this.style.background='rgba(0, 210, 255, 0.1)'; this.style.borderColor='rgba(0, 210, 255, 0.3)'">Eliminar</button>
                                 </form>
                             </td>
                         </tr>`;
@@ -484,7 +479,10 @@ app.get('/dash', async (req, res) => {
                     <img src="https://ui-avatars.com/api/?name=${req.session.user}&background=1e293b&color=fff" alt="Avatar">
                     <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
                 </div>
-                <div class="brand-logo"><strong>STREMIN</strong> GUNPREETSEL</div>
+                <div class="brand-logo">
+                    <img src="/image_09a63a.jpg" alt="Logo">
+                    <strong>SYNC</strong>BOX
+                </div>
                 <div class="search-top"><input type="text" placeholder="Buscar en el sistema..."></div>
             </div>
 
@@ -706,10 +704,10 @@ app.post('/buscar', async (req, res) => {
                 const esDeMiCliente = (dueñocuenta.creado_por === req.session.uid);
                 
                 if (!esPropia && !esDeMiCliente) {
-                    return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(229,9,20,0.3); border-radius:12px; background: rgba(0,0,0,0.8);"><h2 style="color:#E50914;">⛔ Acceso Denegado</h2><p>El correo <strong>${correoIngresado}</strong> le pertenece al cliente <strong>${dueñocuenta.user}</strong></p></div>`);
+                    return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(0, 210, 255, 0.3); border-radius:12px; background: rgba(0,0,0,0.8);"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>El correo <strong>${correoIngresado}</strong> le pertenece al cliente <strong>${dueñocuenta.user}</strong></p></div>`);
                 }
             } else {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(229,9,20,0.3); border-radius:12px; background: rgba(0,0,0,0.8);"><h2 style="color:#E50914;">⛔ Acceso Denegado</h2><p>No tienes autorización en la base de datos para consultar este correo.</p></div>`);
+                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(0, 210, 255, 0.3); border-radius:12px; background: rgba(0,0,0,0.8);"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes autorización en la base de datos para consultar este correo.</p></div>`);
             }
         }
 
@@ -726,7 +724,7 @@ app.post('/buscar', async (req, res) => {
         if (!resultadoExitoso) { 
             return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255,255,255,0.1); border-radius:12px; background: rgba(0,0,0,0.5);">
                 <h2 style="color:#f8fafc; font-weight:300;">Mensaje no encontrado</h2>
-                <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#E50914;">${email_search}</strong></p>
+                <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#00D2FF;">${email_search}</strong></p>
             </div>`); 
         }
 
@@ -741,7 +739,7 @@ app.post('/buscar', async (req, res) => {
                 { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
             ];
             for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:rgba(229,9,20,0.1); border-radius:12px; display:inline-block; border: 1px solid rgba(229,9,20,0.3); color:#fff;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:rgba(0,0,0,0.6); border-radius:12px; display:inline-block; border: 1px solid rgba(229,9,20,0.5);"><h3 style="color:#E50914; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
+            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:rgba(0, 210, 255, 0.1); border-radius:12px; display:inline-block; border: 1px solid rgba(0, 210, 255, 0.3); color:#fff;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:rgba(0,0,0,0.6); border-radius:12px; display:inline-block; border: 1px solid rgba(0, 210, 255, 0.5);"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
             return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
         }
 
@@ -749,7 +747,7 @@ app.post('/buscar', async (req, res) => {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
             let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#fff; margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:rgba(229,9,20,0.1); border-radius:12px; display:inline-block; border: 1px solid rgba(229,9,20,0.3);">${ipContenido}</div></div>`);
+            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:rgba(0, 210, 255, 0.1); border-radius:12px; display:inline-block; border: 1px solid rgba(0, 210, 255, 0.3);">${ipContenido}</div></div>`);
         }
 
         if (/\b\d{4,6}\b/.test(textoBruto) && plataforma === 'netflix') {
@@ -757,17 +755,17 @@ app.post('/buscar', async (req, res) => {
         }
         
         res.send(`${cssIframe}
-            <div style="padding: 15px 20px; border: 1px solid rgba(229,9,20,0.2); border-radius: 12px; background: rgba(0,0,0,0.6); margin-bottom: 25px;">
+            <div style="padding: 15px 20px; border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 12px; background: rgba(0,0,0,0.6); margin-bottom: 25px;">
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#a3a3a3; font-weight:300;">${mail.from.text}</span></div>
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Asunto: <span style="color:#a3a3a3; font-weight:300;">${mail.subject}</span></div>
-                <div style="font-weight: 400; font-size: 11px; margin-top:10px; color:rgba(229,9,20,0.8); text-transform:uppercase; letter-spacing:1px;">Buzón consultado: ${buzón}</div>
+                <div style="font-weight: 400; font-size: 11px; margin-top:10px; color:rgba(0, 210, 255, 0.8); text-transform:uppercase; letter-spacing:1px;">Buzón consultado: ${buzón}</div>
             </div>
             <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
                 ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#e2e8f0;">${mail.text}</pre>`}
             </div>
         `);
 
-    } catch (err) { res.send(`${cssIframe}<h2 style="color:#E50914; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
+    } catch (err) { res.send(`${cssIframe}<h2 style="color:#00D2FF; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
 });
 
 app.listen(10000, () => {
