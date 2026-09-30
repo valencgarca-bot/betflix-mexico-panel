@@ -341,22 +341,6 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            plataformasCardsHtml += `
-            <div class="plat-card">
-                <div style="position:absolute; top:-50px; right:-50px; width:150px; height:150px; background:radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%); border-radius:50%; pointer-events:none;"></div>
-                <div class="plat-header">
-                    <span style="font-weight: 300; font-size: 15px; color: #fff; letter-spacing: 1px;">GMAIL CENTRAL</span>
-                    <span class="status-ok">OPERATIVO</span>
-                </div>
-                <div class="plat-stats">
-                    <span>Buzón Principal</span>
-                    <div class="line"></div>
-                </div>
-                <div class="plat-actions">
-                    <button class="btn-action-sm" onclick="openTab('panel-gmail')">Consultar Bandeja</button>
-                </div>
-            </div>`;
-
             let plataformasPanelsHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
@@ -394,24 +378,6 @@ app.get('/dash', async (req, res) => {
                     </form>
                 </div>`;
             });
-
-            plataformasPanelsHtml += `
-            <div id="panel-gmail" class="main-card">
-                <div class="main-card-header">
-                    <div style="font-size: 28px; font-weight: 300; color: #fff; letter-spacing: 2px;">GMAIL</div>
-                    <div class="main-card-title">
-                        <h3>Buzón darciogarces@gmail.com</h3>
-                        <p>Consulta directa del último correo recibido en el buzón central autorizado.</p>
-                    </div>
-                </div>
-                <form action="/buscar" method="POST" target="marco_resultados">
-                    <input type="hidden" name="plataforma" value="gmail">
-                    <div class="action-row">
-                        <button type="submit" name="accion" value="mensaje" class="action-btn-pill">Leer Último Mensaje</button>
-                    </div>
-                    <input type="text" name="email_search" class="search-input-large" value="darciogarces@gmail.com" readonly style="opacity: 0.5; cursor:not-allowed;">
-                </form>
-            </div>`;
 
             let actividadesHtml = "";
             if (registros.length > 0) {
@@ -475,7 +441,7 @@ app.get('/dash', async (req, res) => {
             ${CSS_MODERNO}
             <div class="top-header">
                 <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
-                    <img src="https://ui-avatars.com/api/?name=${req.session.user}&background=1e293b&color=fff" alt="Avatar">
+                    <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
                     <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
                 </div>
                 <div class="brand-logo">
