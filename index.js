@@ -28,11 +28,10 @@ const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
 
+// 📌 SE DEJARON ÚNICAMENTE NETFLIX Y DISNEY+
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', alpha: 'rgba(229, 9, 20, 0.15)', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
-    'disney': { nombre: 'Disney+', color: '#ffffff', alpha: 'rgba(255, 255, 255, 0.1)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' },
-    'crunchyroll': { nombre: 'Crunchyroll', color: '#F47521', alpha: 'rgba(244, 117, 33, 0.15)', logo: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/crunchyroll.svg', keyword_from: 'crunchyroll' },
-    'spotify': { nombre: 'Spotify', color: '#1DB954', alpha: 'rgba(29, 185, 84, 0.15)', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg', keyword_from: 'spotify' }
+    'disney': { nombre: 'Disney+', color: '#ffffff', alpha: 'rgba(255, 255, 255, 0.1)', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
 };
 
 app.use(express.urlencoded({ extended: true }));
@@ -277,7 +276,7 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="login-box">
-            <h2><img src="/image_09a63a.jpg" alt="Logo"> SYNCBOX</h2>
+            <h2><img src="/logo.jpg" alt="Logo"> SYNCBOX</h2>
             <form action="/login" method="POST">
                 <div class="input-group">
                     <input type="text" name="user" placeholder="Usuario" required>
@@ -480,7 +479,7 @@ app.get('/dash', async (req, res) => {
                     <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
                 </div>
                 <div class="brand-logo">
-                    <img src="/image_09a63a.jpg" alt="Logo">
+                    <img src="/logo.jpg" alt="Logo">
                     <strong>SYNC</strong>BOX
                 </div>
                 <div class="search-top"><input type="text" placeholder="Buscar en el sistema..."></div>
@@ -629,8 +628,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
 
-    // Reducir el timeout para fallar rápido si la conexión es inestable
-    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 1500 } };
+    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 2500 } };
     let connection = null;
 
     try {
@@ -643,13 +641,8 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let messages = [];
         let mail = null;
 
-        // OPTIMIZACIÓN: Solo buscar en los correos de los últimos 2 días
-        let fechaLimite = new Date();
-        fechaLimite.setDate(fechaLimite.getDate() - 2);
-
         if (esConsultaGmailDirecta) {
-            // Se agregó ['SINCE', fechaLimite] para evitar escanear todo el buzón
-            let searchResults = await connection.search([['ALL'], ['SINCE', fechaLimite]], { bodies: ['HEADER.FIELDS (DATE)'] });
+            let searchResults = await connection.search([['ALL']], { bodies: ['HEADER.FIELDS (DATE)'] });
             if (searchResults.length > 0) {
                 searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
                 let latestUid = searchResults[0].attributes.uid;
@@ -663,8 +656,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
             let queryStr = `"${correoIngresado}"`;
             if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
-            // Se agregó ['SINCE', fechaLimite] a la búsqueda por texto RAW
-            let searchResults = await connection.search([['X-GM-RAW', queryStr], ['SINCE', fechaLimite]], { bodies: ['HEADER.FIELDS (DATE)'] });
+            let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
             if (searchResults.length > 0) {
                 searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
                 let latestUid = searchResults[0].attributes.uid; 
