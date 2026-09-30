@@ -169,7 +169,7 @@ const CSS_MODERNO = `
     }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.1); border-color: rgba(0, 210, 255, 0.3); padding-left: 18px; }
 
-    /* ESTILOS MEJORADOS PARA ACTIVIDAD RECIENTE */
+    /* ESTILOS DE ACTIVIDAD RECIENTE ORDENADA */
     .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
     .activity-item {
         background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 210, 255, 0.15);
@@ -349,6 +349,11 @@ app.get('/dash', async (req, res) => {
                 let controlesIzquierda = "";
                 if (key === 'netflix') {
                     controlesIzquierda = `
+                        <div style="background: rgba(0, 210, 255, 0.08); border: 1px dashed rgba(0, 210, 255, 0.4); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 5px;">
+                            <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
+                                ¡Bienvenido! Presiona en <strong style="color: var(--accent);">Consultar lo último que pidió</strong> y el sistema te dará exactamente lo que has pedido al instante. ✨
+                            </p>
+                        </div>
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none;">🔎 Consultar lo último que pidió</button>
                     `;
                 } else {
@@ -704,18 +709,7 @@ app.post('/buscar', async (req, res) => {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
-        // 🌟 MENSAJE MOTIVADOR Y DE BIENVENIDA AÑADIDO AL CONSULTAR NETFLIX
-        let bannerMotivador = "";
-        if (plataforma === 'netflix') {
-            bannerMotivador = `
-            <div style="background: linear-gradient(135deg, rgba(0, 210, 255, 0.15), rgba(229, 9, 20, 0.15)); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 12px; padding: 18px 22px; margin-bottom: 20px; text-align: center;">
-                <h3 style="margin: 0 0 5px 0; color: #00D2FF; font-size: 16px; font-weight: 600;">✨ ¡Bienvenido a tu consulta, ${req.session.user}!</h3>
-                <p style="margin: 0; color: #cbd5e1; font-size: 13px;">Aquí tienes lo que has pedido. Solo revisa el código o la información solicitada abajo y dale continuidad a tu acceso.</p>
-            </div>`;
-        }
-
         res.send(`${cssIframe}
-            ${bannerMotivador}
             <div style="padding: 15px 20px; border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 12px; background: rgba(0,0,0,0.6); margin-bottom: 25px;">
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#a3a3a3; font-weight:300;">${mail.from.text}</span></div>
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Asunto: <span style="color:#a3a3a3; font-weight:300;">${mail.subject}</span></div>
