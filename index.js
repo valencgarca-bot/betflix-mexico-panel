@@ -6,7 +6,7 @@ const { simpleParser } = require('mailparser');
 const path = require('path');
 const app = express();
 
-// 💾 SISTEMA DE PERSISTENCIA (Adaptado para Render Disk)
+// 💾 SISTEMA DE PERSISTENCIA
 const dbDirectory = process.env.RENDER ? '/var/data' : __dirname;
 const dbPath = path.resolve(dbDirectory, 'betflix_mexico_v1.db');
 
@@ -43,11 +43,9 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
-    
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO MODERNO SYNCBOX
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -110,32 +108,27 @@ const CSS_MODERNO = `
     }
     .search-top input:focus { border-color: var(--accent); width: 320px; }
 
-    .dashboard-grid { display: grid; grid-template-columns: 380px 1fr 300px; gap: 30px; padding: 10px 40px 40px 40px; align-items: start; }
-    .platforms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    
-    .plat-card {
-        background: var(--card-bg); border-radius: var(--radius); padding: 25px 20px;
-        box-shadow: var(--shadow-elegant); display: flex; flex-direction: column; gap: 15px;
-        position: relative; overflow: hidden; border: 1px solid var(--card-border);
-        backdrop-filter: var(--blur-effect); transition: 0.3s;
+    /* NUEVA ESTRUCTURA GRID */
+    .dashboard-grid { 
+        display: grid; 
+        grid-template-columns: 300px 1fr 300px; 
+        gap: 30px; 
+        padding: 10px 40px 40px 40px; 
+        align-items: start; 
     }
-    .plat-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 10px 30px rgba(0, 210, 255, 0.2); }
-    
-    .plat-header { display: flex; justify-content: space-between; align-items: flex-start; z-index: 2; position: relative; }
-    .plat-logo { height: 24px; max-width: 90px; object-fit: contain; opacity: 0.9; }
-    .main-card-logo { height: 35px; max-width: 130px; object-fit: contain; }
 
-    .status-ok { background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.4); color: #e0f7fa; font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 50px; letter-spacing: 0.5px; }
+    .left-sidebar { display: flex; flex-direction: column; gap: 25px; }
     
-    .plat-stats { z-index: 2; position: relative; margin-top: 15px; }
-    .plat-stats span { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;}
-    .plat-stats .line { height: 1px; width: 100%; margin-bottom: 12px; background: rgba(255,255,255,0.1); }
-    
-    .plat-actions { display: flex; flex-direction: column; gap: 10px; z-index: 2; position: relative; margin-top: auto; }
-    .btn-action-sm { background: var(--btn-bg); color: var(--text-main); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; }
-    .btn-action-sm:hover { background: var(--btn-hover); border-color: var(--accent); }
+    .action-panel {
+        background: var(--card-bg); border-radius: var(--radius); padding: 40px 25px;
+        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
+        backdrop-filter: var(--blur-effect); display: flex; flex-direction: column; gap: 15px;
+        justify-content: center; min-height: 250px; display: none;
+    }
+    .action-panel.active { display: flex; }
 
     .center-panel { display: flex; flex-direction: column; gap: 25px; }
+    
     .main-card {
         background: var(--card-bg); border-radius: var(--radius); padding: 40px;
         box-shadow: var(--shadow-elegant); display: none; animation: fadeIn 0.4s ease;
@@ -148,9 +141,8 @@ const CSS_MODERNO = `
     .main-card-title h3 { margin: 0; font-size: 24px; color: var(--text-main); font-weight: 500; letter-spacing: -0.5px; }
     .main-card-title p { margin: 6px 0 0 0; color: var(--text-muted); font-size: 13px; font-weight: 300; }
 
-    .action-row { display: flex; gap: 15px; margin-bottom: 25px; }
     .action-btn-pill {
-        flex: 1; background: var(--btn-bg); border: 1px solid var(--card-border);
+        width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border);
         padding: 16px; border-radius: 50px; font-size: 11px; font-weight: 600;
         color: var(--text-main); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
         transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
@@ -183,11 +175,15 @@ const CSS_MODERNO = `
     }
     .side-card h4 { margin: 0 0 20px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 12px;}
     
-    .activity-list { display: flex; flex-direction: column; gap: 15px; }
-    .activity-item { border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; }
-    .activity-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .activity-item strong { display: block; font-size: 13px; color: var(--text-main); font-weight: 500; }
-    .activity-item span { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;}
+    /* BOTONES DE PLATAFORMA EN BARRA DERECHA */
+    .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+    .plat-mini-btn {
+        background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); padding: 15px 10px;
+        border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
+        transition: 0.3s; height: 50px;
+    }
+    .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.1); border-color: var(--accent); transform: translateY(-2px); }
+    .plat-mini-btn img { max-height: 20px; max-width: 80%; object-fit: contain; }
 
     .menu-list { display: flex; flex-direction: column; gap: 10px; }
     .menu-btn-item {
@@ -209,20 +205,46 @@ const CSS_MODERNO = `
     table thead th { background: rgba(0,0,0,0.5) !important; border-bottom: 1px solid var(--card-border); padding: 16px; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: var(--text-muted); }
     table tr td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px; font-size: 13px; color: var(--text-main); }
     table tr:last-child td { border-bottom: none; }
+    
+    .activity-list { display: flex; flex-direction: column; gap: 15px; }
+    .activity-item { border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; }
+    .activity-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .activity-item strong { display: block; font-size: 13px; color: var(--text-main); font-weight: 500; }
+    .activity-item span { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;}
 </style>
 
 <script>
+    function triggerAction(actionName) {
+        let activeForm = document.querySelector('.main-card.active form');
+        if(activeForm) {
+            let actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'accion';
+            actionInput.value = actionName;
+            activeForm.appendChild(actionInput);
+            activeForm.submit();
+            actionInput.remove();
+        }
+    }
+
     function openTab(tabId) {
         document.querySelectorAll('.main-card').forEach(p => p.classList.remove('active'));
-        let selectedTab = document.getElementById(tabId);
-        if(selectedTab) selectedTab.classList.add('active');
+        document.querySelectorAll('.action-panel').forEach(p => p.classList.remove('active'));
+        
+        let selectedMain = document.getElementById('main-' + tabId);
+        let selectedAction = document.getElementById('action-' + tabId);
+        
+        if(selectedMain) selectedMain.classList.add('active');
+        if(selectedAction) selectedAction.classList.add('active');
+        
         localStorage.setItem('activeBetflixTab', tabId);
     }
+
     document.addEventListener('DOMContentLoaded', () => {
         let active = localStorage.getItem('activeBetflixTab');
         const urlParams = new URLSearchParams(window.location.search);
-        if(urlParams.has('buscar_dueno')) { active = 'panel-base-datos'; }
-        if(!active || !document.getElementById(active)) active = 'panel-netflix'; 
+        if(urlParams.has('buscar_dueno')) { active = 'base-datos'; }
+        if(!active || !document.getElementById('main-' + active)) active = 'netflix'; 
         openTab(active);
     });
 </script>
@@ -255,37 +277,25 @@ app.get('/', (req, res) => {
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
             body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; }
             body::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at top center, rgba(0, 210, 255, 0.3) 0%, rgba(0, 0, 10, 0.95) 80%); z-index: 1; pointer-events: none; }
-            
             .login-box { position: relative; z-index: 2; background: rgba(10, 14, 20, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9); box-sizing: border-box; text-align: center; }
             .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; }
-            
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.15); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
             .input-group input:focus { border-color: #00D2FF; background: rgba(0,0,0,0.9); }
-            
             .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
             .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 15px rgba(0, 210, 255, 0.5); }
-            
             .help-text { color: #888; font-size: 12px; margin-top: 30px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
     <body>
         <div class="login-box">
             <h2>
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                </svg> 
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> 
                 SYNCBOX
             </h2>
             <form action="/login" method="POST">
-                <div class="input-group">
-                    <input type="text" name="user" placeholder="Usuario" required>
-                </div>
-                <div class="input-group">
-                    <input type="password" name="pass" placeholder="Contraseña" required>
-                </div>
+                <div class="input-group"><input type="text" name="user" placeholder="Usuario" required></div>
+                <div class="input-group"><input type="password" name="pass" placeholder="Contraseña" required></div>
                 <button type="submit" class="btn-submit">Ingresar</button>
             </form>
             <div class="help-text">Panel de administración encriptado. Conexión segura.</div>
@@ -323,47 +333,46 @@ app.get('/dash', async (req, res) => {
             const correos = await dbAll("SELECT * FROM correos", []);
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
 
-            let plataformasCardsHtml = "";
+            // BOTONES DE PLATAFORMA LATERALES DERECHOS
+            let botonesPlataformaHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
-                plataformasCardsHtml += `
-                <div class="plat-card">
-                    <div style="position:absolute; top:-50px; right:-50px; width:150px; height:150px; background:radial-gradient(circle, ${plat.alpha} 0%, transparent 70%); border-radius:50%; pointer-events:none;"></div>
-                    <div class="plat-header">
-                        <img src="${plat.logo}" alt="${plat.nombre}" class="plat-logo">
-                        <span class="status-ok">OPERATIVO</span>
-                    </div>
-                    <div class="plat-stats">
-                        <span>Estado</span>
-                        <div class="line"></div>
-                    </div>
-                    <div class="plat-actions">
-                        <button class="btn-action-sm" onclick="openTab('panel-${key}')">Consultar Plataforma</button>
-                    </div>
+                botonesPlataformaHtml += `
+                <div class="plat-mini-btn" onclick="openTab('${key}')" title="${plat.nombre}">
+                    <img src="${plat.logo}" alt="${plat.nombre}">
                 </div>`;
             });
 
-            let plataformasPanelsHtml = "";
+            // PANELES CENTRALES Y PANELES DE ACCIÓN IZQUIERDOS
+            let panelesCentroHtml = "";
+            let panelesIzquierdosHtml = "";
+
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
-                let controlesNavegacion = "";
-
+                
+                // Botones para la barra izquierda
+                let controlesIzquierda = "";
                 if (key === 'netflix') {
-                    controlesNavegacion = `
-                    <div class="action-row">
-                        <button type="submit" name="accion" value="mensaje" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; font-size: 13px;">🔎 Consultar lo último que pidió</button>
-                    </div>`;
+                    controlesIzquierda = `
+                        <button onclick="triggerAction('mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; font-size: 13px;">🔎 Consultar lo último que pidió</button>
+                    `;
                 } else {
-                    controlesNavegacion = `
-                    <div class="action-row">
-                        <button type="submit" name="accion" value="mensaje" class="action-btn-pill">Leer Mensaje</button>
-                        <button type="submit" name="accion" value="pais" class="action-btn-pill">Analizar País</button>
-                        <button type="submit" name="accion" value="ip" class="action-btn-pill">Buscar IP</button>
-                    </div>`;
+                    controlesIzquierda = `
+                        <button onclick="triggerAction('mensaje')" class="action-btn-pill">Leer Mensaje</button>
+                        <button onclick="triggerAction('pais')" class="action-btn-pill">Analizar País</button>
+                        <button onclick="triggerAction('ip')" class="action-btn-pill">Buscar IP</button>
+                    `;
                 }
 
-                plataformasPanelsHtml += `
-                <div id="panel-${key}" class="main-card">
+                // Generar panel izquierdo
+                panelesIzquierdosHtml += `
+                <div id="action-${key}" class="action-panel">
+                    ${controlesIzquierda}
+                </div>`;
+
+                // Generar panel central (Buscador)
+                panelesCentroHtml += `
+                <div id="main-${key}" class="main-card">
                     <div class="main-card-header">
                         <img src="${plat.logo}" alt="${plat.nombre}" class="main-card-logo">
                         <div class="main-card-title">
@@ -373,9 +382,8 @@ app.get('/dash', async (req, res) => {
                     </div>
                     <form action="/buscar" method="POST" target="marco_resultados">
                         <input type="hidden" name="plataforma" value="${key}">
-                        ${controlesNavegacion}
                         <div style="position: relative; width: 100%;">
-                            <input type="text" id="email_search_${key}" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required>
+                            <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required>
                         </div>
                     </form>
                 </div>`;
@@ -383,26 +391,19 @@ app.get('/dash', async (req, res) => {
 
             let actividadesHtml = "";
             if (registros.length > 0) {
-                registros.forEach(r => {
-                    actividadesHtml += `<div class="activity-item"><strong>${r.email_buscado}</strong><span>${r.fecha} - ${r.user}</span></div>`;
-                });
+                registros.forEach(r => { actividadesHtml += `<div class="activity-item"><strong>${r.email_buscado}</strong><span>${r.fecha} - ${r.user}</span></div>`; });
             } else {
                 actividadesHtml = `<div class="activity-item"><span>No hay actividades recientes.</span></div>`;
             }
             
-            let clientesOpcionesHtml = usuarios
-                .filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador')
-                .map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`)
-                .join('');
-            
+            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             let tablaUsuariosHtml = "";
             
             if (esAdminPrincipal || esSubAdmin) {
                 let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'dueño' && u.user !== 'ruben') : usuarios.filter(u => u.creado_por === req.session.uid);
-
                 if (usuariosVisibles.length === 0) {
-                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: var(--text-muted);'>No tienes clientes asignados en la base de datos.</td></tr>";
+                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: var(--text-muted);'>No tienes clientes asignados.</td></tr>";
                 } else {
                     usuariosVisibles.forEach(u => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
@@ -411,29 +412,18 @@ app.get('/dash', async (req, res) => {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
                                 let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.15); border: 1px solid rgba(0, 210, 255, 0.3);" : "background: rgba(0,0,0,0.4); border: 1px solid transparent;";
-                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px; transition: 0.2s;">
+                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px;">
                                     <span>${c.email}</span>
-                                    <form action="/admin/eliminar-correo" method="POST" style="margin:0;">
-                                        <input type="hidden" name="correo_id" value="${c.id}">
-                                        <button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:11px;" title="Eliminar correo">✕</button>
-                                    </form>
+                                    <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
                                 </div>`;
                             }).join('');
-                        } else {
-                            listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados</span>";
-                        }
+                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados</span>"; }
 
-                        tablaUsuariosHtml += `
-                        <tr>
+                        tablaUsuariosHtml += `<tr>
                             <td style="font-weight: 500; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small></td>
                             <td style="vertical-align: top;"><div style="max-height: 160px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
-                            <td style="font-size: 12px; color: var(--text-muted); vertical-align: top;">${esAdminPrincipal && u.creado_por ? `ID Creador: ${u.creado_por}` : 'Tú'}</td>
-                            <td style="vertical-align: top; text-align: center;">
-                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario y todos sus correos permanentemente?');" style="margin:0;">
-                                    <input type="hidden" name="user_id" value="${u.id}">
-                                    <button type="submit" style="background:rgba(0, 210, 255, 0.1); border:1px solid rgba(0, 210, 255, 0.3); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; transition:0.3s;" onmouseover="this.style.background='rgba(0, 210, 255, 0.3)'; this.style.borderColor='rgba(0, 210, 255, 0.6)'" onmouseout="this.style.background='rgba(0, 210, 255, 0.1)'; this.style.borderColor='rgba(0, 210, 255, 0.3)'">Eliminar</button>
-                                </form>
-                            </td>
+                            <td style="font-size: 12px; color: var(--text-muted); vertical-align: top;">${esAdminPrincipal && u.creado_por ? \`ID Creador: \${u.creado_por}\` : 'Tú'}</td>
+                            <td style="vertical-align: top; text-align: center;"><form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario?');" style="margin:0;"><input type="hidden" name="user_id" value="${u.id}"><button type="submit" style="background:rgba(0, 210, 255, 0.1); border:1px solid rgba(0, 210, 255, 0.3); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer;">Eliminar</button></form></td>
                         </tr>`;
                     });
                 }
@@ -466,74 +456,74 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div class="dashboard-grid">
-                    <div class="platforms-grid">
-                        ${plataformasCardsHtml}
+                    
+                    <!-- COLUMNA IZQUIERDA: CONTROLES DE ACCIÓN -->
+                    <div class="left-sidebar">
+                        ${panelesIzquierdosHtml}
                     </div>
+
+                    <!-- COLUMNA CENTRAL: BUSCADOR Y VISOR -->
                     <div class="center-panel">
-                        ${plataformasPanelsHtml}
+                        ${panelesCentroHtml}
                         
-                        <div id="panel-crear-user" class="main-card">
-                            <div class="main-card-header"><div class="main-card-title"><h3>Crear Nuevo Usuario</h3><p>Agrega clientes a la base de datos persistente.</p></div></div>
+                        <!-- Paneles Administrativos -->
+                        <div id="main-crear-user" class="main-card">
+                            <div class="main-card-header"><div class="main-card-title"><h3>Crear Nuevo Usuario</h3></div></div>
                             <form action="/admin/crear" method="POST">
                                 <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
                                 <input name="c" class="input-classic" placeholder="Contraseña" required>
-                                <select name="r" class="input-classic" style="appearance: none;">
-                                    <option value="Cliente">Cliente Normal</option>
-                                    ${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}
-                                </select>
+                                <select name="r" class="input-classic"><option value="Cliente">Cliente Normal</option>${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}</select>
                                 <button class="btn-submit">Guardar Usuario en DB</button>
                             </form>
                         </div>
-
-                        <div id="panel-usuarios" class="main-card">
-                            <div class="main-card-header"><div class="main-card-title"><h3>Asignación de Correos</h3><p>Vincula correos masivos a cuentas específicas.</p></div></div>
-                            <form action="/admin/asignar-correo" method="POST" style="margin-bottom: 25px;">
-                                <select name="user_id" class="input-classic" required style="appearance: none;"><option value="" disabled selected>Selecciona un usuario de la base de datos...</option>${clientesOpcionesHtml}</select>
-                                <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio (ej. correo1@gmail.com correo2@gmail.com)" rows="5" required style="resize: vertical;"></textarea>
+                        <div id="main-usuarios" class="main-card">
+                            <div class="main-card-header"><div class="main-card-title"><h3>Asignación de Correos</h3></div></div>
+                            <form action="/admin/asignar-correo" method="POST">
+                                <select name="user_id" class="input-classic" required><option value="" disabled selected>Selecciona un usuario...</option>${clientesOpcionesHtml}</select>
+                                <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio" rows="5" required></textarea>
                                 <button type="submit" class="btn-submit">Asignar Correos</button>
                             </form>
                         </div>
-
-                        <div id="panel-base-datos" class="main-card">
-                            <div class="main-card-header" style="margin-bottom: 20px;"><div class="main-card-title"><h3>Base de Datos SyncBox</h3><p>Datos persistentes del sistema.</p></div></div>
-                            <form action="/dash" method="GET" style="margin-bottom: 25px; display: flex; gap: 12px;">
-                                <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo para localizar al usuario..." style="margin:0; padding: 12px 20px;">
-                                <button type="submit" class="btn-action-sm" style="width: auto; padding: 0 25px;">Buscar</button>
+                        <div id="main-base-datos" class="main-card">
+                            <div class="main-card-header"><div class="main-card-title"><h3>Base de Datos SyncBox</h3></div></div>
+                            <form action="/dash" method="GET" style="display:flex; gap:12px; margin-bottom:20px;">
+                                <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0;">
+                                <button type="submit" class="btn-action-sm">Buscar</button>
                             </form>
                             <div style="background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
-                                <table>
-                                    <thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align: center;">Acción</th></tr></thead>
-                                    <tbody>${tablaUsuariosHtml}</tbody>
-                                </table>
+                                <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th>Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
                             </div>
                         </div>
 
+                        <!-- VISOR PERMANENTE -->
                         <div class="iframe-container">
-                            <div class="iframe-header">SyncBox - Visor de Resultados</div>
+                            <div class="iframe-header">Data Vortex - VISOR DE RESULTADOS EN VIVO</div>
                             <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
                         </div>
                     </div>
 
+                    <!-- COLUMNA DERECHA: ADMINISTRACIÓN Y PLATAFORMAS -->
                     <div class="right-sidebar">
-                        ${esAdminPrincipal ? `
-                        <div class="side-card">
-                            <h4>Actividad Reciente</h4>
-                            <div class="activity-list">
-                                ${actividadesHtml}
-                            </div>
-                        </div>
-                        ` : ''}
-
                         <div class="side-card">
                             <h4>Administración</h4>
                             <div class="menu-list">
                                 ${(esAdminPrincipal || esSubAdmin) ? `
-                                <button class="menu-btn-item" onclick="openTab('panel-crear-user')">Crear Usuario</button>
-                                <button class="menu-btn-item" onclick="openTab('panel-usuarios')">Asignar Correos</button>
-                                <button class="menu-btn-item" onclick="openTab('panel-base-datos')">Ver Base de Datos</button>
+                                <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
+                                <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
+                                <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
                                 ` : ''}
                             </div>
+                            <!-- BOTONES DE PLATAFORMA MOVIDOS AQUÍ -->
+                            <div class="plat-mini-grid">
+                                ${botonesPlataformaHtml}
+                            </div>
                         </div>
+
+                        ${esAdminPrincipal ? `
+                        <div class="side-card">
+                            <h4>Actividad Reciente</h4>
+                            <div class="activity-list">${actividadesHtml}</div>
+                        </div>` : ''}
                     </div>
                 </div>
             </body>
@@ -555,9 +545,7 @@ app.post('/admin/asignar-correo', async (req, res) => {
 
         if (req.session.rol === 'Subadministrador') {
             const verificaPropietario = await dbGet("SELECT id FROM usuarios WHERE id = ? AND (creado_por = ? OR id = ?)", [targetUserId, req.session.uid, req.session.uid]);
-            if (!verificaPropietario) {
-                return res.send("<script>alert('⛔ No tienes permiso para asignar cuentas a este usuario.'); window.location='/dash';</script>");
-            }
+            if (!verificaPropietario) return res.send("<script>alert('⛔ No tienes permiso.'); window.location='/dash';</script>");
         }
 
         const correosBrutos = req.body.email.trim();
@@ -565,7 +553,6 @@ app.post('/admin/asignar-correo', async (req, res) => {
         
         for (let email of listaCorreos) { 
             email = email.toLowerCase();
-            
             const existente = await dbGet("SELECT c.id, c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [email]);
             
             if (existente) {
