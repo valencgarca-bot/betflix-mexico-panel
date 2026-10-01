@@ -58,7 +58,7 @@ setInterval(async () => {
     } catch(err) {
         console.error("Error en limpieza automática de usuarios:", err.message);
     }
-}, 60 * 60 * 1000); // Se ejecuta cada hora
+}, 60 * 60 * 1000);
 
 // 🎬 ESTILO PURO NEGRO Y SERIES RESALTANDO
 const CSS_MODERNO = `
@@ -122,7 +122,8 @@ const CSS_MODERNO = `
         padding: 10px 40px 40px 40px; align-items: start; 
     }
 
-    .left-sidebar, .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
+    .left-sidebar { display: flex; flex-direction: column; gap: 20px; height: 100%; min-height: 600px; }
+    .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
     .action-panel {
@@ -155,10 +156,12 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
+    /* VISOR OCULTO POR DEFECTO */
     .iframe-container {
+        display: none; /* Se oculta inicialmente */
         background: rgba(0, 0, 0, 0.95);
         border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
-        border: 1px solid var(--card-border); height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
+        border: 1px solid var(--card-border); height: 500px; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
     }
     .iframe-header {
         padding: 16px 25px; background: #000000; border-bottom: 1px solid var(--card-border); 
@@ -181,7 +184,7 @@ const CSS_MODERNO = `
     .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
     .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
 
-    /* ESTILOS PARA LOS BOTONES DE CONTACTO PROVEEDOR (TELEGRAM Y WHATSAPP) */
+    /* ESTILOS BOTONES CONTACTO */
     .provider-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
     .contact-btn {
         background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px;
@@ -189,6 +192,8 @@ const CSS_MODERNO = `
     }
     .contact-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
     .contact-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
+    .contact-btn.forobeta { grid-column: span 2; }
+    .contact-btn.forobeta:hover { background: rgba(255, 115, 0, 0.25); border-color: #ff7300; transform: translateY(-2px); }
     .contact-btn img { width: 18px; height: 18px; object-fit: contain; }
 
     .menu-list { display: flex; flex-direction: column; gap: 8px; }
@@ -242,6 +247,9 @@ const CSS_MODERNO = `
                 form.appendChild(actionInput);
             }
             actionInput.value = actionName;
+            
+            // MOSTRAR VISOR AL HACER LA PETICIÓN
+            document.getElementById('visor-resultados').style.display = 'flex';
             form.submit();
         }
     }
@@ -270,7 +278,7 @@ const CSS_MODERNO = `
 `;
 
 app.use(async (req, res, next) => {
-    const rutasAbiertas = ['/', '/login', '/logout', '/registro', '/registrar-cliente'];
+    const rutasAbiertas = ['/', '/login', '/logout', '/registrar-cliente'];
     if (rutasAbiertas.includes(req.path)) return next();
     if (req.session && req.session.uid) {
         try {
@@ -379,13 +387,9 @@ app.get('/dash', async (req, res) => {
 
     if (esAdminPrincipal || esSubAdmin || esCliente) {
         try {
-            // Si es cliente, verificamos si tiene correos asignados
             let misCorreos = [];
             if (esCliente) {
                 misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]);
-                if (misCorreos.length === 0) {
-                    // Si no tiene correos asignados, permitimos ver la interfaz pero bloqueamos las búsquedas
-                }
             }
 
             let query = esAdminPrincipal ? "SELECT * FROM usuarios" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
@@ -450,7 +454,7 @@ app.get('/dash', async (req, res) => {
                             <p style="margin:5px 0 0 0; font-size:12px; color:var(--text-muted);">Ingresa el correo para consultar resultados.</p>
                         </div>
                     </div>
-                    <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;">
+                    <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
                         <input type="hidden" name="plataforma" value="${key}">
                         <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required ${esCliente && misCorreos.length === 0 ? 'disabled' : ''}>
                     </form>
@@ -500,7 +504,7 @@ app.get('/dash', async (req, res) => {
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
                                 </div>`;
                             }).join('');
-                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados (Auto-eliminación en 24h si no se asignan)</span>"; }
+                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados (Auto-eliminación 24h)</span>"; }
 
                         let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
 
@@ -514,7 +518,7 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // SECCIÓN DE BOTONES DE CONTACTO PROVEEDOR (TELEGRAM Y WHATSAPP)
+            // BOTONES DE CONTACTO PROVEEDOR
             let botonesContactoProveedor = `
             <div class="provider-contact">
                 <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
@@ -522,6 +526,9 @@ app.get('/dash', async (req, res) => {
                 </a>
                 <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                </a>
+                <a href="https://forobeta.com/members/soncbox.367003/" target="_blank" class="contact-btn forobeta">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff7300"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg> ForoBeta
                 </a>
             </div>`;
 
@@ -536,11 +543,8 @@ app.get('/dash', async (req, res) => {
             </head>
             <body>
                 <div class="top-header">
-                    <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
-                        <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
-                        <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
-                    </div>
-                    <div class="brand-logo">
+                    <div style="width: 150px;"></div>
+                    <div class="brand-logo" style="margin-right: auto;">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));">
                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                             <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
@@ -555,6 +559,13 @@ app.get('/dash', async (req, res) => {
                     
                     <div class="left-sidebar">
                         ${panelesIzquierdosHtml}
+                        
+                        <div style="margin-top: auto; padding-top: 20px;">
+                            <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
+                                <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
+                                <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="center-panel">
@@ -589,7 +600,7 @@ app.get('/dash', async (req, res) => {
                             </div>
                         </div>` : ''}
 
-                        <div class="iframe-container">
+                        <div class="iframe-container" id="visor-resultados">
                             <div class="iframe-header">Data Vortex - VISOR DE RESULTADOS EN VIVO</div>
                             <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
                         </div>
@@ -603,7 +614,7 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
                                 <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
-                                ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar servicios.</p>`}
+                                ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar accesos.</p>`}
                             </div>
                             
                             <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
@@ -719,7 +730,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         return null;
 
     } catch (err) {
-        console.log(`⚠️️ Advertencia IMAP (${correoBuzon}):`, err.message);
+        console.log(`⚠ Advertencia IMAP (${correoBuzon}):`, err.message);
         if (connection) connection.end();
         return null;
     }
