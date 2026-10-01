@@ -224,6 +224,35 @@ const CSS_MODERNO = `
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); color: #fff; }
 
     .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
+
+    /* MÉTODOS DE PAGO ESTILOS */
+    .payment-box { background: rgba(0, 0, 0, 0.7); border: 1px solid var(--card-border); border-radius: 12px; padding: 15px; margin-top: 15px; text-align: left; }
+    .pay-method { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .pay-method:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .pay-header { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; text-transform: uppercase; letter-spacing: 1px; }
+    .badge { padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; margin-right: 4px; color: #fff; text-transform: uppercase; letter-spacing: 0.5px;}
+    .badge.nequi { background: #E10098; }
+    .badge.daviplata { background: #ED1C24; }
+    .badge.klar { background: #000; border: 1px solid #00E5FF; color: #00E5FF; }
+    .pay-details strong { display: block; font-size: 14px; margin-top: 5px; letter-spacing: 1px; color: #fff; font-family: monospace; user-select: all; cursor: pointer;}
+    .pay-details small { color: var(--text-muted); font-size: 10px; }
+
+    /* ✅ ADAPTACIÓN RESPONSIVA PARA TELÉFONOS MÓVILES */
+    @media (max-width: 1024px) {
+        .dashboard-grid { 
+            grid-template-columns: 1fr !important; 
+            padding: 15px 15px 40px 15px !important;
+            gap: 20px !important;
+        }
+        .left-sidebar { min-height: auto !important; }
+        .top-header { flex-direction: column; gap: 15px; padding: 15px; text-align: center; }
+        .brand-logo { margin: 0 auto !important; justify-content: center; width: 100%; text-align: center; }
+        .search-top { width: 100%; }
+        .search-top input { width: 100% !important; max-width: 100%; }
+        .iframe-container { height: 400px; }
+        .action-panel, .main-card, .side-card { padding: 18px !important; }
+        .user-pill { justify-content: center; }
+    }
 </style>
 
 <script>
@@ -283,6 +312,30 @@ const CSS_MODERNO = `
         openTab(active);
     });
 </script>
+`;
+
+// CÓDIGO HTML DE MÉTODOS DE PAGO REUTILIZABLE
+const metodosDePagoHtml = `
+    <div class="payment-box" id="pagos-box">
+        <div class="pay-method">
+            <div class="pay-header"><span>🇨🇴 Colombia</span></div>
+            <div class="pay-details">
+                <div>
+                    <span class="badge nequi">Nequi</span>
+                    <span class="badge daviplata">DaviPlata</span>
+                </div>
+                <strong>3157705811</strong>
+            </div>
+        </div>
+        <div class="pay-method">
+            <div class="pay-header"><span>🇲🇽 México</span></div>
+            <div class="pay-details">
+                <div><span class="badge klar">KLAR</span></div>
+                <small>Clabe Interbancaria:</small>
+                <strong>661610003284706338</strong>
+            </div>
+        </div>
+    </div>
 `;
 
 app.use(async (req, res, next) => {
@@ -405,6 +458,13 @@ app.get('/', (req, res) => {
         <div class="login-box">
             ${logosReconocidos}
             ${contenidoForm}
+            
+            <!-- BOTÓN MÉTODOS DE PAGO EN LOGIN -->
+            <button type="button" onclick="let p = document.getElementById('pagos-box-login'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" style="background: transparent; border: 1px dashed rgba(0,210,255,0.5); color: #00D2FF; padding: 12px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-top: 15px; transition: 0.3s;">💳 Ver Métodos de Pago</button>
+            <div id="pagos-box-login" style="display: none; margin-top: 10px;">
+                ${metodosDePagoHtml}
+            </div>
+
             <div class="help-text">Panel cifrado. Conexión segura.</div>
             ${redesSociales}
         </div>
@@ -413,20 +473,18 @@ app.get('/', (req, res) => {
     `);
 });
 
-// ✅ REPARACIÓN DEL REGISTRO: ENVÍA USUARIO, PASS Y FECHA A WHATSAPP AUTOMÁTICAMENTE
+// ✅ RUTA DE REGISTRO CON PANTALLA SEGURA DE REDIRECCIÓN A WHATSAPP
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
         
         const fechaObj = new Date();
-        // Genera la hora en formato de Bogotá (Colombia)
         const fechaHoraLocal = fechaObj.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
 
         const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
-        // REDIRECCIÓN AGRESIVA A WHATSAPP: Evita bloqueos de navegadores móviles
         res.send(`
         <!DOCTYPE html>
         <html lang="es">
@@ -446,7 +504,6 @@ app.post('/registrar-cliente', async (req, res) => {
             <p>Se ha creado tu cuenta. Haz clic abajo para enviar tus datos por WhatsApp y activar tu acceso.</p>
             <a href="${linkRedireccion}" class="btn">Confirmar por WhatsApp</a>
             <script>
-                // Forzar redirección limpia y directa
                 window.location.replace('${linkRedireccion}');
             </script>
         </body>
@@ -736,7 +793,6 @@ app.get('/dash', async (req, res) => {
             <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones de nuevas cuentas de tus clientes.</p></div>
             `;
             
-            // ✅ TABLA DE BASE DE DATOS MEJORADA: MUESTRA PASS, TEL Y FECHA CLARAMENTE
             let tablaUsuariosHtml = "";
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
@@ -821,6 +877,7 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
+            // PANEL LATERAL DERECHO
             let botonesContactoProveedor = `
             <style>
                 .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
@@ -848,7 +905,7 @@ app.get('/dash', async (req, res) => {
                 <div class="contact-wrapper">
                     <span class="contact-label">⬇ Ref. Grupo</span>
                     <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
+                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
                     </a>
                 </div>
             </div>`;
