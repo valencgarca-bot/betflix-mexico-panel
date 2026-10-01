@@ -68,7 +68,7 @@ setInterval(async () => {
     }
 }, 60 * 60 * 1000);
 
-// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ RESPONSIVO (MÓVILES Y PC)
+// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ AJUSTADO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -224,23 +224,6 @@ const CSS_MODERNO = `
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); color: #fff; }
 
     .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
-
-    /* ✅ ADAPTACIÓN RESPONSIVA PARA TELÉFONOS MÓVILES */
-    @media (max-width: 1024px) {
-        .dashboard-grid { 
-            grid-template-columns: 1fr !important; /* Todo en una sola columna */
-            padding: 15px 15px 40px 15px !important;
-            gap: 20px !important;
-        }
-        .left-sidebar { min-height: auto !important; }
-        .top-header { flex-direction: column; gap: 15px; padding: 15px; text-align: center; }
-        .brand-logo { margin: 0 auto !important; justify-content: center; width: 100%; text-align: center; }
-        .search-top { width: 100%; }
-        .search-top input { width: 100% !important; max-width: 100%; }
-        .iframe-container { height: 400px; }
-        .action-panel, .main-card, .side-card { padding: 18px !important; }
-        .user-pill { justify-content: center; }
-    }
 </style>
 
 <script>
@@ -383,7 +366,7 @@ app.get('/', (req, res) => {
                 </a>
             </div>
             <div class="contact-wrapper">
-                <span class="contact-label">⬇ Grupo de Ref.</span>
+                <span class="contact-label">⬇ Ref. Grupo</span>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
                     <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
                 </a>
@@ -430,16 +413,20 @@ app.get('/', (req, res) => {
     `);
 });
 
-// ✅ RUTA DE REGISTRO CON PANTALLA SEGURA DE REDIRECCIÓN A WHATSAPP
+// ✅ REPARACIÓN DEL REGISTRO: ENVÍA USUARIO, PASS Y FECHA A WHATSAPP AUTOMÁTICAMENTE
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
         
-        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
+        const fechaObj = new Date();
+        // Genera la hora en formato de Bogotá (Colombia)
+        const fechaHoraLocal = fechaObj.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+
+        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
-        // Pantalla intermedia para forzar la apertura de WhatsApp en teléfonos que bloquean popups
+        // REDIRECCIÓN AGRESIVA A WHATSAPP: Evita bloqueos de navegadores móviles
         res.send(`
         <!DOCTYPE html>
         <html lang="es">
@@ -448,19 +435,19 @@ app.post('/registrar-cliente', async (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Redirigiendo a WhatsApp...</title>
             <style>
-                body { background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
                 h2 { color: #25d366; font-size: 24px; }
                 p { color: #a3a3a3; font-size: 14px; margin-bottom: 30px; }
                 .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); }
             </style>
         </head>
         <body>
-            <h2>✅ ¡Cuenta creada con éxito!</h2>
-            <p>Por favor, haz clic en el botón de abajo para enviarnos tu usuario por WhatsApp y activar tu cuenta.</p>
-            <a href="${linkRedireccion}" class="btn" id="wa-btn">Ir a WhatsApp Ahora</a>
+            <h2>✅ ¡Registro Exitoso!</h2>
+            <p>Se ha creado tu cuenta. Haz clic abajo para enviar tus datos por WhatsApp y activar tu acceso.</p>
+            <a href="${linkRedireccion}" class="btn">Confirmar por WhatsApp</a>
             <script>
-                // Intenta redirigir automáticamente después de 1 segundo
-                setTimeout(() => { window.location.href = '${linkRedireccion}'; }, 1000);
+                // Forzar redirección limpia y directa
+                window.location.replace('${linkRedireccion}');
             </script>
         </body>
         </html>
@@ -749,6 +736,7 @@ app.get('/dash', async (req, res) => {
             <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones de nuevas cuentas de tus clientes.</p></div>
             `;
             
+            // ✅ TABLA DE BASE DE DATOS MEJORADA: MUESTRA PASS, TEL Y FECHA CLARAMENTE
             let tablaUsuariosHtml = "";
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
@@ -792,8 +780,10 @@ app.get('/dash', async (req, res) => {
 
                         return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${prefix ? 'background: rgba(0,210,255,0.03);' : ''}">
                             <td style="font-weight: 500; vertical-align: top; padding-left: ${prefix ? '30px' : '16px'};">
-                                <span style="${prefix ? 'color: var(--text-muted);' : 'color: #fff;'}">${prefix} ${u.user}</span>
-                                <br><small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:4px; display:block;">Tel: ${u.telefono || 'N/A'}</small>
+                                <span style="${prefix ? 'color: var(--text-muted);' : 'color: #fff;'}">${prefix} 👤 ${u.user}</span>
+                                <br><small style="color:var(--accent); font-weight:600; font-size:10px; margin-top:4px; display:block;">🔑 Pass: ${u.pass}</small>
+                                <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📱 Tel: ${u.telefono || 'N/A'}</small>
+                                <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📅 Reg: ${u.fecha_creacion}</small>
                             </td>
                             <td style="vertical-align: top; width: 100px;">${selectorRol}</td>
                             <td style="vertical-align: top; width: 40%;"><div style="max-height: 120px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
