@@ -40,13 +40,27 @@ app.use(session({
 }));
 
 db.serialize(() => {
-    db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
+    db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
-// 🎬 ESTILO PURO NEGRO Y SERIES RESALTANDO AL MÁXIMO SIN FILTROS AZULES
+// 🧹 FUNCIÓN AUTOMÁTICA PARA BORRAR CLIENTES SIN CORREO DESPUÉS DE 24 HORAS
+setInterval(async () => {
+    try {
+        await dbRun(`
+            DELETE FROM usuarios 
+            WHERE rol = 'Cliente' 
+            AND id NOT IN (SELECT DISTINCT user_id FROM correos) 
+            AND datetime(fecha_creacion, '+24 hours') <= datetime('now', 'localtime')
+        `);
+    } catch(err) {
+        console.error("Error en limpieza automática de usuarios:", err.message);
+    }
+}, 60 * 60 * 1000); // Se ejecuta cada hora
+
+// 🎬 ESTILO PURO NEGRO Y SERIES RESALTANDO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -54,8 +68,8 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #94a3b8;
-        --card-bg: rgba(0, 0, 0, 0.88);
-        --card-border: rgba(255, 255, 255, 0.12);
+        --card-bg: rgba(0, 0, 0, 0.9);
+        --card-border: rgba(255, 255, 255, 0.15);
         --accent: #00D2FF;
         --accent-hover: #0099CC;
         --btn-bg: rgba(0, 210, 255, 0.12);
@@ -64,12 +78,11 @@ const CSS_MODERNO = `
         --radius: 18px;
     }
 
-    /* 🌀 SERIES DE FONDO TOTALMENTE VISIBLES Y VIBRANTES SIN DESTELLOS AZULES */
     @keyframes pureSeriesSlideshow {
-        0% { background-image: linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
-        33% { background-image: linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2000&auto=format&fit=crop'); }
-        66% { background-image: linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
-        100% { background-image: linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
+        0% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
+        33% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2000&auto=format&fit=crop'); }
+        66% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
+        100% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
     }
 
     body { 
@@ -81,8 +94,6 @@ const CSS_MODERNO = `
         color: var(--text-main); font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh;
     }
-
-    /* SE ELIMINÓ EL RADIAL AZUL DE LA GOTA DE ENFOQUE */
 
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
     
@@ -145,7 +156,7 @@ const CSS_MODERNO = `
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
     .iframe-container {
-        background: rgba(0, 0, 0, 0.92);
+        background: rgba(0, 0, 0, 0.95);
         border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
         border: 1px solid var(--card-border); height: 500px; display: flex; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
     }
@@ -161,7 +172,7 @@ const CSS_MODERNO = `
     }
     .side-card h4 { margin: 0 0 15px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;}
     
-    .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+    .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
     .plat-mini-btn {
         background: #000000; border: 1px solid var(--card-border); padding: 12px;
         border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
@@ -169,6 +180,16 @@ const CSS_MODERNO = `
     }
     .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
     .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
+
+    /* ESTILOS PARA LOS BOTONES DE CONTACTO PROVEEDOR (TELEGRAM Y WHATSAPP) */
+    .provider-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+    .contact-btn {
+        background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s;
+    }
+    .contact-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
+    .contact-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
+    .contact-btn img { width: 18px; height: 18px; object-fit: contain; }
 
     .menu-list { display: flex; flex-direction: column; gap: 8px; }
     .menu-btn-item {
@@ -249,7 +270,7 @@ const CSS_MODERNO = `
 `;
 
 app.use(async (req, res, next) => {
-    const rutasAbiertas = ['/', '/login', '/logout'];
+    const rutasAbiertas = ['/', '/login', '/logout', '/registro', '/registrar-cliente'];
     if (rutasAbiertas.includes(req.path)) return next();
     if (req.session && req.session.uid) {
         try {
@@ -264,6 +285,29 @@ app.use(async (req, res, next) => {
 });
 
 app.get('/', (req, res) => {
+    let mode = req.query.mode;
+    let contenidoForm = "";
+
+    if (mode === 'registro') {
+        contenidoForm = `
+            <form action="/registrar-cliente" method="POST">
+                <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
+                <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
+                <button type="submit" class="btn-submit">Registrarse</button>
+            </form>
+            <div style="margin-top: 20px;"><a href="/" style="color: #00D2FF; font-size: 12px; text-decoration: none;">← Volver al Login</a></div>
+        `;
+    } else {
+        contenidoForm = `
+            <form action="/login" method="POST">
+                <div class="input-group"><input type="text" name="user" placeholder="Usuario" required></div>
+                <div class="input-group"><input type="password" name="pass" placeholder="Contraseña" required></div>
+                <button type="submit" class="btn-submit">Ingresar</button>
+            </form>
+            <div style="margin-top: 20px;"><a href="/?mode=registro" style="color: #00D2FF; font-size: 12px; text-decoration: none;">¿No tienes cuenta? Regístrate aquí</a></div>
+        `;
+    }
+
     res.send(`
     <!DOCTYPE html>
     <html lang="es">
@@ -278,7 +322,7 @@ app.get('/', (req, res) => {
                 background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; 
                 background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; 
             }
-            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.9); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.95); text-align: center; }
+            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; }
             .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; gap: 10px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
@@ -294,16 +338,22 @@ app.get('/', (req, res) => {
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> 
                 SYNCBOX
             </h2>
-            <form action="/login" method="POST">
-                <div class="input-group"><input type="text" name="user" placeholder="Usuario" required></div>
-                <div class="input-group"><input type="password" name="pass" placeholder="Contraseña" required></div>
-                <button type="submit" class="btn-submit">Ingresar</button>
-            </form>
+            ${contenidoForm}
             <div class="help-text">Panel de administración encriptado. Conexión segura.</div>
         </div>
     </body>
     </html>
     `);
+});
+
+app.post('/registrar-cliente', async (req, res) => {
+    const { user, pass } = req.body;
+    try {
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, 'Cliente', NULL)", [user.trim(), pass]);
+        res.send("<script>alert('✅ ¡Cuenta creada con éxito! Ya puedes ingresar.'); window.location='/';</script>");
+    } catch(err) {
+        res.send("<script>alert('⛔ El nombre de usuario ya está en uso. Elige otro.'); window.location='/?mode=registro';</script>");
+    }
 });
 
 app.post('/login', async (req, res) => {
@@ -325,9 +375,19 @@ app.get('/logout', (req, res) => {
 app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'dueño' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
+    const esCliente = (req.session.rol === 'Cliente');
 
-    if (esAdminPrincipal || esSubAdmin || req.session.rol === 'Cliente') {
+    if (esAdminPrincipal || esSubAdmin || esCliente) {
         try {
+            // Si es cliente, verificamos si tiene correos asignados
+            let misCorreos = [];
+            if (esCliente) {
+                misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]);
+                if (misCorreos.length === 0) {
+                    // Si no tiene correos asignados, permitimos ver la interfaz pero bloqueamos las búsquedas
+                }
+            }
+
             let query = esAdminPrincipal ? "SELECT * FROM usuarios" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
@@ -373,8 +433,14 @@ app.get('/dash', async (req, res) => {
                     ${controlesIzquierda}
                 </div>`;
 
+                let avisoSinCorreo = "";
+                if (esCliente && misCorreos.length === 0) {
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto de abajo para activar tu acceso.</div>`;
+                }
+
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
+                    ${avisoSinCorreo}
                     <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
                         <div style="background:#000000; padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
                             <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:30px; width:auto; max-width:120px; object-fit:contain;">
@@ -386,7 +452,7 @@ app.get('/dash', async (req, res) => {
                     </div>
                     <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;">
                         <input type="hidden" name="plataforma" value="${key}">
-                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required>
+                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required ${esCliente && misCorreos.length === 0 ? 'disabled' : ''}>
                     </form>
                 </div>`;
             });
@@ -420,7 +486,7 @@ app.get('/dash', async (req, res) => {
             if (esAdminPrincipal || esSubAdmin) {
                 let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'dueño' && u.user !== 'ruben') : usuarios.filter(u => u.creado_por === req.session.uid);
                 if (usuariosVisibles.length === 0) {
-                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: var(--text-muted);'>No tienes clientes asignados.</td></tr>";
+                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay clientes registrados aún.</td></tr>";
                 } else {
                     usuariosVisibles.forEach(u => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
@@ -434,9 +500,9 @@ app.get('/dash', async (req, res) => {
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
                                 </div>`;
                             }).join('');
-                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados</span>"; }
+                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados (Auto-eliminación en 24h si no se asignan)</span>"; }
 
-                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : 'Tú';
+                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
 
                         tablaUsuariosHtml += `<tr>
                             <td style="font-weight: 500; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small></td>
@@ -447,6 +513,17 @@ app.get('/dash', async (req, res) => {
                     });
                 }
             }
+
+            // SECCIÓN DE BOTONES DE CONTACTO PROVEEDOR (TELEGRAM Y WHATSAPP)
+            let botonesContactoProveedor = `
+            <div class="provider-contact">
+                <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
+                </a>
+                <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                </a>
+            </div>`;
 
             res.send(`
             <!DOCTYPE html>
@@ -483,6 +560,7 @@ app.get('/dash', async (req, res) => {
                     <div class="center-panel">
                         ${panelesCentroHtml}
                         
+                        ${(esAdminPrincipal || esSubAdmin) ? `
                         <div id="main-crear-user" class="main-card">
                             <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Crear Nuevo Usuario</h3>
                             <form action="/admin/crear" method="POST">
@@ -509,7 +587,7 @@ app.get('/dash', async (req, res) => {
                             <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
                                 <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align:center;">Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
                             </div>
-                        </div>
+                        </div>` : ''}
 
                         <div class="iframe-container">
                             <div class="iframe-header">Data Vortex - VISOR DE RESULTADOS EN VIVO</div>
@@ -525,13 +603,15 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
                                 <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
-                                ` : ''}
+                                ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar servicios.</p>`}
                             </div>
                             
                             <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
                             <div class="plat-mini-grid">
                                 ${botonesPlataformaHtml}
                             </div>
+                            
+                            ${botonesContactoProveedor}
                         </div>
 
                         ${esAdminPrincipal ? `
@@ -639,7 +719,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         return null;
 
     } catch (err) {
-        console.log(`⚠️ Advertencia IMAP (${correoBuzon}):`, err.message);
+        console.log(`⚠️️ Advertencia IMAP (${correoBuzon}):`, err.message);
         if (connection) connection.end();
         return null;
     }
@@ -654,13 +734,18 @@ app.post('/buscar', async (req, res) => {
         let correoIngresado = (email_search || "").trim().toLowerCase();
         
         const esAdminPrincipal = (req.session.user === 'dueño' || req.session.user === 'ruben');
-        if (!esAdminPrincipal) {
+        const esCliente = (req.session.rol === 'Cliente');
+
+        if (esCliente) {
+            const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
+            if (!tieneAcceso) {
+                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius:12px; background: #000;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes este correo asignado a tu cuenta. Solicítalo al proveedor.</p></div>`);
+            }
+        } else if (!esAdminPrincipal) {
             const dueñocuenta = await dbGet("SELECT c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [correoIngresado]);
-            
             if (dueñocuenta) {
                 const esPropia = (dueñocuenta.user_id === req.session.uid);
                 const esDeMiCliente = (dueñocuenta.creado_por === req.session.uid);
-                
                 if (!esPropia && !esDeMiCliente) {
                     return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius:12px; background: #000;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>El correo <strong>${correoIngresado}</strong> le pertenece al cliente <strong>${dueñocuenta.user}</strong></p></div>`);
                 }
