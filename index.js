@@ -164,11 +164,10 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
-    /* ✅ VISOR MÁGICO: SIN BORDES, TOTALMENTE INYECTADO A LA PÁGINA */
     .iframe-container {
         display: none; 
-        background: transparent; /* Fondo transparente */
-        border: none; /* Sin bordes */
+        background: transparent;
+        border: none; 
         height: 600px; 
         width: 100%;
         overflow: hidden;
@@ -388,7 +387,6 @@ app.post('/registrar-cliente', async (req, res) => {
     }
 });
 
-// ✅ REPARACIÓN DEL LOGIN Y FALLBACK DE EMERGENCIA
 app.post('/login', async (req, res) => {
     const user = (req.body.user || '').trim();
     const pass = (req.body.pass || '').trim();
@@ -470,7 +468,6 @@ app.get('/dash', async (req, res) => {
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
             
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
-            
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
             let actividadesHtml = "";
@@ -542,7 +539,7 @@ app.get('/dash', async (req, res) => {
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
                     <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
                         <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
+                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️️ Reportar Caída</h5>
                             <input type="hidden" name="plataforma" value="${key}">
                             <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
                             <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
@@ -570,7 +567,7 @@ app.get('/dash', async (req, res) => {
 
                 let avisoSinCorreo = "";
                 if (esCliente && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
                 }
 
                 panelesCentroHtml += `
@@ -780,7 +777,6 @@ app.get('/dash', async (req, res) => {
                             </div>
                         </div>` : ''}
 
-                        <!-- VISOR MÁGICO, TOTALMENTE INYECTADO SIN BORDES -->
                         <div class="iframe-container" id="visor-resultados">
                             <iframe name="marco_resultados" allowtransparency="true" style="width: 100%; height: 100%; border: none; background: transparent;"></iframe>
                         </div>
@@ -934,31 +930,62 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
-    // ✅ CSS ACTUALIZADO: Iframe 100% libre, sin bordes, inyectado directamente a la página
+    // ✅ CSS MÁGICO: Sin cuadros grises en los bordes, texto brilloso y scroll camuflado.
     const cssIframe = `<style>
-        body { 
-            font-family: 'Inter', sans-serif; 
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body, html { 
+            font-family: 'Inter', sans-serif !important; 
             background: transparent !important; 
-            color: #cbd5e1; 
-            margin: 0; 
-            padding: 0; 
+            margin: 0; padding: 0; 
+            color: #e2e8f0 !important;
         } 
-        /* Scrollbar estético y disimulado */
-        ::-webkit-scrollbar { width: 5px; }
+        
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.2); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 210, 255, 0.5); }
-        
-        .dark-email-wrapper { 
-            filter: invert(1) hue-rotate(180deg); 
-            width: 100%; 
-            min-height: 100%; 
-            padding: 0;
-            background: #000; 
+        ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.5); border-radius: 10px; }
+
+        /* Vuelve transparentes todas las cajas grises/blancas del fondo de Netflix */
+        table, td, tr, div, center, body {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
         }
-        .dark-email-wrapper img { filter: invert(1) hue-rotate(180deg); }
+
+        /* TEXTO MÁGICO Y BRILLANTE */
+        .magic-email-wrapper * {
+            font-family: 'Inter', sans-serif !important;
+            color: #f8fafc !important;
+            text-shadow: 0 0 6px rgba(255, 255, 255, 0.4) !important;
+            line-height: 1.6 !important;
+        }
+
+        .magic-email-wrapper h1, 
+        .magic-email-wrapper h2, 
+        .magic-email-wrapper h3, 
+        .magic-email-wrapper a, 
+        .magic-email-wrapper strong {
+            color: #00D2FF !important; /* Cian neón */
+            text-shadow: 0 0 10px rgba(0, 210, 255, 0.7), 0 0 20px rgba(0, 210, 255, 0.4) !important;
+            text-decoration: none !important;
+        }
+
+        .magic-email-wrapper img {
+            filter: drop-shadow(0 0 12px rgba(229, 9, 20, 0.8)) !important;
+            border-radius: 4px !important;
+        }
+
+        .magic-email-wrapper { 
+            width: 100%; 
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
         
-        table { margin: 0 auto !important; }
+        .magic-email-wrapper > * {
+            max-width: 600px;
+            width: 100%;
+        }
     </style>`;
 
     try {
@@ -1028,9 +1055,8 @@ app.post('/buscar', async (req, res) => {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
-        // ✅ CORREO LIBRE E INYECTADO: SIN CUADRO DE REMITENTE NI ASUNTO
         res.send(`${cssIframe}
-            <div class="dark-email-wrapper">
+            <div class="magic-email-wrapper">
                 ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#fff; padding: 20px;">${mail.text}</pre>`}
             </div>
         `);
