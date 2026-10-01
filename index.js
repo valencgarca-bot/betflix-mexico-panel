@@ -50,7 +50,9 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
     
-    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('fanny', 'teamo2020', 'Administrador', NULL)");
+    // CREAR ADMIN NUEVO POR DEFECTO Y ACTUALIZAR EL VIEJO SI EXISTE EN LA BASE DE DATOS
+    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)");
+    db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'");
 });
 
 // 🧹 FUNCIÓN AUTOMÁTICA PARA BORRAR CLIENTES SIN CORREO DESPUÉS DE 24 HORAS
@@ -387,6 +389,7 @@ app.post('/registrar-cliente', async (req, res) => {
     }
 });
 
+// ✅ REPARACIÓN DEL LOGIN: ACTUALIZACIÓN A CREDENCIALES 'admin'
 app.post('/login', async (req, res) => {
     const user = (req.body.user || '').trim();
     const pass = (req.body.pass || '').trim();
@@ -398,9 +401,9 @@ app.post('/login', async (req, res) => {
             req.session.user = row.user; 
             req.session.rol = row.rol;
             req.session.save(() => res.redirect('/dash'));
-        } else if (user === 'dueño' && pass === 'teamo2020') {
+        } else if (user === 'admin' && pass === '14032021') {
             req.session.uid = 1;
-            req.session.user = 'dueño';
+            req.session.user = 'admin';
             req.session.rol = 'Administrador';
             req.session.save(() => res.redirect('/dash'));
         } else { 
@@ -450,7 +453,7 @@ app.post('/admin/completar-reserva', async (req, res) => {
 });
 
 app.get('/dash', async (req, res) => {
-    const esAdminPrincipal = (req.session.user === 'dueño' || req.session.user === 'ruben');
+    const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
     const esCliente = (req.session.rol === 'Cliente');
 
@@ -539,7 +542,7 @@ app.get('/dash', async (req, res) => {
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
                     <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
                         <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️️ Reportar Caída</h5>
+                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
                             <input type="hidden" name="plataforma" value="${key}">
                             <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
                             <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
@@ -567,7 +570,7 @@ app.get('/dash', async (req, res) => {
 
                 let avisoSinCorreo = "";
                 if (esCliente && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
                 }
 
                 panelesCentroHtml += `
@@ -663,7 +666,7 @@ app.get('/dash', async (req, res) => {
             let tablaUsuariosHtml = "";
             
             if (esAdminPrincipal || esSubAdmin) {
-                let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'dueño' && u.user !== 'ruben') : usuarios.filter(u => u.creado_por === req.session.uid);
+                let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben') : usuarios.filter(u => u.creado_por === req.session.uid);
                 if (usuariosVisibles.length === 0) {
                     tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay clientes registrados aún.</td></tr>";
                 } else {
@@ -930,7 +933,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
-    // ✅ CSS MÁGICO: Sin cuadros grises en los bordes, texto brilloso y scroll camuflado.
+    // ✅ CSS MÁGICO Y LUMINOSO: Transparencia absoluta y brillo neón en textos sin cuadros grises
     const cssIframe = `<style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
@@ -945,18 +948,18 @@ app.post('/buscar', async (req, res) => {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.5); border-radius: 10px; }
 
-        /* Vuelve transparentes todas las cajas grises/blancas del fondo de Netflix */
-        table, td, tr, div, center, body {
+        /* DESTRUYE CUALQUIER FONDO BLANCO O GRIS DEL CORREO ORIGINAL */
+        table, td, tr, div, center, body, span {
             background: transparent !important;
             background-color: transparent !important;
             border: none !important;
         }
 
-        /* TEXTO MÁGICO Y BRILLANTE */
+        /* EFECTO LUMINOSO PARA TEXTOS E IMÁGENES */
         .magic-email-wrapper * {
             font-family: 'Inter', sans-serif !important;
             color: #f8fafc !important;
-            text-shadow: 0 0 6px rgba(255, 255, 255, 0.4) !important;
+            text-shadow: 0 0 6px rgba(255, 255, 255, 0.3) !important;
             line-height: 1.6 !important;
         }
 
@@ -965,13 +968,13 @@ app.post('/buscar', async (req, res) => {
         .magic-email-wrapper h3, 
         .magic-email-wrapper a, 
         .magic-email-wrapper strong {
-            color: #00D2FF !important; /* Cian neón */
-            text-shadow: 0 0 10px rgba(0, 210, 255, 0.7), 0 0 20px rgba(0, 210, 255, 0.4) !important;
+            color: #00D2FF !important; /* Brillo Cian Neón */
+            text-shadow: 0 0 10px rgba(0, 210, 255, 0.6), 0 0 20px rgba(0, 210, 255, 0.3) !important;
             text-decoration: none !important;
         }
 
         .magic-email-wrapper img {
-            filter: drop-shadow(0 0 12px rgba(229, 9, 20, 0.8)) !important;
+            filter: drop-shadow(0 0 15px rgba(229, 9, 20, 0.9)) !important; /* Resplandor rojo al logo de Netflix */
             border-radius: 4px !important;
         }
 
@@ -991,7 +994,7 @@ app.post('/buscar', async (req, res) => {
     try {
         let correoIngresado = (email_search || "").trim().toLowerCase();
         
-        const esAdminPrincipal = (req.session.user === 'dueño' || req.session.user === 'ruben');
+        const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
         const esCliente = (req.session.rol === 'Cliente');
 
         if (esCliente) {
@@ -1024,7 +1027,7 @@ app.post('/buscar', async (req, res) => {
 
         if (!resultadoExitoso) { 
             return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;">
-                <h2 style="color:#f8fafc; font-weight:300;">Mensaje no encontrado</h2>
+                <h2 style="color:#f8fafc; font-weight:300; text-shadow: 0 0 10px rgba(0, 210, 255, 0.6);">Mensaje no encontrado</h2>
                 <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#00D2FF;">${email_search}</strong></p>
             </div>`); 
         }
@@ -1040,14 +1043,14 @@ app.post('/buscar', async (req, res) => {
                 { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
             ];
             for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#fff;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
+            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#00D2FF; text-shadow: 0 0 15px rgba(0, 210, 255, 0.8);">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
             return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
         }
 
         if (accion === 'ip') {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#fff; margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
+            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#00D2FF; text-shadow: 0 0 10px rgba(0,210,255,0.6); margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
             return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;">${ipContenido}</div></div>`);
         }
 
@@ -1055,6 +1058,7 @@ app.post('/buscar', async (req, res) => {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
+        // ✅ CORREO MÁGICO TOTALMENTE INTEGRADO
         res.send(`${cssIframe}
             <div class="magic-email-wrapper">
                 ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#fff; padding: 20px;">${mail.text}</pre>`}
