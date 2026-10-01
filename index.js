@@ -133,6 +133,7 @@ const CSS_MODERNO = `
     .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
+    /* PANEL IZQUIERDO MÁS LARGO Y ESPACIOSO */
     .action-panel {
         background: var(--card-bg);
         border-radius: var(--radius); padding: 25px;
@@ -142,6 +143,7 @@ const CSS_MODERNO = `
     }
     .action-panel.active { display: flex; }
 
+    /* TARJETA CENTRAL MÁS CORTA Y COMPACTA */
     .main-card {
         background: var(--card-bg);
         border-radius: var(--radius); padding: 18px 25px; 
@@ -164,6 +166,7 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
+    /* VISOR OCULTO POR DEFECTO */
     .iframe-container {
         display: none; 
         background: rgba(0, 0, 0, 0.95);
@@ -464,7 +467,6 @@ app.get('/dash', async (req, res) => {
             
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
 
-            // ✅ AQUÍ ESTÁ LA VARIABLE QUE FALTABA Y CAUSABA EL ERROR
             let actividadesHtml = "";
             if (registros.length > 0) {
                 registros.forEach(r => { 
@@ -832,12 +834,12 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// ✅ REPARACIÓN DEL ALGORITMO DE BÚSQUEDA IMAP (IGNORAR FECHA, EXTRAER ÚLTIMO UID)
+// ✅ EXTRACCIÓN IMAP RESTAURADA: ORDENA POR UID PARA EXTRAER SIEMPRE EL ÚLTIMO
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
 
-    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 2500 } };
+    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 5000 } };
     let connection = null;
 
     try {
@@ -848,22 +850,28 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let queryStr = `"${correoIngresado}"`;
         if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
-        // Búsqueda 1: Intento Estricto
-        let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: [''] });
+        // BUSCAR SOLO ENCABEZADOS PRIMERO (Súper rápido y no satura la conexión)
+        let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
         
-        // Búsqueda 2: Si el signo + arruina la búsqueda, buscar texto general
         if (searchResults.length === 0) {
-            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: [''] });
+            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
         }
 
         let messages = [];
         let mail = null;
 
         if (searchResults.length > 0) {
-            // ORDEN ESTRICTO POR IDENTIFICADOR ÚNICO (UID) DE GMAIL PARA TRAER SIEMPRE EL MÁS RECIENTE
-            searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
+            // ORDENAR POR FECHA Y UID PARA ENCONTRAR ESTRICTAMENTE EL ÚLTIMO
+            searchResults.sort((a, b) => {
+                let dateA = new Date(a.attributes.date || 0);
+                let dateB = new Date(b.attributes.date || 0);
+                if (dateB.getTime() !== dateA.getTime()) { return dateB - dateA; }
+                return b.attributes.uid - a.attributes.uid;
+            });
+
             let latestUid = searchResults[0].attributes.uid; 
             
+            // EXTRAER EL CUERPO COMPLETO SOLO DEL ÚLTIMO CORREO
             let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
             if (fetchedMsg.length > 0) {
                 messages = fetchedMsg;
