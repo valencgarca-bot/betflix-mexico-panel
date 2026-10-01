@@ -68,7 +68,7 @@ setInterval(async () => {
     }
 }, 60 * 60 * 1000);
 
-// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ AJUSTADO
+// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ RESPONSIVO (MÓVILES Y PC)
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -224,6 +224,23 @@ const CSS_MODERNO = `
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); color: #fff; }
 
     .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
+
+    /* ✅ ADAPTACIÓN RESPONSIVA PARA TELÉFONOS MÓVILES */
+    @media (max-width: 1024px) {
+        .dashboard-grid { 
+            grid-template-columns: 1fr !important; /* Todo en una sola columna */
+            padding: 15px 15px 40px 15px !important;
+            gap: 20px !important;
+        }
+        .left-sidebar { min-height: auto !important; }
+        .top-header { flex-direction: column; gap: 15px; padding: 15px; text-align: center; }
+        .brand-logo { margin: 0 auto !important; justify-content: center; width: 100%; text-align: center; }
+        .search-top { width: 100%; }
+        .search-top input { width: 100% !important; max-width: 100%; }
+        .iframe-container { height: 400px; }
+        .action-panel, .main-card, .side-card { padding: 18px !important; }
+        .user-pill { justify-content: center; }
+    }
 </style>
 
 <script>
@@ -384,7 +401,7 @@ app.get('/', (req, res) => {
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
             body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
-            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; }
+            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; margin: 15px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
             .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
@@ -413,6 +430,7 @@ app.get('/', (req, res) => {
     `);
 });
 
+// ✅ RUTA DE REGISTRO CON PANTALLA SEGURA DE REDIRECCIÓN A WHATSAPP
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
@@ -421,10 +439,32 @@ app.post('/registrar-cliente', async (req, res) => {
         const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
-        res.send(`<script>
-            alert('✅ ¡Cuenta creada con éxito! Serás redirigido a nuestro WhatsApp para enviarte los links de acceso.'); 
-            window.location.href='${linkRedireccion}';
-        </script>`);
+        // Pantalla intermedia para forzar la apertura de WhatsApp en teléfonos que bloquean popups
+        res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Redirigiendo a WhatsApp...</title>
+            <style>
+                body { background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+                h2 { color: #25d366; font-size: 24px; }
+                p { color: #a3a3a3; font-size: 14px; margin-bottom: 30px; }
+                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); }
+            </style>
+        </head>
+        <body>
+            <h2>✅ ¡Cuenta creada con éxito!</h2>
+            <p>Por favor, haz clic en el botón de abajo para enviarnos tu usuario por WhatsApp y activar tu cuenta.</p>
+            <a href="${linkRedireccion}" class="btn" id="wa-btn">Ir a WhatsApp Ahora</a>
+            <script>
+                // Intenta redirigir automáticamente después de 1 segundo
+                setTimeout(() => { window.location.href = '${linkRedireccion}'; }, 1000);
+            </script>
+        </body>
+        </html>
+        `);
     } catch(err) {
         res.send("<script>alert('⛔ El nombre de usuario ya está en uso. Elige otro.'); window.location='/?mode=registro';</script>");
     }
@@ -492,7 +532,6 @@ app.post('/admin/completar-reserva', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// ✅ RUTA PARA CAMBIAR EL ROL DE UN USUARIO (CLIENTE <-> SUBADMIN)
 app.post('/admin/cambiar-rol', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     try {
@@ -710,15 +749,14 @@ app.get('/dash', async (req, res) => {
             <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones de nuevas cuentas de tus clientes.</p></div>
             `;
             
-            // ✅ NUEVA LÓGICA DE BASE DE DATOS ORGANIZADA Y JERÁRQUICA
             let tablaUsuariosHtml = "";
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
             
             if (esAdminPrincipal || esSubAdmin) {
-                let usuariosBase = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben' && u.user !== 'dueño') : usuarios.filter(u => u.creado_por === req.session.uid);
+                let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben' && u.user !== 'dueño') : usuarios.filter(u => u.creado_por === req.session.uid);
                 
-                if (usuariosBase.length === 0) {
+                if (usuariosVisibles.length === 0) {
                     tablaUsuariosHtml = "<tr><td colspan='5' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay usuarios registrados aún.</td></tr>";
                 } else {
                     let renderRow = (u, prefix = "") => {
@@ -770,46 +808,59 @@ app.get('/dash', async (req, res) => {
                     };
 
                     if (esAdminPrincipal) {
-                        let subadmins = usuariosBase.filter(u => u.rol === 'Subadministrador');
-                        let directos = usuariosBase.filter(u => u.rol !== 'Subadministrador' && !u.creado_por);
-                        let huerfanos = usuariosBase.filter(u => u.rol !== 'Subadministrador' && u.creado_por && !subadmins.find(sa => sa.id === u.creado_por));
+                        let subadmins = usuariosVisibles.filter(u => u.rol === 'Subadministrador');
+                        let directos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador' && !u.creado_por);
+                        let huerfanos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador' && u.creado_por && !subadmins.find(sa => sa.id === u.creado_por));
 
-                        // 1. Mostrar Subadmins y sus hijos anidados
                         subadmins.forEach(sa => {
                             tablaUsuariosHtml += renderRow(sa);
-                            let children = usuariosBase.filter(u => u.creado_por === sa.id);
+                            let children = usuariosVisibles.filter(u => u.creado_por === sa.id);
                             children.forEach(child => {
                                 tablaUsuariosHtml += renderRow(child, "↳ ");
                             });
                         });
 
-                        // 2. Mostrar clientes directos al final
                         if (directos.length > 0 || huerfanos.length > 0) {
                             tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255,255,255,0.05); text-align: center; font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: 1px; padding: 10px;">CLIENTES DIRECTOS / REGISTRO PÚBLICO</td></tr>`;
                             directos.forEach(d => tablaUsuariosHtml += renderRow(d));
                             huerfanos.forEach(h => tablaUsuariosHtml += renderRow(h));
                         }
                     } else {
-                        // Subadmin solo ve sus hijos de manera normal
-                        usuariosBase.forEach(u => tablaUsuariosHtml += renderRow(u));
+                        usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u));
                     }
                 }
             }
 
             let botonesContactoProveedor = `
+            <style>
+                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
+                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
+            </style>
             <div class="provider-contact">
-                <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                </a>
-                <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                </a>
-                <a href="https://forobeta.com/members/soncbox.367003/" target="_blank" class="contact-btn forobeta">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff7300"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 6h-2v1.5h2v2h-2V19h-3v-6.5H8v-2h1V7c0-1.66 1.34-3 3-3h3v3z"/></svg> ForoBeta
-                </a>
-                <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
-                </a>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Mi Telegram</span>
+                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
+                    </a>
+                </div>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Mi WhatsApp</span>
+                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                    </a>
+                </div>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ ForoBeta</span>
+                    <a href="https://forobeta.com/members/soncbox.367003/" target="_blank" class="contact-btn forobeta" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff7300"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 6h-2v1.5h2v2h-2V19h-3v-6.5H8v-2h1V7c0-1.66 1.34-3 3-3h3v3z"/></svg> ForoBeta
+                    </a>
+                </div>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Ref. Grupo</span>
+                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
+                    </a>
+                </div>
             </div>`;
 
             res.send(`
@@ -878,13 +929,13 @@ app.get('/dash', async (req, res) => {
                                 </form>
                             </div>
                             <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
-                                <table>
+                                <table style="width: 100%; border-collapse: collapse;">
                                     <thead><tr>
-                                        <th style="padding-left: 20px;">Usuario</th>
-                                        <th>Rol</th>
-                                        <th style="width: 40%;">Correos Vinculados</th>
-                                        <th>Creador</th>
-                                        <th style="text-align:center;">Acción</th>
+                                        <th style="padding-left: 20px; border-bottom: 1px solid rgba(255,255,255,0.15);">Usuario</th>
+                                        <th style="border-bottom: 1px solid rgba(255,255,255,0.15);">Rol</th>
+                                        <th style="width: 40%; border-bottom: 1px solid rgba(255,255,255,0.15);">Correos Vinculados</th>
+                                        <th style="border-bottom: 1px solid rgba(255,255,255,0.15);">Creador</th>
+                                        <th style="text-align:center; border-bottom: 1px solid rgba(255,255,255,0.15);">Acción</th>
                                     </tr></thead>
                                     <tbody>${tablaUsuariosHtml}</tbody>
                                 </table>
@@ -934,7 +985,6 @@ app.get('/dash', async (req, res) => {
     }
 });
 
-// ✅ RUTA DE DESTRUCCIÓN EN CASCADA (Borra a un usuario y todo lo que haya creado)
 app.post('/admin/eliminar-usuario', async (req, res) => {
     if (req.session.rol === 'Cliente') return res.redirect('/dash');
     try {
@@ -948,7 +998,6 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
             await dbRun("DELETE FROM garantias WHERE user_id = ?", [userId]);
             await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
         } else {
-            // EL ADMIN PRINCIPAL ELIMINA AL SUBADMIN Y A TODOS LOS HIJOS QUE ÉSTE CREÓ
             const children = await dbAll("SELECT id FROM usuarios WHERE creado_por = ?", [userId]);
             const idsToDelete = [userId, ...children.map(c => c.id)];
             
