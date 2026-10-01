@@ -40,7 +40,10 @@ app.use(session({
 }));
 
 db.serialize(() => {
-    db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
+    // Evitar error si la tabla ya existía sin la columna 'telefono'
+    db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => { /* Silenciar error si la columna ya existe */ });
+    
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
@@ -247,7 +250,6 @@ const CSS_MODERNO = `
             }
             actionInput.value = actionName;
             
-            // MOSTRAR VISOR AL HACER LA PETICIÓN
             document.getElementById('visor-resultados').style.display = 'flex';
             form.submit();
         }
@@ -295,17 +297,28 @@ app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
 
+    // Mensaje de bienvenida para los clientes en el inicio
+    let mensajeBienvenida = `
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h3 style="color: #00D2FF; margin: 0 0 5px 0; font-size: 18px; font-weight: 600;">¡Bienvenido a SyncBox!</h3>
+            <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.5;">Somos nuevos en el mercado pero con las mejores cuentas.</p>
+        </div>
+    `;
+
     if (mode === 'registro') {
         contenidoForm = `
+            ${mensajeBienvenida}
             <form action="/registrar-cliente" method="POST">
                 <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
+                <div class="input-group"><input type="tel" name="telefono" placeholder="Número de WhatsApp (Ej: +57...)" required></div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
-                <button type="submit" class="btn-submit">Registrarse</button>
+                <button type="submit" class="btn-submit">Completar Registro</button>
             </form>
             <div style="margin-top: 20px;"><a href="/" style="color: #00D2FF; font-size: 12px; text-decoration: none;">← Volver al Login</a></div>
         `;
     } else {
         contenidoForm = `
+            ${mensajeBienvenida}
             <form action="/login" method="POST">
                 <div class="input-group"><input type="text" name="user" placeholder="Usuario" required></div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Contraseña" required></div>
@@ -329,14 +342,14 @@ app.get('/', (req, res) => {
                 background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; 
                 background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; 
             }
-            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 50px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; }
-            .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; }
+            .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 25px; display: flex; align-items: center; justify-content: center; gap: 10px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
             .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
-            .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
+            .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
             .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
-            .help-text { color: #888; font-size: 12px; margin-top: 30px; line-height: 1.6; font-weight: 300; }
+            .help-text { color: #888; font-size: 12px; margin-top: 25px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
     <body>
@@ -354,10 +367,18 @@ app.get('/', (req, res) => {
 });
 
 app.post('/registrar-cliente', async (req, res) => {
-    const { user, pass } = req.body;
+    const { user, pass, telefono } = req.body;
     try {
-        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, 'Cliente', NULL)", [user.trim(), pass]);
-        res.send("<script>alert('✅ ¡Cuenta creada con éxito! Ya puedes ingresar.'); window.location='/';</script>");
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
+        
+        // Mensaje predeterminado que el cliente te enviará por WhatsApp al registrarse
+        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox como *${user.trim()}*. Mi número es ${telefono.trim()}. ¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
+        const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
+
+        res.send(`<script>
+            alert('✅ ¡Cuenta creada con éxito! Serás redirigido a nuestro WhatsApp para enviarte los links de acceso.'); 
+            window.location.href='${linkRedireccion}';
+        </script>`);
     } catch(err) {
         res.send("<script>alert('⛔ El nombre de usuario ya está en uso. Elige otro.'); window.location='/?mode=registro';</script>");
     }
@@ -453,7 +474,7 @@ app.get('/dash', async (req, res) => {
                             <p style="margin:5px 0 0 0; font-size:12px; color:var(--text-muted);">Ingresa el correo para consultar resultados.</p>
                         </div>
                     </div>
-                    <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;">
+                    <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
                         <input type="hidden" name="plataforma" value="${key}">
                         <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required ${esCliente && misCorreos.length === 0 ? 'disabled' : ''}>
                     </form>
@@ -517,7 +538,7 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // BOTONES DE CONTACTO PROVEEDOR ACTUALIZADOS
+            // BOTONES DE CONTACTO PROVEEDOR
             let botonesContactoProveedor = `
             <div class="provider-contact">
                 <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
