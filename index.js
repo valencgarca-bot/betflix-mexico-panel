@@ -68,6 +68,30 @@ setInterval(async () => {
     }
 }, 60 * 60 * 1000);
 
+// ✅ CÓDIGO HTML REUTILIZABLE PARA LOS MÉTODOS DE PAGO
+const metodosDePagoHtml = `
+    <div class="payment-box">
+        <div class="pay-method">
+            <div class="pay-header"><span>🇨🇴 Colombia</span></div>
+            <div class="pay-details">
+                <div>
+                    <span class="badge nequi">Nequi</span>
+                    <span class="badge daviplata">DaviPlata</span>
+                </div>
+                <strong>3157705811</strong>
+            </div>
+        </div>
+        <div class="pay-method">
+            <div class="pay-header"><span>🇲🇽 México</span></div>
+            <div class="pay-details">
+                <div><span class="badge klar">KLAR</span></div>
+                <small>Clabe Interbancaria:</small>
+                <strong>661610003284706338</strong>
+            </div>
+        </div>
+    </div>
+`;
+
 // 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ AJUSTADO
 const CSS_MODERNO = `
 <style>
@@ -225,8 +249,8 @@ const CSS_MODERNO = `
 
     .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
 
-    /* MÉTODOS DE PAGO ESTILOS */
-    .payment-box { background: rgba(0, 0, 0, 0.7); border: 1px solid var(--card-border); border-radius: 12px; padding: 15px; margin-top: 15px; text-align: left; }
+    /* ✅ ESTILOS DE MÉTODOS DE PAGO */
+    .payment-box { background: rgba(0, 0, 0, 0.6); border: 1px solid var(--card-border); border-radius: 12px; padding: 15px; margin-top: 10px; text-align: left; }
     .pay-method { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
     .pay-method:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
     .pay-header { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; text-transform: uppercase; letter-spacing: 1px; }
@@ -236,23 +260,6 @@ const CSS_MODERNO = `
     .badge.klar { background: #000; border: 1px solid #00E5FF; color: #00E5FF; }
     .pay-details strong { display: block; font-size: 14px; margin-top: 5px; letter-spacing: 1px; color: #fff; font-family: monospace; user-select: all; cursor: pointer;}
     .pay-details small { color: var(--text-muted); font-size: 10px; }
-
-    /* ✅ ADAPTACIÓN RESPONSIVA PARA TELÉFONOS MÓVILES */
-    @media (max-width: 1024px) {
-        .dashboard-grid { 
-            grid-template-columns: 1fr !important; 
-            padding: 15px 15px 40px 15px !important;
-            gap: 20px !important;
-        }
-        .left-sidebar { min-height: auto !important; }
-        .top-header { flex-direction: column; gap: 15px; padding: 15px; text-align: center; }
-        .brand-logo { margin: 0 auto !important; justify-content: center; width: 100%; text-align: center; }
-        .search-top { width: 100%; }
-        .search-top input { width: 100% !important; max-width: 100%; }
-        .iframe-container { height: 400px; }
-        .action-panel, .main-card, .side-card { padding: 18px !important; }
-        .user-pill { justify-content: center; }
-    }
 </style>
 
 <script>
@@ -312,30 +319,6 @@ const CSS_MODERNO = `
         openTab(active);
     });
 </script>
-`;
-
-// CÓDIGO HTML DE MÉTODOS DE PAGO REUTILIZABLE
-const metodosDePagoHtml = `
-    <div class="payment-box" id="pagos-box">
-        <div class="pay-method">
-            <div class="pay-header"><span>🇨🇴 Colombia</span></div>
-            <div class="pay-details">
-                <div>
-                    <span class="badge nequi">Nequi</span>
-                    <span class="badge daviplata">DaviPlata</span>
-                </div>
-                <strong>3157705811</strong>
-            </div>
-        </div>
-        <div class="pay-method">
-            <div class="pay-header"><span>🇲🇽 México</span></div>
-            <div class="pay-details">
-                <div><span class="badge klar">KLAR</span></div>
-                <small>Clabe Interbancaria:</small>
-                <strong>661610003284706338</strong>
-            </div>
-        </div>
-    </div>
 `;
 
 app.use(async (req, res, next) => {
@@ -459,7 +442,6 @@ app.get('/', (req, res) => {
             ${logosReconocidos}
             ${contenidoForm}
             
-            <!-- BOTÓN MÉTODOS DE PAGO EN LOGIN -->
             <button type="button" onclick="let p = document.getElementById('pagos-box-login'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" style="background: transparent; border: 1px dashed rgba(0,210,255,0.5); color: #00D2FF; padding: 12px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-top: 15px; transition: 0.3s;">💳 Ver Métodos de Pago</button>
             <div id="pagos-box-login" style="display: none; margin-top: 10px;">
                 ${metodosDePagoHtml}
@@ -473,7 +455,6 @@ app.get('/', (req, res) => {
     `);
 });
 
-// ✅ RUTA DE REGISTRO CON PANTALLA SEGURA DE REDIRECCIÓN A WHATSAPP
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
@@ -877,7 +858,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // PANEL LATERAL DERECHO
             let botonesContactoProveedor = `
             <style>
                 .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
@@ -1012,6 +992,11 @@ app.get('/dash', async (req, res) => {
                                 ${botonesPlataformaHtml}
                             </div>
                             
+                            <div class="side-card" style="margin-top: 20px; background: rgba(0,0,0,0.6);">
+                                <h4 style="margin-bottom: 5px;">💳 MÉTODOS DE PAGO</h4>
+                                ${metodosDePagoHtml}
+                            </div>
+
                             ${botonesContactoProveedor}
                         </div>
 
