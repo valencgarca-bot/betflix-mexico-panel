@@ -413,13 +413,11 @@ app.get('/', (req, res) => {
     `);
 });
 
-// ✅ REPARACIÓN EN LA RUTA DE REGISTRO PARA ENVIAR USUARIO Y CONTRASEÑA A WHATSAPP
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
         
-        // MODIFICACIÓN APLICADA: Ahora se incluye la contraseña en el mensaje.
         const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
@@ -490,6 +488,15 @@ app.post('/admin/completar-reserva', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+// ✅ RUTA PARA CAMBIAR EL ROL DE UN USUARIO (CLIENTE <-> SUBADMIN)
+app.post('/admin/cambiar-rol', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    try {
+        await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]);
         res.redirect('/dash');
     } catch(err) { res.redirect('/dash'); }
 });
@@ -703,16 +710,18 @@ app.get('/dash', async (req, res) => {
             <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones de nuevas cuentas de tus clientes.</p></div>
             `;
             
-            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
-            let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
+            // ✅ NUEVA LÓGICA DE BASE DE DATOS ORGANIZADA Y JERÁRQUICA
             let tablaUsuariosHtml = "";
+            let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
+            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
             
             if (esAdminPrincipal || esSubAdmin) {
-                let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben') : usuarios.filter(u => u.creado_por === req.session.uid);
-                if (usuariosVisibles.length === 0) {
-                    tablaUsuariosHtml = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay clientes registrados aún.</td></tr>";
+                let usuariosBase = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben' && u.user !== 'dueño') : usuarios.filter(u => u.creado_por === req.session.uid);
+                
+                if (usuariosBase.length === 0) {
+                    tablaUsuariosHtml = "<tr><td colspan='5' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay usuarios registrados aún.</td></tr>";
                 } else {
-                    usuariosVisibles.forEach(u => {
+                    let renderRow = (u, prefix = "") => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
                         let listaCorreosHtml = "";
                         if (correosDelUsuario.length > 0) {
@@ -726,15 +735,64 @@ app.get('/dash', async (req, res) => {
                             }).join('');
                         } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados (Auto-eliminación 24h)</span>"; }
 
+                        let selectorRol = "";
+                        if (esAdminPrincipal) {
+                            selectorRol = `
+                            <form action="/admin/cambiar-rol" method="POST" style="margin-top: 5px; display: flex; flex-direction: column; gap: 5px;">
+                                <input type="hidden" name="user_id" value="${u.id}">
+                                <select name="nuevo_rol" style="background: #000; color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 4px; border-radius: 4px; font-size: 10px; outline: none; width: 100%;">
+                                    <option value="Cliente" ${u.rol === 'Cliente' ? 'selected' : ''}>Cliente</option>
+                                    <option value="Subadministrador" ${u.rol === 'Subadministrador' ? 'selected' : ''}>Subadmin</option>
+                                </select>
+                                <button type="submit" style="background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; width: 100%;">Cambiar</button>
+                            </form>`;
+                        } else {
+                            selectorRol = `<small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small>`;
+                        }
+
                         let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
 
-                        tablaUsuariosHtml += `<tr>
-                            <td style="font-weight: 500; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">Tel: ${u.telefono || 'N/A'}</small></td>
-                            <td style="vertical-align: top;"><div style="max-height: 160px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
-                            <td style="font-size: 12px; color: var(--text-muted); vertical-align: top;">${idCreadorTexto}</td>
-                            <td style="vertical-align: top; text-align: center;"><form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario?');" style="margin:0;"><input type="hidden" name="user_id" value="${u.id}"><button type="submit" style="background:#000000; border:1px solid rgba(255, 255, 255, 0.2); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer;">Eliminar</button></form></td>
+                        return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${prefix ? 'background: rgba(0,210,255,0.03);' : ''}">
+                            <td style="font-weight: 500; vertical-align: top; padding-left: ${prefix ? '30px' : '16px'};">
+                                <span style="${prefix ? 'color: var(--text-muted);' : 'color: #fff;'}">${prefix} ${u.user}</span>
+                                <br><small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:4px; display:block;">Tel: ${u.telefono || 'N/A'}</small>
+                            </td>
+                            <td style="vertical-align: top; width: 100px;">${selectorRol}</td>
+                            <td style="vertical-align: top; width: 40%;"><div style="max-height: 120px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
+                            <td style="font-size: 11px; color: var(--text-muted); vertical-align: top;">${idCreadorTexto}</td>
+                            <td style="vertical-align: top; text-align: center;">
+                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario? ${u.rol === 'Subadministrador' ? '¡ESTO BORRARÁ TAMBIÉN A TODOS SUS CLIENTES Y DATOS!' : ''}');" style="margin:0;">
+                                    <input type="hidden" name="user_id" value="${u.id}">
+                                    <button type="submit" style="background:#000000; border:1px solid rgba(255, 255, 255, 0.2); color:#E50914; padding:6px 12px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer;">Eliminar</button>
+                                </form>
+                            </td>
                         </tr>`;
-                    });
+                    };
+
+                    if (esAdminPrincipal) {
+                        let subadmins = usuariosBase.filter(u => u.rol === 'Subadministrador');
+                        let directos = usuariosBase.filter(u => u.rol !== 'Subadministrador' && !u.creado_por);
+                        let huerfanos = usuariosBase.filter(u => u.rol !== 'Subadministrador' && u.creado_por && !subadmins.find(sa => sa.id === u.creado_por));
+
+                        // 1. Mostrar Subadmins y sus hijos anidados
+                        subadmins.forEach(sa => {
+                            tablaUsuariosHtml += renderRow(sa);
+                            let children = usuariosBase.filter(u => u.creado_por === sa.id);
+                            children.forEach(child => {
+                                tablaUsuariosHtml += renderRow(child, "↳ ");
+                            });
+                        });
+
+                        // 2. Mostrar clientes directos al final
+                        if (directos.length > 0 || huerfanos.length > 0) {
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255,255,255,0.05); text-align: center; font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: 1px; padding: 10px;">CLIENTES DIRECTOS / REGISTRO PÚBLICO</td></tr>`;
+                            directos.forEach(d => tablaUsuariosHtml += renderRow(d));
+                            huerfanos.forEach(h => tablaUsuariosHtml += renderRow(h));
+                        }
+                    } else {
+                        // Subadmin solo ve sus hijos de manera normal
+                        usuariosBase.forEach(u => tablaUsuariosHtml += renderRow(u));
+                    }
                 }
             }
 
@@ -811,14 +869,25 @@ app.get('/dash', async (req, res) => {
                                 <button type="submit" class="btn-submit">Asignar Correos</button>
                             </form>
                         </div>
-                        <div id="main-base-datos" class="main-card">
-                            <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Base de Datos SyncBox</h3>
-                            <form action="/dash" method="GET" style="display:flex; gap:12px; margin-bottom:20px;">
-                                <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0;">
-                                <button type="submit" class="btn-action-sm" style="padding: 0 20px;">Buscar</button>
-                            </form>
-                            <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
-                                <table><thead><tr><th>Usuario</th><th style="width: 50%;">Correos Vinculados</th><th>Creador</th><th style="text-align:center;">Acción</th></tr></thead><tbody>${tablaUsuariosHtml}</tbody></table>
+                        <div id="main-base-datos" class="main-card" style="padding: 10px;">
+                            <div style="padding: 20px 20px 0 20px; display:flex; justify-content:space-between; align-items:center;">
+                                <h3 style="margin:0; font-size:20px; font-weight:500;">Base de Datos SyncBox</h3>
+                                <form action="/dash" method="GET" style="display:flex; gap:12px;">
+                                    <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0; padding: 10px;">
+                                    <button type="submit" class="btn-submit" style="padding: 10px 20px; width:auto;">Buscar</button>
+                                </form>
+                            </div>
+                            <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
+                                <table>
+                                    <thead><tr>
+                                        <th style="padding-left: 20px;">Usuario</th>
+                                        <th>Rol</th>
+                                        <th style="width: 40%;">Correos Vinculados</th>
+                                        <th>Creador</th>
+                                        <th style="text-align:center;">Acción</th>
+                                    </tr></thead>
+                                    <tbody>${tablaUsuariosHtml}</tbody>
+                                </table>
                             </div>
                         </div>` : ''}
 
@@ -865,6 +934,35 @@ app.get('/dash', async (req, res) => {
     }
 });
 
+// ✅ RUTA DE DESTRUCCIÓN EN CASCADA (Borra a un usuario y todo lo que haya creado)
+app.post('/admin/eliminar-usuario', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try {
+        const userId = req.body.user_id;
+        if (req.session.rol === 'Subadministrador') {
+            const u = await dbGet("SELECT creado_por FROM usuarios WHERE id = ?", [userId]);
+            if (!u || u.creado_por !== req.session.uid) return res.redirect('/dash');
+            
+            await dbRun("DELETE FROM correos WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM reservas WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM garantias WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
+        } else {
+            // EL ADMIN PRINCIPAL ELIMINA AL SUBADMIN Y A TODOS LOS HIJOS QUE ÉSTE CREÓ
+            const children = await dbAll("SELECT id FROM usuarios WHERE creado_por = ?", [userId]);
+            const idsToDelete = [userId, ...children.map(c => c.id)];
+            
+            for(let id of idsToDelete) {
+                await dbRun("DELETE FROM correos WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM reservas WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM garantias WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM usuarios WHERE id = ?", [id]);
+            }
+        }
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
 app.post('/admin/crear', async (req, res) => {
     let creado_por = (req.session.rol === 'Subadministrador') ? req.session.uid : null;
     try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
@@ -904,20 +1002,6 @@ app.post('/admin/asignar-correo', async (req, res) => {
 app.post('/admin/eliminar-correo', async (req, res) => {
     if (req.session.rol === 'Cliente') return res.redirect('/dash');
     try { await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/eliminar-usuario', async (req, res) => {
-    if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try {
-        const userId = req.body.user_id;
-        if (req.session.rol === 'Subadministrador') {
-            const u = await dbGet("SELECT creado_por FROM usuarios WHERE id = ?", [userId]);
-            if (!u || u.creado_por !== req.session.uid) return res.redirect('/dash');
-        }
-        await dbRun("DELETE FROM correos WHERE user_id = ?", [userId]);
-        await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
 });
 
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
