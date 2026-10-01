@@ -307,7 +307,6 @@ app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
 
-    // ✅ REEMPLAZO DE LA CAJA DE SINCRONIZACIÓN POR LOGOS
     let logosReconocidos = `
         <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; align-items: center;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg" height="24" alt="Netflix" style="filter: drop-shadow(0 0 5px rgba(229,9,20,0.8));">
@@ -348,7 +347,6 @@ app.get('/', (req, res) => {
         `;
     }
 
-    // ✅ BOTONES SOCIALES INTEGRADOS CON FLECHAS Y ETIQUETAS
     let redesSociales = `
         <style>
             .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; text-align: center; }
@@ -392,7 +390,7 @@ app.get('/', (req, res) => {
             .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
             .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
             .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
-            .help-text { color: #888; font-size: 12px; margin-top: 25px; line-height: 1.6; font-weight: 300; }
+            .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
             
             .contact-icon-btn {
                 background: #000; border: 1px solid rgba(255,255,255,0.15); padding: 10px; border-radius: 10px;
@@ -415,12 +413,14 @@ app.get('/', (req, res) => {
     `);
 });
 
+// ✅ REPARACIÓN EN LA RUTA DE REGISTRO PARA ENVIAR USUARIO Y CONTRASEÑA A WHATSAPP
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
         
-        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox como *${user.trim()}*. Mi número es ${telefono.trim()}. ¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
+        // MODIFICACIÓN APLICADA: Ahora se incluye la contraseña en el mensaje.
+        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
         res.send(`<script>
