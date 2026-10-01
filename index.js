@@ -67,7 +67,7 @@ setInterval(async () => {
     }
 }, 60 * 60 * 1000);
 
-// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ AJUSTADO
+// 🎬 ESTILO PURO NEGRO Y SERIES RESALTANDO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -133,7 +133,6 @@ const CSS_MODERNO = `
     .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
-    /* PANEL IZQUIERDO MÁS LARGO Y ESPACIOSO */
     .action-panel {
         background: var(--card-bg);
         border-radius: var(--radius); padding: 25px;
@@ -143,7 +142,6 @@ const CSS_MODERNO = `
     }
     .action-panel.active { display: flex; }
 
-    /* TARJETA CENTRAL MÁS CORTA Y COMPACTA */
     .main-card {
         background: var(--card-bg);
         border-radius: var(--radius); padding: 18px 25px; 
@@ -166,7 +164,6 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
-    /* VISOR OCULTO POR DEFECTO */
     .iframe-container {
         display: none; 
         background: rgba(0, 0, 0, 0.95);
@@ -446,6 +443,15 @@ app.post('/admin/resolver-garantia', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
+// ✅ NUEVA RUTA: MARCAR RESERVA COMO ATENDIDA
+app.post('/admin/completar-reserva', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
 app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'dueño' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
@@ -465,6 +471,9 @@ app.get('/dash', async (req, res) => {
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
             
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
+            
+            // ✅ EXTRAER RESERVAS DE LA BASE DE DATOS
+            const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
             let actividadesHtml = "";
             if (registros.length > 0) {
@@ -504,7 +513,6 @@ app.get('/dash', async (req, res) => {
                         </p>
                     </div>`;
 
-                // ✅ BOTÓN DE EXTRACCIÓN MODIFICADO SEGÚN LA SOLICITUD
                 if (key === 'netflix') {
                     controlesIzquierda += `
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
@@ -536,7 +544,7 @@ app.get('/dash', async (req, res) => {
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
                     <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
                         <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
+                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️️ Reportar Caída</h5>
                             <input type="hidden" name="plataforma" value="${key}">
                             <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
                             <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
@@ -564,7 +572,7 @@ app.get('/dash', async (req, res) => {
 
                 let avisoSinCorreo = "";
                 if (esCliente && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
                 }
 
                 panelesCentroHtml += `
@@ -585,6 +593,34 @@ app.get('/dash', async (req, res) => {
                     </form>
                 </div>`;
             });
+
+            // ✅ MÓDULO DE RESERVAS PARA EL ADMINISTRADOR
+            if (esAdminPrincipal || esSubAdmin) {
+                let listadoReservas = "";
+                if(reservas.length === 0) listadoReservas = "<p style='color:var(--text-muted); font-size:12px;'>No hay reservas pendientes.</p>";
+                reservas.forEach(r => {
+                    if(r.estado === 'Pendiente') {
+                        listadoReservas += `
+                        <div style="background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
+                            <strong style="color: var(--accent);">🛒 PEDIDO: ${r.cantidad} Cuentas</strong>
+                            <p style="margin: 5px 0; font-size: 12px;"><strong>Cliente:</strong> ${r.cliente_nombre} | <strong>WhatsApp:</strong> ${r.telefono}</p>
+                            <p style="margin: 5px 0 15px 0; font-size: 11px; color: var(--text-muted);"><strong>Fecha:</strong> ${r.fecha}</p>
+                            <form action="/admin/completar-reserva" method="POST" style="margin:0;">
+                                <input type="hidden" name="reserva_id" value="${r.id}">
+                                <button type="submit" class="btn-submit" style="background: #25d366; width: auto; padding: 8px 15px; font-size:11px;">Marcar como Atendido</button>
+                            </form>
+                        </div>`;
+                    }
+                });
+
+                panelesCentroHtml += `
+                <div id="main-reservas-admin" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: var(--accent);">🛒 Pedidos de Cuentas (Reservas)</h3>
+                    <div style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
+                        ${listadoReservas}
+                    </div>
+                </div>`;
+            }
 
             if (esAdminPrincipal || esSubAdmin) {
                 let listadoGarantias = "";
@@ -625,6 +661,7 @@ app.get('/dash', async (req, res) => {
             <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
             <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y clientes registrados.</p></div>
             <div id="action-garantias-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Sistema Inteligente</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Gestiona alertas y reemplazos en tiempo real.</p></div>
+            <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones de nuevas cuentas de tus clientes.</p></div>
             `;
             
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
@@ -760,6 +797,7 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
                                 <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
+                                <button class="menu-btn-item" onclick="openTab('reservas-admin')" style="color: var(--accent); font-weight: 600;">🛒 Ver Reservas</button>
                                 <button class="menu-btn-item" onclick="openTab('garantias-admin')" style="color: #00D2FF; font-weight: 600;">🚨 Alertas y Garantías</button>
                                 ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar accesos.</p>`}
                             </div>
@@ -844,7 +882,6 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// ✅ EXTRACCIÓN IMAP RESTAURADA: ORDENA POR UID PARA EXTRAER SIEMPRE EL ÚLTIMO
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
@@ -860,7 +897,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let queryStr = `"${correoIngresado}"`;
         if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
-        // BUSCAR SOLO ENCABEZADOS PRIMERO (Súper rápido y no satura la conexión)
         let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
         
         if (searchResults.length === 0) {
@@ -871,7 +907,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let mail = null;
 
         if (searchResults.length > 0) {
-            // ORDENAR POR FECHA Y UID PARA ENCONTRAR ESTRICTAMENTE EL ÚLTIMO
             searchResults.sort((a, b) => {
                 let dateA = new Date(a.attributes.date || 0);
                 let dateB = new Date(b.attributes.date || 0);
@@ -881,7 +916,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 
             let latestUid = searchResults[0].attributes.uid; 
             
-            // EXTRAER EL CUERPO COMPLETO SOLO DEL ÚLTIMO CORREO
             let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
             if (fetchedMsg.length > 0) {
                 messages = fetchedMsg;
@@ -903,12 +937,11 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
-    // ✅ CSS ACTUALIZADO: Filtro para invertir el correo a negro manteniendo logotipos intactos
+    // ✅ CSS ACTUALIZADO: Sin el cuadro de remitente, fondo 100% libre para el correo de Netflix
     const cssIframe = `<style>
-        body { font-family: 'Inter', sans-serif; background: #000; color: #cbd5e1; padding: 25px; margin: 0; line-height: 1.6; } 
-        h2, h3 { color: #f8fafc; font-weight: 400; }
-        .dark-email-wrapper { background: #fff; padding: 20px; border-radius: 12px; filter: invert(1) hue-rotate(180deg); overflow-x: auto; }
-        .dark-email-wrapper img { filter: invert(1) hue-rotate(180deg); } /* Vuelve a invertir las imágenes para que no se vean mal */
+        body { font-family: 'Inter', sans-serif; background: #000; color: #cbd5e1; margin: 0; padding: 0; } 
+        .dark-email-wrapper { filter: invert(1) hue-rotate(180deg); width: 100%; min-height: 100vh; overflow-x: auto; }
+        .dark-email-wrapper img { filter: invert(1) hue-rotate(180deg); }
     </style>`;
 
     try {
@@ -978,15 +1011,10 @@ app.post('/buscar', async (req, res) => {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
-        // ✅ CÓDIGO CORREO APLICANDO CLASE DARK-EMAIL-WRAPPER PARA FONDO NEGRO Y LETRAS BLANCAS
+        // ✅ EL CORREO AHORA SE MUESTRA LIBRE, SIN LA CAJA DE "REMITENTE/ASUNTO"
         res.send(`${cssIframe}
-            <div style="padding: 15px 20px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; background: #000000; margin-bottom: 25px;">
-                <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#a3a3a3; font-weight:300;">${mail.from.text}</span></div>
-                <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Asunto: <span style="color:#a3a3a3; font-weight:300;">${mail.subject}</span></div>
-                <div style="font-weight: 400; font-size: 11px; margin-top:10px; color:rgba(0, 210, 255, 0.9); text-transform:uppercase; letter-spacing:1px;">Buzón consultado: [SISTEMA ENCRIPTADO SYNCBOX]</div>
-            </div>
             <div class="dark-email-wrapper">
-                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#000;">${mail.text}</pre>`}
+                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#000; padding: 20px;">${mail.text}</pre>`}
             </div>
         `);
 
