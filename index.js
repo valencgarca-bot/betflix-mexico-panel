@@ -67,7 +67,7 @@ setInterval(async () => {
     }
 }, 60 * 60 * 1000);
 
-// 🎬 ESTILO PURO NEGRO Y SERIES RESALTANDO
+// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ AJUSTADO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -164,15 +164,14 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
+    /* ✅ VISOR MÁGICO: SIN BORDES, TOTALMENTE INYECTADO A LA PÁGINA */
     .iframe-container {
         display: none; 
-        background: rgba(0, 0, 0, 0.95);
-        border-radius: var(--radius); box-shadow: var(--shadow-elegant); 
-        border: 1px solid var(--card-border); height: 500px; flex-direction: column; backdrop-filter: var(--blur-effect); overflow: hidden;
-    }
-    .iframe-header {
-        padding: 16px 25px; background: #000000; border-bottom: 1px solid var(--card-border); 
-        font-weight: 500; font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
+        background: transparent; /* Fondo transparente */
+        border: none; /* Sin bordes */
+        height: 600px; 
+        width: 100%;
+        overflow: hidden;
     }
 
     .side-card {
@@ -389,6 +388,7 @@ app.post('/registrar-cliente', async (req, res) => {
     }
 });
 
+// ✅ REPARACIÓN DEL LOGIN Y FALLBACK DE EMERGENCIA
 app.post('/login', async (req, res) => {
     const user = (req.body.user || '').trim();
     const pass = (req.body.pass || '').trim();
@@ -443,7 +443,6 @@ app.post('/admin/resolver-garantia', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// ✅ NUEVA RUTA: MARCAR RESERVA COMO ATENDIDA
 app.post('/admin/completar-reserva', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
@@ -472,7 +471,6 @@ app.get('/dash', async (req, res) => {
             
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
             
-            // ✅ EXTRAER RESERVAS DE LA BASE DE DATOS
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
             let actividadesHtml = "";
@@ -544,7 +542,7 @@ app.get('/dash', async (req, res) => {
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
                     <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
                         <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️️ Reportar Caída</h5>
+                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
                             <input type="hidden" name="plataforma" value="${key}">
                             <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
                             <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
@@ -572,7 +570,7 @@ app.get('/dash', async (req, res) => {
 
                 let avisoSinCorreo = "";
                 if (esCliente && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
                 }
 
                 panelesCentroHtml += `
@@ -594,7 +592,6 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // ✅ MÓDULO DE RESERVAS PARA EL ADMINISTRADOR
             if (esAdminPrincipal || esSubAdmin) {
                 let listadoReservas = "";
                 if(reservas.length === 0) listadoReservas = "<p style='color:var(--text-muted); font-size:12px;'>No hay reservas pendientes.</p>";
@@ -783,9 +780,9 @@ app.get('/dash', async (req, res) => {
                             </div>
                         </div>` : ''}
 
+                        <!-- VISOR MÁGICO, TOTALMENTE INYECTADO SIN BORDES -->
                         <div class="iframe-container" id="visor-resultados">
-                            <div class="iframe-header">Data Vortex - VISOR DE RESULTADOS EN VIVO</div>
-                            <iframe name="marco_resultados" style="width: 100%; height: 100%; border: none;"></iframe>
+                            <iframe name="marco_resultados" allowtransparency="true" style="width: 100%; height: 100%; border: none; background: transparent;"></iframe>
                         </div>
                     </div>
 
@@ -937,11 +934,31 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
-    // ✅ CSS ACTUALIZADO: Sin el cuadro de remitente, fondo 100% libre para el correo de Netflix
+    // ✅ CSS ACTUALIZADO: Iframe 100% libre, sin bordes, inyectado directamente a la página
     const cssIframe = `<style>
-        body { font-family: 'Inter', sans-serif; background: #000; color: #cbd5e1; margin: 0; padding: 0; } 
-        .dark-email-wrapper { filter: invert(1) hue-rotate(180deg); width: 100%; min-height: 100vh; overflow-x: auto; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: transparent !important; 
+            color: #cbd5e1; 
+            margin: 0; 
+            padding: 0; 
+        } 
+        /* Scrollbar estético y disimulado */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 210, 255, 0.5); }
+        
+        .dark-email-wrapper { 
+            filter: invert(1) hue-rotate(180deg); 
+            width: 100%; 
+            min-height: 100%; 
+            padding: 0;
+            background: #000; 
+        }
         .dark-email-wrapper img { filter: invert(1) hue-rotate(180deg); }
+        
+        table { margin: 0 auto !important; }
     </style>`;
 
     try {
@@ -953,7 +970,7 @@ app.post('/buscar', async (req, res) => {
         if (esCliente) {
             const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
             if (!tieneAcceso) {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius:12px; background: #000;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes este correo asignado a tu cuenta. Solicítalo al proveedor.</p></div>`);
+                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes este correo asignado a tu cuenta. Solicítalo al proveedor.</p></div>`);
             }
         } else if (!esAdminPrincipal) {
             const dueñocuenta = await dbGet("SELECT c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [correoIngresado]);
@@ -961,10 +978,10 @@ app.post('/buscar', async (req, res) => {
                 const esPropia = (dueñocuenta.user_id === req.session.uid);
                 const esDeMiCliente = (dueñocuenta.creado_por === req.session.uid);
                 if (!esPropia && !esDeMiCliente) {
-                    return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius:12px; background: #000;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>El correo <strong>${correoIngresado}</strong> le pertenece al cliente <strong>${dueñocuenta.user}</strong></p></div>`);
+                    return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>El correo <strong>${correoIngresado}</strong> le pertenece al cliente <strong>${dueñocuenta.user}</strong></p></div>`);
                 }
             } else {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius:12px; background: #000;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes autorización en la base de datos para consultar este correo.</p></div>`);
+                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes autorización en la base de datos para consultar este correo.</p></div>`);
             }
         }
 
@@ -979,7 +996,7 @@ app.post('/buscar', async (req, res) => {
         } catch (error) { console.error("Error en búsqueda:", error); }
 
         if (!resultadoExitoso) { 
-            return res.send(`${cssIframe}<div style="text-align:center; padding:40px; border: 1px solid rgba(255,255,255,0.1); border-radius:12px; background: #000;">
+            return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;">
                 <h2 style="color:#f8fafc; font-weight:300;">Mensaje no encontrado</h2>
                 <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#00D2FF;">${email_search}</strong></p>
             </div>`); 
@@ -996,25 +1013,25 @@ app.post('/buscar', async (req, res) => {
                 { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
             ];
             for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:#000; border-radius:12px; display:inline-block; border: 1px solid rgba(255, 255, 255, 0.2); color:#fff;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:#000; border-radius:12px; display:inline-block; border: 1px solid rgba(255, 255, 255, 0.2);"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
+            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#fff;">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
+            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
         }
 
         if (accion === 'ip') {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
             let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#fff; margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:#000; border-radius:12px; display:inline-block; border: 1px solid rgba(255, 255, 255, 0.2);">${ipContenido}</div></div>`);
+            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;">${ipContenido}</div></div>`);
         }
 
         if (/\b\d{4,6}\b/.test(textoBruto) && plataforma === 'netflix') {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
-        // ✅ EL CORREO AHORA SE MUESTRA LIBRE, SIN LA CAJA DE "REMITENTE/ASUNTO"
+        // ✅ CORREO LIBRE E INYECTADO: SIN CUADRO DE REMITENTE NI ASUNTO
         res.send(`${cssIframe}
             <div class="dark-email-wrapper">
-                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#000; padding: 20px;">${mail.text}</pre>`}
+                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#fff; padding: 20px;">${mail.text}</pre>`}
             </div>
         `);
 
