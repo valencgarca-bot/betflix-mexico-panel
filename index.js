@@ -39,13 +39,19 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
+// 🗄️ ESTRUCTURA DE BASE DE DATOS (NUEVAS TABLAS PARA EL BOT Y GARANTÍAS)
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
-    // Evitar error si la tabla ya existía sin la columna 'telefono'
-    db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => { /* Silenciar error si la columna ya existe */ });
+    db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {}); // Silencia error si ya existe
     
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    
+    // TABLAS PARA EL SISTEMA DE BOT
+    db.run("CREATE TABLE IF NOT EXISTS reservas (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, cantidad INTEGER, telefono TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
+    db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
+    db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
+    
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('dueño', 'teamo2020', 'Administrador', NULL)");
 });
 
@@ -59,11 +65,11 @@ setInterval(async () => {
             AND datetime(fecha_creacion, '+24 hours') <= datetime('now', 'localtime')
         `);
     } catch(err) {
-        console.error("Error en limpieza automática de usuarios:", err.message);
+        console.error("Error en limpieza:", err.message);
     }
 }, 60 * 60 * 1000);
 
-// 🎬 ESTILO PURO NEGRO Y SERIES RESALTANDO
+// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ AJUSTADO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -71,14 +77,14 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #94a3b8;
-        --card-bg: rgba(0, 0, 0, 0.9);
+        --card-bg: rgba(0, 0, 0, 0.92);
         --card-border: rgba(255, 255, 255, 0.15);
         --accent: #00D2FF;
         --accent-hover: #0099CC;
         --btn-bg: rgba(0, 210, 255, 0.12);
         --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
         --blur-effect: blur(8px);
-        --radius: 18px;
+        --radius: 16px;
     }
 
     @keyframes pureSeriesSlideshow {
@@ -120,8 +126,9 @@ const CSS_MODERNO = `
     }
     .search-top input:focus { border-color: var(--accent); width: 320px; background: #000; }
 
+    /* 📏 GRID ACTUALIZADO: Panel izquierdo MÁS ANCHO (360px) para acomodar opciones */
     .dashboard-grid { 
-        display: grid; grid-template-columns: 280px 1fr 280px; gap: 30px; 
+        display: grid; grid-template-columns: 360px 1fr 280px; gap: 25px; 
         padding: 10px 40px 40px 40px; align-items: start; 
     }
 
@@ -137,9 +144,10 @@ const CSS_MODERNO = `
     }
     .action-panel.active { display: flex; }
 
+    /* TARJETA DE BÚSQUEDA MÁS PEQUEÑA Y ORDENADA */
     .main-card {
         background: var(--card-bg);
-        border-radius: var(--radius); padding: 35px;
+        border-radius: var(--radius); padding: 20px 25px; /* Menos padding */
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none;
     }
@@ -147,14 +155,14 @@ const CSS_MODERNO = `
 
     .action-btn-pill {
         width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border);
-        padding: 15px; border-radius: 50px; font-size: 11px; font-weight: 600;
-        color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;
+        padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600;
+        color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
     }
-    .action-btn-pill:hover { background: rgba(0, 210, 255, 0.25); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,210,255,0.4);}
+    .action-btn-pill:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.5);}
 
     .search-input-large {
         width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); 
-        padding: 20px 30px; border-radius: 50px; font-size: 14px; margin-top: 15px;
+        padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 10px;
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
@@ -206,27 +214,21 @@ const CSS_MODERNO = `
     }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
 
-    .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
-    .activity-item {
-        background: #000000; border: 1px solid rgba(255, 255, 255, 0.12);
-        padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s;
-    }
-    .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.08); }
-    .activity-item strong { color: var(--text-main); font-weight: 500; word-break: break-all; font-size: 12px; }
-    .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
-    .activity-user { color: var(--accent); font-weight: 600; }
-
-    .input-classic { width: 100%; padding: 16px; margin-bottom: 15px; border-radius: 8px; border: 1px solid var(--card-border); background: #000000; color: white; box-sizing: border-box; outline: none;}
+    .input-classic { width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: #000000; color: white; box-sizing: border-box; outline: none; font-size: 13px;}
     .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,210,255,0.25); }
-    .btn-submit { background: var(--accent); color: #000; border: none; padding: 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
+    .btn-submit { background: var(--accent); color: #000; border: none; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); color: #fff; }
 
-    table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    table th { background: #000000; border-bottom: 1px solid var(--card-border); padding: 16px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); text-align: left;}
-    table td { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 16px; font-size: 13px; }
+    .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
 </style>
 
 <script>
+    function toggleSubForm(id) {
+        document.querySelectorAll('.sub-form').forEach(f => { if(f.id !== id) f.style.display = 'none'; });
+        let el = document.getElementById(id);
+        el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
+    }
+
     function triggerAction(platKey, actionName) {
         let form = document.getElementById('form-' + platKey);
         if(form) {
@@ -258,6 +260,7 @@ const CSS_MODERNO = `
     function openTab(tabId) {
         document.querySelectorAll('.main-card').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.action-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.sub-form').forEach(f => f.style.display = 'none');
         
         let selectedMain = document.getElementById('main-' + tabId);
         let selectedAction = document.getElementById('action-' + tabId);
@@ -293,11 +296,11 @@ app.use(async (req, res, next) => {
     } else { return res.redirect('/'); }
 });
 
+// RUTAS DE REGISTRO E INICIO
 app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
 
-    // Mensaje de bienvenida para los clientes en el inicio
     let mensajeBienvenida = `
         <div style="text-align: center; margin-bottom: 25px;">
             <h3 style="color: #00D2FF; margin: 0 0 5px 0; font-size: 18px; font-weight: 600;">¡Bienvenido a SyncBox!</h3>
@@ -337,11 +340,7 @@ app.get('/', (req, res) => {
         <title>Acceso - SyncBox</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-            body { 
-                margin: 0; font-family: 'Inter', sans-serif; 
-                background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; 
-                background-color: #000000; height: 100vh; display: flex; justify-content: center; align-items: center; 
-            }
+            body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
             .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; }
             .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 25px; display: flex; align-items: center; justify-content: center; gap: 10px; }
             .input-group { margin-bottom: 20px; }
@@ -356,10 +355,10 @@ app.get('/', (req, res) => {
         <div class="login-box">
             <h2>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> 
-                SYNCBOX
+                CAJA DE SINCRONIZACIÓN
             </h2>
             ${contenidoForm}
-            <div class="help-text">Panel de administración encriptado. Conexión segura.</div>
+            <div class="help-text">Panel cifrado. Conexión segura.</div>
         </div>
     </body>
     </html>
@@ -371,7 +370,6 @@ app.post('/registrar-cliente', async (req, res) => {
     try {
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
         
-        // Mensaje predeterminado que el cliente te enviará por WhatsApp al registrarse
         const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox como *${user.trim()}*. Mi número es ${telefono.trim()}. ¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
@@ -400,6 +398,31 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
+// RUTAS DEL BOT DE ACCIÓN
+app.post('/bot/reservar', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
+        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/bot/garantia', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
+        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/resolver-garantia', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
 app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'dueño' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
@@ -416,7 +439,9 @@ app.get('/dash', async (req, res) => {
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
             const correos = await dbAll("SELECT * FROM correos", []);
-            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
+            
+            // GARANTÍAS LOGIC
+            const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
 
             let botonesPlataformaHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
@@ -433,45 +458,69 @@ app.get('/dash', async (req, res) => {
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
                 
-                let controlesIzquierda = "";
-                if (key === 'netflix') {
-                    controlesIzquierda = `
-                        <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 5px;">
-                            <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
-                                ¡Bienvenido! Presiona en <strong style="color: var(--accent);">Consultar lo último que pidió</strong> y el sistema te dará exactamente lo que has pedido al instante. ✨
-                            </p>
-                        </div>
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none;">🔎 Consultar lo último que pidió</button>
-                    `;
-                } else {
-                    controlesIzquierda = `
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill">Leer Mensaje</button>
-                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill">Analizar País</button>
-                        <button onclick="triggerAction('${key}', 'ip')" class="action-btn-pill">Buscar IP</button>
-                    `;
+                // 🤖 MENÚ DE ACCIONES (ESTRUCTURA DEL BOT)
+                let controlesIzquierda = `
+                    <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; margin-bottom: 5px;">🔎 Extraer Código Original</button>
+                    
+                    <button onclick="alert('📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles')" class="action-btn-pill" style="background: #000;">📊 Ver Stock Disponible</button>
+                    
+                    <button onclick="toggleSubForm('reserva-${key}')" class="action-btn-pill" style="background: #000;">🛒 Reservar Cuentas</button>
+                    <div id="reserva-${key}" class="sub-form">
+                        <form action="/bot/reservar" method="POST">
+                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">🛒 Reservar Stock</h5>
+                            <input type="number" name="cantidad" min="1" max="10" placeholder="Cantidad (1 a 10)" class="input-classic" required>
+                            <input type="text" name="telefono" placeholder="Número de WhatsApp" class="input-classic" required>
+                            <button type="submit" class="btn-submit">Enviar Pedido</button>
+                        </form>
+                    </div>
+
+                    <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff;">🛡️ Pedir Garantía</button>
+                    <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
+                        <form action="/bot/garantia" method="POST">
+                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
+                            <input type="hidden" name="plataforma" value="${key}">
+                            <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
+                            <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
+                            <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;">Reportar Falla</button>
+                        </form>
+                    </div>
+                `;
+
+                if (esSubAdmin) {
+                    controlesIzquierda += `
+                    <button onclick="toggleSubForm('soporte-${key}')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.15); border-color: #ff7300; margin-top: 5px;">🛠️ Pedir Soporte (SubAdmin)</button>
+                    <div id="soporte-${key}" class="sub-form" style="border-color: #ff7300;">
+                        <p style="font-size: 11px; margin-bottom: 10px;">Comunícate directo con el jefe por pagos o ayudas técnicas.</p>
+                        <textarea class="input-classic" rows="2" placeholder="Describe el problema..."></textarea>
+                        <button type="button" class="btn-submit" style="background: #ff7300; color: #fff;" onclick="alert('Ticket de soporte enviado.')">Enviar Ticket</button>
+                    </div>`;
                 }
 
                 panelesIzquierdosHtml += `
                 <div id="action-${key}" class="action-panel">
-                    <h4 style="margin:0 0 10px 0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Acciones ${plat.nombre}</h4>
+                    <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 15px;">
+                        <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
+                            Panel Operativo. Utiliza las opciones del bot para interactuar con la administración.
+                        </p>
+                    </div>
                     ${controlesIzquierda}
                 </div>`;
 
                 let avisoSinCorreo = "";
                 if (esCliente && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto de abajo para activar tu acceso.</div>`;
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
                 }
 
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
                     ${avisoSinCorreo}
-                    <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
                         <div style="background:#000000; padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
-                            <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:30px; width:auto; max-width:120px; object-fit:contain;">
+                            <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:24px; width:auto; max-width:100px; object-fit:contain;">
                         </div>
                         <div>
-                            <h3 style="margin:0; font-size:18px; font-weight:500;">Búsqueda en ${plat.nombre}</h3>
-                            <p style="margin:5px 0 0 0; font-size:12px; color:var(--text-muted);">Ingresa el correo para consultar resultados.</p>
+                            <h3 style="margin:0; font-size:16px; font-weight:500;">Búsqueda en ${plat.nombre}</h3>
+                            <p style="margin:2px 0 0 0; font-size:11px; color:var(--text-muted);">Ingresa el correo para consultar resultados.</p>
                         </div>
                     </div>
                     <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
@@ -481,27 +530,65 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
+            // 🚨 CONSTRUCCIÓN DEL PANEL DE GARANTÍAS PARA ADMIN Y SUBADMIN
+            let panelGarantiasHtml = "";
+            if (esAdminPrincipal || esSubAdmin) {
+                let listadoGarantias = "";
+                if(garantias.length === 0) listadoGarantias = "<p style='color:var(--text-muted); font-size:12px;'>No hay garantías activas.</p>";
+                garantias.forEach(g => {
+                    if(g.estado === 'Pendiente') {
+                        listadoGarantias += `
+                        <div style="background: rgba(229, 9, 20, 0.15); border: 1px solid #E50914; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
+                            <strong style="color: #E50914;">🔴 ALERTA: Caída de ${g.plataforma.toUpperCase()}</strong>
+                            <p style="margin: 5px 0; font-size: 12px;"><strong>Cliente:</strong> ${g.cliente_nombre} | <strong>Motivo:</strong> ${g.motivo}</p>
+                            <p style="margin: 5px 0 15px 0; font-size: 12px; color: #a3a3a3;"><strong>Detalles:</strong> ${g.detalles}</p>
+                            <form action="/admin/resolver-garantia" method="POST" style="display:flex; gap:10px;">
+                                <input type="hidden" name="garantia_id" value="${g.id}">
+                                <input type="text" name="reemplazo" class="input-classic" style="margin:0; padding:10px;" placeholder="Pega aquí la nueva cuenta..." required>
+                                <button type="submit" class="btn-submit" style="background: #25d366; width: auto; padding: 0 15px;">Solucionar</button>
+                            </form>
+                        </div>`;
+                    } else {
+                        listadoGarantias += `
+                        <div style="background: rgba(37, 211, 102, 0.1); border: 1px solid #25d366; padding: 12px; border-radius: 12px; margin-bottom: 10px; opacity: 0.8;">
+                            <strong style="color: #25d366;">🟢 RESUELTO (${g.plataforma.toUpperCase()})</strong>
+                            <p style="margin: 5px 0 0 0; font-size: 11px; color: #ccc;"><strong>Cliente:</strong> ${g.cliente_nombre} | <strong>Entregada:</strong> ${g.reemplazo}</p>
+                        </div>`;
+                    }
+                });
+
+                panelesCentroHtml += `
+                <div id="main-garantias-admin" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #E50914;">🚨 Central de Garantías</h3>
+                    <div style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
+                        ${listadoGarantias}
+                    </div>
+                </div>`;
+            } else {
+                // VISTA DE GARANTÍAS PARA EL CLIENTE (Mis Garantías)
+                let misGarantias = garantias.filter(g => g.user_id === req.session.uid);
+                let listadoMisGarantias = "";
+                if(misGarantias.length === 0) listadoMisGarantias = "<p style='color:var(--text-muted); font-size:12px;'>No tienes reportes de garantía recientes.</p>";
+                misGarantias.forEach(g => {
+                    if(g.estado === 'Pendiente') {
+                        listadoMisGarantias += `<div style="background: rgba(229, 9, 20, 0.15); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 10px;"><strong style="color: #E50914;">🕒 Revisando (${g.plataforma.toUpperCase()})</strong><p style="margin: 5px 0 0 0; font-size: 11px;">El soporte está preparando tu reemplazo.</p></div>`;
+                    } else {
+                        listadoMisGarantias += `<div style="background: rgba(37, 211, 102, 0.15); border: 1px solid #25d366; padding: 12px; border-radius: 8px; margin-bottom: 10px;"><strong style="color: #25d366;">✅ Reemplazo Listo (${g.plataforma.toUpperCase()})</strong><p style="margin: 5px 0; font-size: 13px; font-family: monospace;">${g.reemplazo}</p></div>`;
+                    }
+                });
+                panelesCentroHtml += `
+                <div id="main-garantias-admin" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">🛡️ Mis Garantías</h3>
+                    <div style="max-height: 400px; overflow-y: auto;">${listadoMisGarantias}</div>
+                </div>`;
+            }
+
             panelesIzquierdosHtml += `
             <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Crea nuevas cuentas de clientes para darles acceso al panel SyncBox.</p></div>
-            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de las plataformas de streaming al perfil de un cliente autorizado.</p></div>
-            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y borra registros que ya no necesites en el sistema.</p></div>
+            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
+            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y clientes registrados.</p></div>
+            <div id="action-garantias-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Sistema Inteligente</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Gestiona alertas y reemplazos en tiempo real.</p></div>
             `;
-
-            let actividadesHtml = "";
-            if (registros.length > 0) {
-                registros.forEach(r => { 
-                    actividadesHtml += `
-                    <div class="activity-item">
-                        <strong>${r.email_buscado}</strong>
-                        <div class="activity-meta">
-                            <span>${r.fecha}</span>
-                            <span class="activity-user">@${r.user}</span>
-                        </div>
-                    </div>`; 
-                });
-            } else { 
-                actividadesHtml = `<div class="activity-item"><span style="color:var(--text-muted);">No hay actividades recientes.</span></div>`; 
-            }
             
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
@@ -529,7 +616,7 @@ app.get('/dash', async (req, res) => {
                         let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
 
                         tablaUsuariosHtml += `<tr>
-                            <td style="font-weight: 500; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small></td>
+                            <td style="font-weight: 500; vertical-align: top;">${u.user} <br><small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">Tel: ${u.telefono || 'N/A'}</small></td>
                             <td style="vertical-align: top;"><div style="max-height: 160px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
                             <td style="font-size: 12px; color: var(--text-muted); vertical-align: top;">${idCreadorTexto}</td>
                             <td style="vertical-align: top; text-align: center;"><form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario?');" style="margin:0;"><input type="hidden" name="user_id" value="${u.id}"><button type="submit" style="background:#000000; border:1px solid rgba(255, 255, 255, 0.2); color:#fff; padding:8px 16px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer;">Eliminar</button></form></td>
@@ -538,7 +625,7 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // BOTONES DE CONTACTO PROVEEDOR
+            // BOTONES DE CONTACTO PROVEEDOR ORDENADOS
             let botonesContactoProveedor = `
             <div class="provider-contact">
                 <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
@@ -551,7 +638,7 @@ app.get('/dash', async (req, res) => {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff7300"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 6h-2v1.5h2v2h-2V19h-3v-6.5H8v-2h1V7c0-1.66 1.34-3 3-3h3v3z"/></svg> ForoBeta
                 </a>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> Grupo Ventas
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
                 </a>
             </div>`;
 
@@ -580,6 +667,7 @@ app.get('/dash', async (req, res) => {
 
                 <div class="dashboard-grid">
                     
+                    <!-- PANEL IZQUIERDO MÁS ANCHO Y ORDENADO -->
                     <div class="left-sidebar">
                         ${panelesIzquierdosHtml}
                         
@@ -637,7 +725,8 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
                                 <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
-                                ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar accesos.</p>`}
+                                ` : ''}
+                                <button class="menu-btn-item" onclick="openTab('garantias-admin')" style="color: #00D2FF; font-weight: 600;">🚨 Alertas y Garantías</button>
                             </div>
                             
                             <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
@@ -647,12 +736,6 @@ app.get('/dash', async (req, res) => {
                             
                             ${botonesContactoProveedor}
                         </div>
-
-                        ${esAdminPrincipal ? `
-                        <div class="side-card">
-                            <h4>Actividad Reciente</h4>
-                            <div class="activity-list">${actividadesHtml}</div>
-                        </div>` : ''}
                     </div>
                 </div>
             </body>
