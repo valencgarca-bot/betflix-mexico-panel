@@ -39,15 +39,13 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// 🗄️ ESTRUCTURA DE BASE DE DATOS (NUEVAS TABLAS PARA EL BOT Y GARANTÍAS)
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
-    db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {}); // Silencia error si ya existe
+    db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
     
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     
-    // TABLAS PARA EL SISTEMA DE BOT
     db.run("CREATE TABLE IF NOT EXISTS reservas (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, cantidad INTEGER, telefono TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
@@ -65,7 +63,7 @@ setInterval(async () => {
             AND datetime(fecha_creacion, '+24 hours') <= datetime('now', 'localtime')
         `);
     } catch(err) {
-        console.error("Error en limpieza:", err.message);
+        console.error("Error en limpieza automática de usuarios:", err.message);
     }
 }, 60 * 60 * 1000);
 
@@ -126,9 +124,8 @@ const CSS_MODERNO = `
     }
     .search-top input:focus { border-color: var(--accent); width: 320px; background: #000; }
 
-    /* 📏 GRID ACTUALIZADO: Panel izquierdo MÁS ANCHO (360px) para acomodar opciones */
     .dashboard-grid { 
-        display: grid; grid-template-columns: 360px 1fr 280px; gap: 25px; 
+        display: grid; grid-template-columns: 320px 1fr 280px; gap: 25px; 
         padding: 10px 40px 40px 40px; align-items: start; 
     }
 
@@ -136,18 +133,20 @@ const CSS_MODERNO = `
     .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
+    /* PANEL IZQUIERDO MÁS LARGO Y ESPACIOSO */
     .action-panel {
         background: var(--card-bg);
         border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px;
+        min-height: 380px; /* Forza a que el panel sea más largo visualmente */
     }
     .action-panel.active { display: flex; }
 
-    /* TARJETA DE BÚSQUEDA MÁS PEQUEÑA Y ORDENADA */
+    /* TARJETA CENTRAL MÁS CORTA Y COMPACTA */
     .main-card {
         background: var(--card-bg);
-        border-radius: var(--radius); padding: 20px 25px; /* Menos padding */
+        border-radius: var(--radius); padding: 18px 25px; /* Relleno reducido */
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none;
     }
@@ -162,12 +161,11 @@ const CSS_MODERNO = `
 
     .search-input-large {
         width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); 
-        padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 10px;
+        padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px;
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
-    /* VISOR OCULTO POR DEFECTO */
     .iframe-container {
         display: none; 
         background: rgba(0, 0, 0, 0.95);
@@ -195,7 +193,6 @@ const CSS_MODERNO = `
     .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
     .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
 
-    /* ESTILOS BOTONES CONTACTO */
     .provider-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
     .contact-btn {
         background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px;
@@ -213,6 +210,16 @@ const CSS_MODERNO = `
         text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif;
     }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
+
+    .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+    .activity-item {
+        background: #000000; border: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s;
+    }
+    .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.08); }
+    .activity-item strong { color: var(--text-main); font-weight: 500; word-break: break-all; font-size: 12px; }
+    .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
+    .activity-user { color: var(--accent); font-weight: 600; }
 
     .input-classic { width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: #000000; color: white; box-sizing: border-box; outline: none; font-size: 13px;}
     .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,210,255,0.25); }
@@ -296,7 +303,6 @@ app.use(async (req, res, next) => {
     } else { return res.redirect('/'); }
 });
 
-// RUTAS DE REGISTRO E INICIO
 app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
@@ -398,7 +404,6 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-// RUTAS DEL BOT DE ACCIÓN
 app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
@@ -440,7 +445,6 @@ app.get('/dash', async (req, res) => {
             const usuarios = await dbAll(query, params);
             const correos = await dbAll("SELECT * FROM correos", []);
             
-            // GARANTÍAS LOGIC
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
 
             let botonesPlataformaHtml = "";
@@ -458,7 +462,6 @@ app.get('/dash', async (req, res) => {
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
                 
-                // 🤖 MENÚ DE ACCIONES (ESTRUCTURA DEL BOT)
                 let controlesIzquierda = `
                     <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; margin-bottom: 5px;">🔎 Extraer Código Original</button>
                     
@@ -514,7 +517,7 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
                     ${avisoSinCorreo}
-                    <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+                    <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
                         <div style="background:#000000; padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
                             <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:24px; width:auto; max-width:100px; object-fit:contain;">
                         </div>
@@ -530,7 +533,6 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            // 🚨 CONSTRUCCIÓN DEL PANEL DE GARANTÍAS PARA ADMIN Y SUBADMIN
             let panelGarantiasHtml = "";
             if (esAdminPrincipal || esSubAdmin) {
                 let listadoGarantias = "";
@@ -565,7 +567,6 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>`;
             } else {
-                // VISTA DE GARANTÍAS PARA EL CLIENTE (Mis Garantías)
                 let misGarantias = garantias.filter(g => g.user_id === req.session.uid);
                 let listadoMisGarantias = "";
                 if(misGarantias.length === 0) listadoMisGarantias = "<p style='color:var(--text-muted); font-size:12px;'>No tienes reportes de garantía recientes.</p>";
@@ -625,7 +626,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // BOTONES DE CONTACTO PROVEEDOR ORDENADOS
             let botonesContactoProveedor = `
             <div class="provider-contact">
                 <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
@@ -667,7 +667,6 @@ app.get('/dash', async (req, res) => {
 
                 <div class="dashboard-grid">
                     
-                    <!-- PANEL IZQUIERDO MÁS ANCHO Y ORDENADO -->
                     <div class="left-sidebar">
                         ${panelesIzquierdosHtml}
                         
@@ -736,6 +735,12 @@ app.get('/dash', async (req, res) => {
                             
                             ${botonesContactoProveedor}
                         </div>
+
+                        ${esAdminPrincipal ? `
+                        <div class="side-card">
+                            <h4>Actividad Reciente</h4>
+                            <div class="activity-list">${actividadesHtml}</div>
+                        </div>` : ''}
                     </div>
                 </div>
             </body>
@@ -812,16 +817,20 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         await connection.openBox('INBOX');
         
         let keywordPlat = (plataforma && PLATAFORMAS[plataforma]) ? PLATAFORMAS[plataforma].keyword_from : '';
-
-        let messages = [];
-        let mail = null;
-
         let queryStr = `"${correoIngresado}"`;
         if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
+        // 1er Intento: Búsqueda estricta de Gmail
         let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
+        
+        // 2do Intento: Si falla (por los signos +), usa búsqueda general IMAP
+        if (searchResults.length === 0) {
+            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
+        }
+
         if (searchResults.length > 0) {
-            searchResults.sort((a, b) => new Date(b.attributes.date || 0) - new Date(a.attributes.date || 0));
+            // ORDENAR ESTRICTAMENTE POR UID DESCENDENTE PARA TRAER SIEMPRE EL ÚLTIMO
+            searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
             let latestUid = searchResults[0].attributes.uid; 
             
             let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
