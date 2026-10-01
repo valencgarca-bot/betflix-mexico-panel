@@ -303,10 +303,20 @@ app.use(async (req, res, next) => {
     } else { return res.redirect('/'); }
 });
 
-// ✅ PANTALLA DE INICIO (LOGIN) CON LOS BOTONES DE REDES SOCIALES INCORPORADOS
 app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
+
+    // ✅ REEMPLAZO DE LA CAJA DE SINCRONIZACIÓN POR LOGOS
+    let logosReconocidos = `
+        <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; align-items: center;">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg" height="24" alt="Netflix" style="filter: drop-shadow(0 0 5px rgba(229,9,20,0.8));">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg" height="30" alt="Disney+" style="filter: drop-shadow(0 0 5px rgba(255,255,255,0.8));">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/1/11/Amazon_Prime_Video_logo.svg" height="18" alt="Prime Video" style="filter: drop-shadow(0 0 5px rgba(0,168,225,0.8));">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/Max_logo.svg" height="20" alt="Max" style="filter: drop-shadow(0 0 5px rgba(0,43,231,0.8));">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg" height="24" alt="Spotify" style="filter: drop-shadow(0 0 5px rgba(30,215,96,0.8));">
+        </div>
+    `;
 
     let mensajeBienvenida = `
         <div style="text-align: center; margin-bottom: 25px;">
@@ -338,18 +348,31 @@ app.get('/', (req, res) => {
         `;
     }
 
-    // HTML de los botones sociales integrados para la pantalla de inicio
+    // ✅ BOTONES SOCIALES INTEGRADOS CON FLECHAS Y ETIQUETAS
     let redesSociales = `
-        <div class="login-contact">
-            <a href="https://t.me/SyncBox701" target="_blank" class="contact-icon-btn telegram" title="Telegram">
-                <svg viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-            </a>
-            <a href="https://wa.me/573012964169" target="_blank" class="contact-icon-btn whatsapp" title="WhatsApp Directo">
-                <svg viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-            </a>
-            <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo Ventas">
-                <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-            </a>
+        <style>
+            .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; text-align: center; }
+            .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
+        </style>
+        <div class="login-contact" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+            <div class="contact-wrapper">
+                <span class="contact-label">⬇ Mi Telegram</span>
+                <a href="https://t.me/SyncBox701" target="_blank" class="contact-icon-btn telegram" title="Telegram" style="width: 100%;">
+                    <svg viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
+                </a>
+            </div>
+            <div class="contact-wrapper">
+                <span class="contact-label">⬇ Mi WhatsApp</span>
+                <a href="https://wa.me/573012964169" target="_blank" class="contact-icon-btn whatsapp" title="WhatsApp Directo" style="width: 100%;">
+                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                </a>
+            </div>
+            <div class="contact-wrapper">
+                <span class="contact-label">⬇ Grupo de Ref.</span>
+                <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
+                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                </a>
+            </div>
         </div>
     `;
 
@@ -364,20 +387,16 @@ app.get('/', (req, res) => {
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
             body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
             .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; }
-            .login-box h2 { color: #ffffff; font-size: 24px; font-weight: 500; letter-spacing: 2px; margin-top: 0; margin-bottom: 25px; display: flex; align-items: center; justify-content: center; gap: 10px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
             .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
             .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
             .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
-            .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
+            .help-text { color: #888; font-size: 12px; margin-top: 25px; line-height: 1.6; font-weight: 300; }
             
-            /* ESTILOS PARA LOS BOTONES SOCIALES DEL LOGIN */
-            .login-contact { display: flex; justify-content: center; gap: 10px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; }
             .contact-icon-btn {
                 background: #000; border: 1px solid rgba(255,255,255,0.15); padding: 10px; border-radius: 10px;
                 display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s;
-                flex: 1;
             }
             .contact-icon-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
             .contact-icon-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
@@ -386,10 +405,7 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="login-box">
-            <h2>
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> 
-                CAJA DE SINCRONIZACIÓN
-            </h2>
+            ${logosReconocidos}
             ${contenidoForm}
             <div class="help-text">Panel cifrado. Conexión segura.</div>
             ${redesSociales}
@@ -730,6 +746,9 @@ app.get('/dash', async (req, res) => {
                 <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
                 </a>
+                <a href="https://forobeta.com/members/soncbox.367003/" target="_blank" class="contact-btn forobeta">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff7300"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 6h-2v1.5h2v2h-2V19h-3v-6.5H8v-2h1V7c0-1.66 1.34-3 3-3h3v3z"/></svg> ForoBeta
+                </a>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
                 </a>
@@ -984,7 +1003,7 @@ app.post('/buscar', async (req, res) => {
         .magic-email-wrapper h3, 
         .magic-email-wrapper a, 
         .magic-email-wrapper strong {
-            color: #00D2FF !important;
+            color: #00D2FF !important; 
             text-shadow: 0 0 8px rgba(0, 210, 255, 0.8), 0 0 15px rgba(0, 210, 255, 0.5) !important;
             text-decoration: none !important;
         }
