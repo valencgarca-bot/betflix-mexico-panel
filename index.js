@@ -392,7 +392,6 @@ app.post('/registrar-cliente', async (req, res) => {
     }
 });
 
-// ✅ REPARACIÓN DEL LOGIN Y FALLBACK DE EMERGENCIA
 app.post('/login', async (req, res) => {
     const user = (req.body.user || '').trim();
     const pass = (req.body.pass || '').trim();
@@ -503,10 +502,22 @@ app.get('/dash', async (req, res) => {
                         <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
                             Panel Operativo. Utiliza las opciones del bot para interactuar con la administración.
                         </p>
-                    </div>
+                    </div>`;
 
-                    <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; margin-bottom: 5px;">🔎 Extraer Código Original</button>
-                    
+                // ✅ BOTÓN DE EXTRACCIÓN MODIFICADO SEGÚN LA SOLICITUD
+                if (key === 'netflix') {
+                    controlesIzquierda += `
+                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
+                            <img src="${plat.logo}" alt="Netflix" style="height: 16px;"> DAR CLICK AQUÍ
+                        </button>
+                    `;
+                } else {
+                    controlesIzquierda += `
+                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; margin-bottom: 5px;">🔎 Extraer Código Original</button>
+                    `;
+                }
+
+                controlesIzquierda += `
                     <button onclick="alert('📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles')" class="action-btn-pill" style="background: #000;">📊 Ver Stock Disponible</button>
                     
                     <button onclick="toggleSubForm('reserva-${key}')" class="action-btn-pill" style="background: #000;">🛒 Reservar Cuentas</button>
@@ -520,7 +531,6 @@ app.get('/dash', async (req, res) => {
                     </div>
                 `;
 
-                // ✅ RESTRICCIÓN DE GARANTÍAS APLICADA (Los Clientes Normales NO verán esto)
                 if (esAdminPrincipal || esSubAdmin) {
                     controlesIzquierda += `
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
@@ -893,7 +903,13 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
-    const cssIframe = `<style>body { font-family: 'Inter', sans-serif; background: #000; color: #cbd5e1; padding: 25px; margin: 0; line-height: 1.6; } h2, h3 { color: #f8fafc; font-weight: 400; }</style>`;
+    // ✅ CSS ACTUALIZADO: Filtro para invertir el correo a negro manteniendo logotipos intactos
+    const cssIframe = `<style>
+        body { font-family: 'Inter', sans-serif; background: #000; color: #cbd5e1; padding: 25px; margin: 0; line-height: 1.6; } 
+        h2, h3 { color: #f8fafc; font-weight: 400; }
+        .dark-email-wrapper { background: #fff; padding: 20px; border-radius: 12px; filter: invert(1) hue-rotate(180deg); overflow-x: auto; }
+        .dark-email-wrapper img { filter: invert(1) hue-rotate(180deg); } /* Vuelve a invertir las imágenes para que no se vean mal */
+    </style>`;
 
     try {
         let correoIngresado = (email_search || "").trim().toLowerCase();
@@ -962,14 +978,15 @@ app.post('/buscar', async (req, res) => {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
         }
         
+        // ✅ CÓDIGO CORREO APLICANDO CLASE DARK-EMAIL-WRAPPER PARA FONDO NEGRO Y LETRAS BLANCAS
         res.send(`${cssIframe}
             <div style="padding: 15px 20px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; background: #000000; margin-bottom: 25px;">
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Remitente: <span style="color:#a3a3a3; font-weight:300;">${mail.from.text}</span></div>
                 <div style="font-weight: 500; font-size: 14px; margin-bottom: 5px; color: #f8fafc;">Asunto: <span style="color:#a3a3a3; font-weight:300;">${mail.subject}</span></div>
                 <div style="font-weight: 400; font-size: 11px; margin-top:10px; color:rgba(0, 210, 255, 0.9); text-transform:uppercase; letter-spacing:1px;">Buzón consultado: [SISTEMA ENCRIPTADO SYNCBOX]</div>
             </div>
-            <div style="background: #000000; padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
-                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#e2e8f0;">${mail.text}</pre>`}
+            <div class="dark-email-wrapper">
+                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#000;">${mail.text}</pre>`}
             </div>
         `);
 
