@@ -133,20 +133,18 @@ const CSS_MODERNO = `
     .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
 
-    /* PANEL IZQUIERDO MÁS LARGO Y ESPACIOSO */
     .action-panel {
         background: var(--card-bg);
         border-radius: var(--radius); padding: 25px;
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px;
-        min-height: 380px; /* Forza a que el panel sea más largo visualmente */
+        min-height: 380px; 
     }
     .action-panel.active { display: flex; }
 
-    /* TARJETA CENTRAL MÁS CORTA Y COMPACTA */
     .main-card {
         background: var(--card-bg);
-        border-radius: var(--radius); padding: 18px 25px; /* Relleno reducido */
+        border-radius: var(--radius); padding: 18px 25px; 
         box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
         backdrop-filter: var(--blur-effect); display: none;
     }
@@ -166,7 +164,6 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
-    /* VISOR OCULTO POR DEFECTO */
     .iframe-container {
         display: none; 
         background: rgba(0, 0, 0, 0.95);
@@ -405,7 +402,6 @@ app.post('/login', async (req, res) => {
             req.session.rol = row.rol;
             req.session.save(() => res.redirect('/dash'));
         } else if (user === 'dueño' && pass === 'teamo2020') {
-            // FALLBACK DE EMERGENCIA (Por si se corrompe la DB no pierdas acceso)
             req.session.uid = 1;
             req.session.user = 'dueño';
             req.session.rol = 'Administrador';
@@ -464,8 +460,26 @@ app.get('/dash', async (req, res) => {
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
             const correos = await dbAll("SELECT * FROM correos", []);
+            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
             
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
+
+            // ✅ AQUÍ ESTÁ LA VARIABLE QUE FALTABA Y CAUSABA EL ERROR
+            let actividadesHtml = "";
+            if (registros.length > 0) {
+                registros.forEach(r => { 
+                    actividadesHtml += `
+                    <div class="activity-item">
+                        <strong>${r.email_buscado}</strong>
+                        <div class="activity-meta">
+                            <span>${r.fecha}</span>
+                            <span class="activity-user">@${r.user}</span>
+                        </div>
+                    </div>`; 
+                });
+            } else { 
+                actividadesHtml = `<div class="activity-item"><span style="color:var(--text-muted);">No hay actividades recientes.</span></div>`; 
+            }
 
             let botonesPlataformaHtml = "";
             Object.keys(PLATAFORMAS).forEach(key => {
@@ -504,7 +518,7 @@ app.get('/dash', async (req, res) => {
                     </div>
                 `;
 
-                // ✅ RESTRICCIÓN DE GARANTÍAS APLICADA (Los Clientes Normales no verán esto)
+                // ✅ RESTRICCIÓN DE GARANTÍAS APLICADA (Los Clientes Normales NO verán esto)
                 if (esAdminPrincipal || esSubAdmin) {
                     controlesIzquierda += `
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
