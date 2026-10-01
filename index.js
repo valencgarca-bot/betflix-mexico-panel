@@ -50,9 +50,9 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
     
-    // CREAR ADMIN NUEVO POR DEFECTO Y ACTUALIZAR EL VIEJO SI EXISTE EN LA BASE DE DATOS
-    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)");
-    db.run("UPDATE usuarios SET user = 'andy', pass = '14032021' WHERE user = 'dueño'");
+    // ✅ CORRECCIÓN DE SEGURIDAD PARA EVITAR CAÍDAS DEL SERVIDOR
+    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)", (err) => {});
+    db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 });
 
 // 🧹 FUNCIÓN AUTOMÁTICA PARA BORRAR CLIENTES SIN CORREO DESPUÉS DE 24 HORAS
@@ -389,7 +389,6 @@ app.post('/registrar-cliente', async (req, res) => {
     }
 });
 
-// ✅ REPARACIÓN DEL LOGIN: ACTUALIZACIÓN A CREDENCIALES 'admin'
 app.post('/login', async (req, res) => {
     const user = (req.body.user || '').trim();
     const pass = (req.body.pass || '').trim();
@@ -933,34 +932,27 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
-    // ✅ CSS MÁGICO Y LUMINOSO: Transparencia absoluta y brillo neón en textos sin cuadros grises
+    // ✅ CSS MÁGICO Y DESTRUCTOR DE FONDOS GRISES: Obliga al HTML interno del correo a ser transparente
     const cssIframe = `<style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
         body, html { 
             font-family: 'Inter', sans-serif !important; 
             background: transparent !important; 
             margin: 0; padding: 0; 
-            color: #e2e8f0 !important;
         } 
         
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.5); border-radius: 10px; }
 
-        /* DESTRUYE CUALQUIER FONDO BLANCO O GRIS DEL CORREO ORIGINAL */
-        table, td, tr, div, center, body, span {
-            background: transparent !important;
-            background-color: transparent !important;
-            border: none !important;
-        }
-
-        /* EFECTO LUMINOSO PARA TEXTOS E IMÁGENES */
+        /* INYECCIÓN DE CSS: Elimina los colores de fondo de las tablas originales de Netflix */
+        * { background-color: transparent !important; background: transparent !important; }
+        
         .magic-email-wrapper * {
             font-family: 'Inter', sans-serif !important;
             color: #f8fafc !important;
-            text-shadow: 0 0 6px rgba(255, 255, 255, 0.3) !important;
             line-height: 1.6 !important;
+            border: none !important;
+            box-shadow: none !important;
         }
 
         .magic-email-wrapper h1, 
@@ -969,13 +961,21 @@ app.post('/buscar', async (req, res) => {
         .magic-email-wrapper a, 
         .magic-email-wrapper strong {
             color: #00D2FF !important; /* Brillo Cian Neón */
-            text-shadow: 0 0 10px rgba(0, 210, 255, 0.6), 0 0 20px rgba(0, 210, 255, 0.3) !important;
+            text-shadow: 0 0 8px rgba(0, 210, 255, 0.8), 0 0 15px rgba(0, 210, 255, 0.5) !important;
             text-decoration: none !important;
+        }
+
+        .magic-email-wrapper p, 
+        .magic-email-wrapper td, 
+        .magic-email-wrapper span {
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3) !important;
+            font-size: 15px !important;
         }
 
         .magic-email-wrapper img {
             filter: drop-shadow(0 0 15px rgba(229, 9, 20, 0.9)) !important; /* Resplandor rojo al logo de Netflix */
             border-radius: 4px !important;
+            max-width: 100% !important;
         }
 
         .magic-email-wrapper { 
