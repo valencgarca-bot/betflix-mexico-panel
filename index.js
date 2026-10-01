@@ -166,6 +166,7 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
 
+    /* VISOR OCULTO POR DEFECTO */
     .iframe-container {
         display: none; 
         background: rgba(0, 0, 0, 0.95);
@@ -299,7 +300,10 @@ app.use(async (req, res, next) => {
                 return res.send("<script>alert('⛔ ACCESO DENEGADO'); window.location='/';</script>");
             }
             next();
-        } catch (err) { return res.redirect('/'); }
+        } catch (err) { 
+            console.error(err);
+            return res.send(`<script>alert('Error Interno de Sesión: ${err.message}'); window.location='/';</script>`);
+        }
     } else { return res.redirect('/'); }
 });
 
@@ -388,15 +392,31 @@ app.post('/registrar-cliente', async (req, res) => {
     }
 });
 
+// ✅ REPARACIÓN DEL LOGIN Y FALLBACK DE EMERGENCIA
 app.post('/login', async (req, res) => {
-    const { user, pass } = req.body;
+    const user = (req.body.user || '').trim();
+    const pass = (req.body.pass || '').trim();
+    
     try {
         const row = await dbGet("SELECT * FROM usuarios WHERE user = ? AND pass = ?", [user, pass]);
         if (row) {
-            req.session.uid = row.id; req.session.user = row.user; req.session.rol = row.rol;
-            res.redirect('/dash');
-        } else { res.send("<script>alert('⛔ Datos incorrectos.'); window.location='/';</script>"); }
-    } catch (err) { res.redirect('/'); }
+            req.session.uid = row.id; 
+            req.session.user = row.user; 
+            req.session.rol = row.rol;
+            req.session.save(() => res.redirect('/dash'));
+        } else if (user === 'dueño' && pass === 'teamo2020') {
+            // FALLBACK DE EMERGENCIA (Por si se corrompe la DB no pierdas acceso)
+            req.session.uid = 1;
+            req.session.user = 'dueño';
+            req.session.rol = 'Administrador';
+            req.session.save(() => res.redirect('/dash'));
+        } else { 
+            res.send("<script>alert('⛔ Datos incorrectos.'); window.location='/';</script>"); 
+        }
+    } catch (err) { 
+        console.error(err);
+        res.send(`<script>alert('Error de base de datos en Login: ${err.message}'); window.location='/';</script>`); 
+    }
 });
 
 app.get('/logout', (req, res) => {
@@ -463,6 +483,12 @@ app.get('/dash', async (req, res) => {
                 let plat = PLATAFORMAS[key];
                 
                 let controlesIzquierda = `
+                    <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 15px;">
+                        <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
+                            Panel Operativo. Utiliza las opciones del bot para interactuar con la administración.
+                        </p>
+                    </div>
+
                     <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; margin-bottom: 5px;">🔎 Extraer Código Original</button>
                     
                     <button onclick="alert('📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles')" class="action-btn-pill" style="background: #000;">📊 Ver Stock Disponible</button>
@@ -476,8 +502,12 @@ app.get('/dash', async (req, res) => {
                             <button type="submit" class="btn-submit">Enviar Pedido</button>
                         </form>
                     </div>
+                `;
 
-                    <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff;">🛡️ Pedir Garantía</button>
+                // ✅ RESTRICCIÓN DE GARANTÍAS APLICADA (Los Clientes Normales no verán esto)
+                if (esAdminPrincipal || esSubAdmin) {
+                    controlesIzquierda += `
+                    <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
                     <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
                         <form action="/bot/garantia" method="POST">
                             <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
@@ -487,7 +517,8 @@ app.get('/dash', async (req, res) => {
                             <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;">Reportar Falla</button>
                         </form>
                     </div>
-                `;
+                    `;
+                }
 
                 if (esSubAdmin) {
                     controlesIzquierda += `
@@ -501,11 +532,7 @@ app.get('/dash', async (req, res) => {
 
                 panelesIzquierdosHtml += `
                 <div id="action-${key}" class="action-panel">
-                    <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 15px;">
-                        <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
-                            Panel Operativo. Utiliza las opciones del bot para interactuar con la administración.
-                        </p>
-                    </div>
+                    <h4 style="margin:0 0 10px 0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Acciones ${plat.nombre}</h4>
                     ${controlesIzquierda}
                 </div>`;
 
@@ -533,7 +560,6 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            let panelGarantiasHtml = "";
             if (esAdminPrincipal || esSubAdmin) {
                 let listadoGarantias = "";
                 if(garantias.length === 0) listadoGarantias = "<p style='color:var(--text-muted); font-size:12px;'>No hay garantías activas.</p>";
@@ -565,22 +591,6 @@ app.get('/dash', async (req, res) => {
                     <div style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
                         ${listadoGarantias}
                     </div>
-                </div>`;
-            } else {
-                let misGarantias = garantias.filter(g => g.user_id === req.session.uid);
-                let listadoMisGarantias = "";
-                if(misGarantias.length === 0) listadoMisGarantias = "<p style='color:var(--text-muted); font-size:12px;'>No tienes reportes de garantía recientes.</p>";
-                misGarantias.forEach(g => {
-                    if(g.estado === 'Pendiente') {
-                        listadoMisGarantias += `<div style="background: rgba(229, 9, 20, 0.15); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 10px;"><strong style="color: #E50914;">🕒 Revisando (${g.plataforma.toUpperCase()})</strong><p style="margin: 5px 0 0 0; font-size: 11px;">El soporte está preparando tu reemplazo.</p></div>`;
-                    } else {
-                        listadoMisGarantias += `<div style="background: rgba(37, 211, 102, 0.15); border: 1px solid #25d366; padding: 12px; border-radius: 8px; margin-bottom: 10px;"><strong style="color: #25d366;">✅ Reemplazo Listo (${g.plataforma.toUpperCase()})</strong><p style="margin: 5px 0; font-size: 13px; font-family: monospace;">${g.reemplazo}</p></div>`;
-                    }
-                });
-                panelesCentroHtml += `
-                <div id="main-garantias-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">🛡️ Mis Garantías</h3>
-                    <div style="max-height: 400px; overflow-y: auto;">${listadoMisGarantias}</div>
                 </div>`;
             }
 
@@ -724,8 +734,8 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
                                 <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
-                                ` : ''}
                                 <button class="menu-btn-item" onclick="openTab('garantias-admin')" style="color: #00D2FF; font-weight: 600;">🚨 Alertas y Garantías</button>
+                                ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar accesos.</p>`}
                             </div>
                             
                             <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
@@ -746,7 +756,10 @@ app.get('/dash', async (req, res) => {
             </body>
             </html>
             `);
-        } catch (err) { res.redirect('/'); }
+        } catch (err) { 
+            console.error(err);
+            res.send(`<script>alert('Error crítico de servidor: ${err.message}'); window.location='/';</script>`); 
+        }
     }
 });
 
@@ -805,6 +818,7 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
+// ✅ REPARACIÓN DEL ALGORITMO DE BÚSQUEDA IMAP (IGNORAR FECHA, EXTRAER ÚLTIMO UID)
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
@@ -820,16 +834,19 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let queryStr = `"${correoIngresado}"`;
         if (keywordPlat) queryStr += ` ${keywordPlat}`;
 
-        // 1er Intento: Búsqueda estricta de Gmail
-        let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
+        // Búsqueda 1: Intento Estricto
+        let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: [''] });
         
-        // 2do Intento: Si falla (por los signos +), usa búsqueda general IMAP
+        // Búsqueda 2: Si el signo + arruina la búsqueda, buscar texto general
         if (searchResults.length === 0) {
-            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
+            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: [''] });
         }
 
+        let messages = [];
+        let mail = null;
+
         if (searchResults.length > 0) {
-            // ORDENAR ESTRICTAMENTE POR UID DESCENDENTE PARA TRAER SIEMPRE EL ÚLTIMO
+            // ORDEN ESTRICTO POR IDENTIFICADOR ÚNICO (UID) DE GMAIL PARA TRAER SIEMPRE EL MÁS RECIENTE
             searchResults.sort((a, b) => b.attributes.uid - a.attributes.uid);
             let latestUid = searchResults[0].attributes.uid; 
             
