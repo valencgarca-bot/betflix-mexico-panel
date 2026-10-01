@@ -52,7 +52,7 @@ db.serialize(() => {
     
     // CREAR ADMIN NUEVO POR DEFECTO Y ACTUALIZAR EL VIEJO SI EXISTE EN LA BASE DE DATOS
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)");
-    db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'");
+    db.run("UPDATE usuarios SET user = 'andy', pass = '14032021' WHERE user = 'dueño'");
 });
 
 // 🧹 FUNCIÓN AUTOMÁTICA PARA BORRAR CLIENTES SIN CORREO DESPUÉS DE 24 HORAS
