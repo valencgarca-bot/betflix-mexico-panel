@@ -21,7 +21,7 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 📌 CORREO REAL RESTAURADO PARA QUE FUNCIONE EL IMAP Y DEVUELVA LA INFORMACIÓN
+// 📌 BUZÓN IMAP
 const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
@@ -54,21 +54,28 @@ db.serialize(() => {
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 });
 
-// 🧹 FUNCIÓN AUTOMÁTICA PARA BORRAR CLIENTES SIN CORREO DESPUÉS DE 24 HORAS
-setInterval(async () => {
+// 🧹 FUNCIÓN DE PURGA INMEDIATA: Borra clientes sin correos tras 24h
+async function purgarUsuariosInactivos() {
     try {
-        await dbRun(`
+        const res = await dbRun(`
             DELETE FROM usuarios 
             WHERE rol = 'Cliente' 
             AND id NOT IN (SELECT DISTINCT user_id FROM correos) 
             AND datetime(fecha_creacion, '+24 hours') <= datetime('now', 'localtime')
         `);
+        if (res.changes > 0) {
+            console.log(`🧹 Purgados ${res.changes} clientes inactivos de más de 24 horas.`);
+        }
     } catch(err) {
-        console.error("Error en limpieza automática de usuarios:", err.message);
+        console.error("Error al purgar usuarios inactivos:", err.message);
     }
-}, 60 * 60 * 1000);
+}
 
-// ✅ CÓDIGO HTML REUTILIZABLE PARA LOS MÉTODOS DE PAGO
+// Ejecuta al iniciar y revisa cada 15 minutos
+purgarUsuariosInactivos();
+setInterval(purgarUsuariosInactivos, 15 * 60 * 1000);
+
+// ✅ TARJETAS DE MÉTODOS DE PAGO: NU MÉXICO ACTUALIZADO
 const metodosDePagoHtml = `
     <div class="payment-box" style="background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: left;">
         <div class="pay-method" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -86,16 +93,16 @@ const metodosDePagoHtml = `
             <div class="pay-header" style="font-size: 14px; font-weight: 600; color: #00D2FF; margin-bottom: 8px; text-transform: uppercase;"><span>🇲🇽 México</span></div>
             <div class="pay-details" style="color: #ffffff;">
                 <div style="margin-bottom: 6px;">
-                    <span class="badge" style="background: #000; color: #00E5FF; border: 1px solid #00E5FF; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">KLAR</span>
+                    <span class="badge" style="background: #820AD1; color: #ffffff; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">Nu México</span>
                 </div>
-                <small style="color: #94a3b8; font-size: 11px;">Clabe Interbancaria:</small>
-                <strong style="display: block; font-size: 16px; margin-top: 2px; color: #ffffff; font-family: monospace; letter-spacing: 1px; user-select: all;">661610003284706338</strong>
+                <small style="color: #94a3b8; font-size: 11px;">Titular: <b style="color:#f8fafc;">Javier Rodriguez</b></small><br>
+                <small style="color: #94a3b8; font-size: 11px;">Concepto: <b style="color:#00D2FF;">Pago o Comida</b></small>
+                <strong style="display: block; font-size: 16px; margin-top: 4px; color: #ffffff; font-family: monospace; letter-spacing: 1px; user-select: all;">638180010102198561</strong>
             </div>
         </div>
     </div>
 `;
 
-// 🎬 ESTILO PURO NEGRO, SERIES RESALTANDO Y MENÚ AJUSTADO
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -251,7 +258,6 @@ const CSS_MODERNO = `
 
     .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
 
-    /* ✅ ADAPTACIÓN RESPONSIVA PARA TELÉFONOS MÓVILES */
     @media (max-width: 1024px) {
         .dashboard-grid { 
             grid-template-columns: 1fr !important; 
@@ -409,7 +415,7 @@ app.get('/', (req, res) => {
                 </a>
             </div>
             <div class="contact-wrapper">
-                <span class="contact-label">⬇ Ref. Grupo</span>
+                <span class="contact-label">⬇ Grupo de Ref.</span>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
                     <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
                 </a>
@@ -865,7 +871,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // PANEL LATERAL DERECHO
             let botonesContactoProveedor = `
             <style>
                 .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
@@ -994,6 +999,7 @@ app.get('/dash', async (req, res) => {
                                 ${botonesPlataformaHtml}
                             </div>
                             
+                            <!-- TARJETA FIJA DE MÉTODOS DE PAGO EN EL DASHBOARD -->
                             <div class="side-card" style="margin-top: 20px; background: rgba(0,0,0,0.6);">
                                 <h4 style="margin-bottom: 5px;">💳 MÉTODOS DE PAGO</h4>
                                 ${metodosDePagoHtml}
