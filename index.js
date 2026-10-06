@@ -61,11 +61,15 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
 
-    // 📋 REGISTRO DE ASIGNACIONES MANUALES (ADMIN)
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
+
+    // 🚀 ACTUALIZAR TELÉFONOS ANTIGUOS AGREGANDO +52 SI NO TIENEN EL +
+    db.run("UPDATE usuarios SET telefono = '+52' || telefono WHERE telefono IS NOT NULL AND telefono != '' AND telefono NOT LIKE '+%'", (err) => {
+        if (!err) console.log("✅ Números de teléfono antiguos actualizados con +52.");
+    });
 });
 
 // 🧹 FUNCIÓN DE PURGA INMEDIATA
@@ -297,7 +301,7 @@ app.get('/', (req, res) => {
             ${mensajeBienvenida}
             <form action="/registrar-cliente" method="POST">
                 <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
-                <div class="input-group"><input type="tel" name="telefono" placeholder="Número de WhatsApp (Ej: +57...)" required></div>
+                <div class="input-group"><input type="tel" name="telefono" placeholder="Número de WhatsApp (Ej: +57...)" pattern="^\\+[1-9]\\d{1,14}$" title="Debe incluir el símbolo + seguido del código de país (ej. +521234567890)" required></div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
                 <button type="submit" class="btn-submit">Completar Registro</button>
             </form>
@@ -314,33 +318,6 @@ app.get('/', (req, res) => {
             <div style="margin-top: 20px;"><a href="/?mode=registro" style="color: #00D2FF; font-size: 12px; text-decoration: none;">¿No tienes cuenta? Regístrate aquí</a></div>
         `;
     }
-
-    let redesSociales = `
-        <style>
-            .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; text-align: center; }
-            .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
-        </style>
-        <div class="login-contact" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Mi Telegram</span>
-                <a href="https://t.me/SyncBox701" target="_blank" class="contact-icon-btn telegram" title="Telegram" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                </a>
-            </div>
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Mi WhatsApp</span>
-                <a href="https://wa.me/573012964169" target="_blank" class="contact-icon-btn whatsapp" title="WhatsApp Directo" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                </a>
-            </div>
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Ref. Grupo</span>
-                <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                </a>
-            </div>
-        </div>
-    `;
 
     res.send(`
     <!DOCTYPE html>
@@ -359,14 +336,6 @@ app.get('/', (req, res) => {
             .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
             .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
             .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
-            
-            .contact-icon-btn {
-                background: #000; border: 1px solid rgba(255,255,255,0.15); padding: 10px; border-radius: 10px;
-                display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s;
-            }
-            .contact-icon-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
-            .contact-icon-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
-            .contact-icon-btn svg { width: 16px; height: 16px; }
         </style>
     </head>
     <body>
@@ -380,7 +349,6 @@ app.get('/', (req, res) => {
             </div>
 
             <div class="help-text">Panel cifrado. Conexión segura.</div>
-            ${redesSociales}
         </div>
     </body>
     </html>
@@ -499,9 +467,9 @@ app.post('/admin/cambiar-rol', async (req, res) => {
 
 app.post('/admin/crear', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
-    const { n, c, r } = req.body;
+    const { n, c, r, telefono } = req.body;
     try {
-        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid]);
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, telefono ? telefono.trim() : null]);
         res.redirect('/dash');
     } catch(err) {
         res.send("<script>alert('Error al crear usuario o ya existe.'); window.location='/dash';</script>");
@@ -589,7 +557,7 @@ app.post('/admin/asignar-creditos', async (req, res) => {
 
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
 
-        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
+        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\\s/g, '') : '';
         const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
         const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
 
@@ -629,26 +597,19 @@ app.post('/admin/asignar-manual', async (req, res) => {
     }
 
     try {
-        // 1. Verificar estrictamente que la cuenta exista en el stock y esté 'Disponible'
         const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE id = ? AND estado = 'Disponible'", [cuenta_id]);
         if (!cuenta) {
             return res.send("<script>alert('⛔ La cuenta seleccionada no existe o ya no está disponible en el stock.'); window.location='/dash';</script>");
         }
 
-        // 2. Verificar que no haya sido vinculada previamente
         const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
         if (yaVinculada) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
             return res.send("<script>alert('⛔ Esta cuenta ya se encontraba asignada a un usuario previamente.'); window.location='/dash';</script>");
         }
 
-        // 3. Cambiar estado a 'Asignada' en stock y registrar al receptor
         await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
-
-        // 4. Vincular el correo al usuario receptor (aparecerá en Mis cuentas)
         await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
-
-        // 5. Registrar la operación en el historial
         await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
 
         res.send(`<script>alert('✅ Asignación manual completada exitosamente.\\n\\nCuenta: ${cuenta.email}\\nEliminada del stock disponible y agregada a las cuentas del usuario.'); window.location='/dash';</script>`);
@@ -817,7 +778,7 @@ app.get('/dash', async (req, res) => {
                         <form action="/bot/reservar" method="POST">
                             <h5 style="margin: 0 0 10px 0; color: var(--accent);">🛒 Pedido Manual</h5>
                             <input type="number" name="cantidad" min="1" max="10" placeholder="Cantidad (1 a 10)" class="input-classic" required>
-                            <input type="text" name="telefono" placeholder="Número de WhatsApp" class="input-classic" required>
+                            <input type="tel" name="telefono" placeholder="WhatsApp (Ej: +52...)" pattern="^\\+[1-9]\\d{1,14}$" class="input-classic" required>
                             <button type="submit" class="btn-submit">Enviar Pedido</button>
                         </form>
                     </div>
@@ -894,7 +855,7 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div id="action-asignacion-manual" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Asignación Directa</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Selecciona una cuenta del stock disponible y entrégala manualmente a un usuario.</p>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Busca y selecciona una cuenta del stock disponible y entrégala manualmente a un usuario.</p>
                 </div>
                 <div id="action-creditos-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
@@ -904,10 +865,6 @@ app.get('/dash', async (req, res) => {
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Auditoría General</h4>
                     <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Registro inmutable de todas las cuentas reclamadas por subadministradores.</p>
                 </div>`;
-
-                let opcionesStockDispHtml = stockCuentasDisponibles.length > 0
-                    ? stockCuentasDisponibles.map(c => `<option value="${c.id}">${c.email} (${c.plataforma.toUpperCase()})</option>`).join('')
-                    : '<option value="" disabled>-- No hay cuentas disponibles en el stock --</option>';
 
                 let historialAsigRows = "";
                 if (historialAsignaciones.length === 0) {
@@ -987,29 +944,39 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
-                <!-- 🎯 TARJETA DE ASIGNACIÓN MANUAL -->
+                <!-- 🎯 TARJETA DE ASIGNACIÓN MANUAL CON LUPA Y BUSCADOR -->
                 <div id="main-asignacion-manual" class="main-card">
-                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual de Cuenta desde el Stock</h3>
+                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual de Cuenta</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
-                        Selecciona una cuenta disponible del stock para entregársela directamente a un usuario. La cuenta se eliminará inmediatamente del stock disponible y se vinculará a las cuentas del cliente.
+                        Busca y selecciona una cuenta del stock. Se eliminará inmediatamente del inventario y se vinculará al cliente elegido.
                     </p>
                     
-                    <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+                    <form id="form_asignacion_manual" action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Cuenta disponible en Stock:</label>
-                            <select name="cuenta_id" class="input-classic" required>
-                                <option value="" disabled selected>-- Selecciona una cuenta --</option>
-                                ${opcionesStockDispHtml}
-                            </select>
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar cuenta en Stock: 🔍</label>
+                            <input type="text" id="buscar_stock_input" class="input-classic" placeholder="Escribe el correo o parte de él..." onkeyup="buscarCuentaStock()" style="margin-bottom: 0;">
                         </div>
-                        <div style="margin-bottom: 20px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Usuario receptor (Cliente / Subadmin):</label>
-                            <select name="receptor_id" class="input-classic" required>
-                                <option value="" disabled selected>-- Selecciona al usuario --</option>
-                                ${clientesOpcionesHtml}
-                            </select>
+                        
+                        <div id="resultado_busqueda_stock" style="display:none; background: rgba(0,210,255,0.1); padding: 15px; border-radius: 8px; border: 1px solid #00D2FF; margin-bottom: 20px;">
                         </div>
-                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación manual? La cuenta se transferirá al usuario y se eliminará del stock disponible.');">Asignar Cuenta Manualmente</button>
+
+                        <div id="paso_2_asignacion" style="display:none;">
+                            <div style="margin-bottom: 15px; background: rgba(37,211,102,0.1); border: 1px solid #25d366; padding: 10px; border-radius: 8px;">
+                                <span style="color: #25d366; font-size: 12px; font-weight: bold;">Cuenta seleccionada:</span>
+                                <span id="cuenta_email_mostrar" style="color: #fff; font-size: 14px; margin-left: 10px; font-weight: bold;"></span>
+                            </div>
+                            <input type="hidden" name="cuenta_id" id="cuenta_id_seleccionada">
+                            
+                            <div style="margin-bottom: 20px;">
+                                <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
+                                <select name="receptor_id" id="receptor_id_select" class="input-classic" required>
+                                    <option value="" disabled selected>-- Selecciona al usuario --</option>
+                                    ${clientesOpcionesHtml}
+                                </select>
+                            </div>
+                            
+                            <button type="button" class="btn-submit" onclick="confirmarAsignacion(event)">Confirmar Asignación</button>
+                        </div>
                     </form>
 
                     <div style="margin-top: 30px;">
@@ -1296,31 +1263,47 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            let botonesContactoProveedor = `
-            <style>
-                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
-                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
-            </style>
-            <div class="provider-contact">
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi Telegram</span>
-                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi WhatsApp</span>
-                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Ref. Grupo</span>
-                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                    </a>
-                </div>
-            </div>`;
+            // 🎯 LÓGICA DE CONTACTO Y PRIVACIDAD SEGÚN TIPO DE USUARIO
+            let botonesContactoProveedor = "";
+            if (esAdminPrincipal || esSubAdmin) {
+                // Subadministrador ve tu información
+                botonesContactoProveedor = `
+                <div class="provider-contact">
+                    <div class="contact-wrapper">
+                        <span class="contact-label">⬇ Mi Telegram</span>
+                        <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
+                        </a>
+                    </div>
+                    <div class="contact-wrapper">
+                        <span class="contact-label">⬇ Mi WhatsApp</span>
+                        <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                        </a>
+                    </div>
+                    <div class="contact-wrapper">
+                        <span class="contact-label">⬇ Ref. Grupo</span>
+                        <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                            <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                        </a>
+                    </div>
+                </div>`;
+            } else if (esCliente && usuarioActual.creado_por) {
+                // Cliente solo ve el número de su subadministrador
+                const creador = usuarios.find(u => u.id === usuarioActual.creado_por);
+                if (creador && creador.telefono) {
+                    let telefonoLimpio = creador.telefono.replace(/\s+/g, '').replace('+', '');
+                    botonesContactoProveedor = `
+                    <div class="provider-contact" style="grid-template-columns: 1fr;">
+                        <div class="contact-wrapper">
+                            <span class="contact-label">⬇ Contactar a mi Proveedor</span>
+                            <a href="https://wa.me/${telefonoLimpio}" target="_blank" class="contact-btn whatsapp" style="width: 100%; height: 40px; font-size: 13px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp Proveedor
+                            </a>
+                        </div>
+                    </div>`;
+                }
+            }
 
             res.send(`
             <!DOCTYPE html>
@@ -1370,6 +1353,7 @@ app.get('/dash', async (req, res) => {
                             <form action="/admin/crear" method="POST">
                                 <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
                                 <input name="c" class="input-classic" placeholder="Contraseña" required>
+                                <input type="tel" name="telefono" class="input-classic" placeholder="WhatsApp (Ej: +52...)" pattern="^\\+[1-9]\\d{1,14}$" title="Debe incluir el símbolo + y código de país (Ej: +521234567890)">
                                 <select name="r" class="input-classic"><option value="Cliente">Cliente Normal</option>${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}</select>
                                 <button class="btn-submit">Guardar Usuario en DB</button>
                             </form>
@@ -1452,6 +1436,70 @@ app.get('/dash', async (req, res) => {
                         </div>` : ''}
                     </div>
                 </div>
+
+                <!-- 🚀 SCRIPT PARA BÚSQUEDA INTERACTIVA DEL STOCK -->
+                <script>
+                    const stockDisponibleJs = ${JSON.stringify(stockCuentasDisponibles || [])};
+                    
+                    function buscarCuentaStock() {
+                        let val = document.getElementById('buscar_stock_input').value.toLowerCase().trim();
+                        let resDiv = document.getElementById('resultado_busqueda_stock');
+                        let paso2 = document.getElementById('paso_2_asignacion');
+                        
+                        if (val.length < 3) {
+                            resDiv.style.display = 'none';
+                            paso2.style.display = 'none';
+                            return;
+                        }
+                        
+                        let encontradas = stockDisponibleJs.filter(c => c.email.toLowerCase().includes(val));
+                        
+                        if (encontradas.length > 0) {
+                            let html = encontradas.map(c => 
+                                '<div style="margin-bottom: 10px; padding: 15px; background: rgba(0,0,0,0.8); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">' +
+                                    '<h4 style="color:#00D2FF; margin:0 0 8px 0; display:flex; align-items:center; gap:5px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Cuenta encontrada</h4>' +
+                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Correo:</strong> ' + c.email + '</p>' +
+                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Estado:</strong> Disponible</p>' +
+                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Stock:</strong> Sí</p>' +
+                                    '<button type="button" class="btn-submit" style="margin-top: 10px; padding: 10px; font-size: 11px; width: auto;" onclick="prepararAsignacion(' + c.id + ', \\'' + c.email + '\\')">Seleccionar para asignar</button>' +
+                                '</div>'
+                            ).join('');
+                            resDiv.innerHTML = html;
+                            resDiv.style.display = 'block';
+                            paso2.style.display = 'none';
+                        } else {
+                            resDiv.innerHTML = '<p style="color: #E50914; margin:0; font-weight:600;">❌ No se encontró ninguna cuenta en el stock con ese texto.</p>';
+                            resDiv.style.display = 'block';
+                            paso2.style.display = 'none';
+                        }
+                    }
+
+                    function prepararAsignacion(id, email) {
+                        document.getElementById('cuenta_id_seleccionada').value = id;
+                        document.getElementById('cuenta_email_mostrar').innerText = email;
+                        document.getElementById('paso_2_asignacion').style.display = 'block';
+                        document.getElementById('resultado_busqueda_stock').style.display = 'none';
+                        document.getElementById('buscar_stock_input').value = email;
+                    }
+
+                    function confirmarAsignacion(event) {
+                        event.preventDefault();
+                        let receptorId = document.getElementById('receptor_id_select').value;
+                        let receptorSelect = document.getElementById('receptor_id_select');
+                        let receptorName = receptorId ? receptorSelect.options[receptorSelect.selectedIndex].text : '';
+                        let email = document.getElementById('cuenta_email_mostrar').innerText;
+
+                        if (!receptorId) {
+                            alert("Por favor, selecciona el usuario al que asignarás la cuenta.");
+                            return;
+                        }
+
+                        let conf = confirm('¿Confirmar asignación?\\n\\nCuenta: ' + email + '\\nUsuario: ' + receptorName + '\\n\\nLa cuenta será asignada y eliminada del stock.');
+                        if (conf) {
+                            document.getElementById('form_asignacion_manual').submit();
+                        }
+                    }
+                </script>
             </body>
             </html>
             `);
