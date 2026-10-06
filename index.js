@@ -39,7 +39,7 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS (MÓDULOS DE CRÉDITO Y DEUDA INTEGRADOS)
+// ✅ ESTRUCTURA DE BASE DE DATOS
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
@@ -329,7 +329,7 @@ app.get('/', (req, res) => {
             <div class="contact-wrapper">
                 <span class="contact-label">⬇ Ref. Grupo</span>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
                 </a>
             </div>
         </div>
@@ -685,7 +685,7 @@ app.get('/dash', async (req, res) => {
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
                     <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
                         <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
+                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️️ Reportar Caída</h5>
                             <input type="hidden" name="plataforma" value="${key}">
                             <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
                             <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
@@ -1072,7 +1072,7 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // ✅ DEFINICIÓN RESTAURADA DE BOTONES DE CONTACTO
+            // ✅ DECLARACIÓN DE BOTONES DE CONTACTO (RESTAURADO)
             let botonesContactoProveedor = `
             <style>
                 .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
@@ -1236,6 +1236,76 @@ app.get('/dash', async (req, res) => {
             res.send(`<script>alert('Error crítico de servidor: ${err.message}'); window.location='/';</script>`); 
         }
     }
+});
+
+app.post('/admin/eliminar-usuario', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try {
+        const userId = req.body.user_id;
+        if (req.session.rol === 'Subadministrador') {
+            const u = await dbGet("SELECT creado_por FROM usuarios WHERE id = ?", [userId]);
+            if (!u || u.creado_por !== req.session.uid) return res.redirect('/dash');
+            
+            await dbRun("DELETE FROM correos WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM reservas WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM garantias WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
+        } else {
+            const children = await dbAll("SELECT id FROM usuarios WHERE creado_por = ?", [userId]);
+            const idsToDelete = [userId, ...children.map(c => c.id)];
+            
+            for(let id of idsToDelete) {
+                await dbRun("DELETE FROM correos WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM reservas WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM garantias WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM usuarios WHERE id = ?", [id]);
+            }
+        }
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/crear', async (req, res) => {
+    let creado_por = (req.session.rol === 'Subadministrador') ? req.session.uid : null;
+    try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/asignar-correo', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try {
+        const targetUserId = req.body.user_id;
+
+        if (req.session.rol === 'Subadministrador') {
+            const verificaPropietario = await dbGet("SELECT id FROM usuarios WHERE id = ? AND (creado_por = ? OR id = ?)", [targetUserId, req.session.uid, req.session.uid]);
+            if (!verificaPropietario) return res.send("<script>alert('⛔ No tienes permiso.'); window.location='/dash';</script>");
+        }
+
+        const correosBrutos = req.body.email.trim();
+        const listaCorreos = correosBrutos.split(/[\s,]+/).filter(e => e.includes('@'));
+        
+        for (let email of listaCorreos) { 
+            email = email.toLowerCase();
+            const existente = await dbGet("SELECT c.id, c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [email]);
+            
+            if (existente) {
+                if (req.session.rol === 'Subadministrador' && existente.user_id === req.session.uid) {
+                    await dbRun("UPDATE correos SET user_id = ? WHERE id = ?", [targetUserId, existente.id]);
+                    await dbRun("DELETE FROM stock_cuentas WHERE email = ?", [email]);
+                } else {
+                    return res.send(`<script>alert('Esta cuenta ya está asignada. Cliente actual: ${existente.user} | Correo: ${email}'); window.location='/dash';</script>`);
+                }
+            } else {
+                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [email, targetUserId]); 
+                await dbRun("DELETE FROM stock_cuentas WHERE email = ?", [email]);
+            }
+        }
+        res.redirect('/dash'); 
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/eliminar-correo', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try { await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
