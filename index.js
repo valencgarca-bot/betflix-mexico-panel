@@ -39,11 +39,12 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS
+// ✅ ESTRUCTURA DE BASE DE DATOS (MÓDULOS DE CRÉDITO Y DEUDA INTEGRADOS)
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {});
+    db.run("ALTER TABLE usuarios ADD COLUMN deuda REAL DEFAULT 0", (err) => {}); // 💰 NUEVO: Deuda acumulada
     
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
@@ -52,7 +53,12 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
     
+    // TABLAS DEL MÓDULO DE STOCK CON HISTORIAL VINCULADO
     db.run("CREATE TABLE IF NOT EXISTS stock_cuentas (id INTEGER PRIMARY KEY AUTOINCREMENT, plataforma TEXT, email TEXT UNIQUE, estado TEXT DEFAULT 'Disponible', fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN comprador_id INTEGER", (err) => {});
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN compra_id INTEGER", (err) => {});
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN fecha_compra DATETIME", (err) => {});
+
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
 
@@ -69,13 +75,12 @@ async function purgarUsuariosInactivos() {
             AND id NOT IN (SELECT DISTINCT user_id FROM correos) 
             AND datetime(fecha_creacion, '+24 hours') <= datetime('now', 'localtime')
         `);
-        if (res.changes > 0) { console.log(`🧹 Purgados ${res.changes} clientes inactivos de más de 24 horas.`); }
-    } catch(err) { console.error("Error al purgar usuarios inactivos:", err.message); }
+        if (res.changes > 0) { console.log(`🧹 Purgados ${res.changes} clientes inactivos.`); }
+    } catch(err) {}
 }
 purgarUsuariosInactivos();
 setInterval(purgarUsuariosInactivos, 15 * 60 * 1000);
 
-// ✅ MÉTODOS DE PAGO
 const metodosDePagoHtml = `
     <div class="payment-box" style="background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: left;">
         <div class="pay-method" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -103,170 +108,73 @@ const metodosDePagoHtml = `
     </div>
 `;
 
-// 🎬 ESTILO PURO NEGRO Y GLOW
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
     :root {
-        --text-main: #f8fafc;
-        --text-muted: #94a3b8;
-        --card-bg: rgba(0, 0, 0, 0.92);
-        --card-border: rgba(255, 255, 255, 0.15);
-        --accent: #00D2FF;
-        --accent-hover: #0099CC;
-        --btn-bg: rgba(0, 210, 255, 0.12);
-        --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
-        --blur-effect: blur(8px);
-        --radius: 16px;
+        --text-main: #f8fafc; --text-muted: #94a3b8; --card-bg: rgba(0, 0, 0, 0.92);
+        --card-border: rgba(255, 255, 255, 0.15); --accent: #00D2FF; --accent-hover: #0099CC;
+        --btn-bg: rgba(0, 210, 255, 0.12); --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
+        --blur-effect: blur(8px); --radius: 16px;
     }
-
     @keyframes pureSeriesSlideshow {
         0% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
         33% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2000&auto=format&fit=crop'); }
         66% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
         100% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
     }
-
-    body { 
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        animation: pureSeriesSlideshow 16s ease infinite;
-        background-color: #000000;
-        color: var(--text-main); font-family: 'Inter', sans-serif; 
-        margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh;
-    }
-
+    body { background-size: cover; background-position: center; background-attachment: fixed; animation: pureSeriesSlideshow 16s ease infinite; background-color: #000000; color: var(--text-main); font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; }
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
-    
-    .user-pill {
-        display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; 
-        border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
-        border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s;
-    }
+    .user-pill { display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s; }
     .user-pill:hover { border-color: rgba(255, 255, 255, 0.4); transform: translateY(-2px); }
     .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
     .user-pill .info strong { color: var(--text-main); font-size: 13px; font-weight: 600; }
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
-
     .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
     .brand-logo strong { font-weight: 700; color: var(--accent); }
-
-    .search-top input {
-        background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px;
-        border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s;
-    }
+    .search-top input { background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px; border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s; }
     .search-top input:focus { border-color: var(--accent); width: 320px; background: #000; }
-
-    .dashboard-grid { 
-        display: grid; grid-template-columns: 320px 1fr 280px; gap: 25px; 
-        padding: 10px 40px 40px 40px; align-items: start; 
-    }
-
+    .dashboard-grid { display: grid; grid-template-columns: 320px 1fr 280px; gap: 25px; padding: 10px 40px 40px 40px; align-items: start; }
     .left-sidebar { display: flex; flex-direction: column; gap: 20px; height: 100%; min-height: 600px; }
     .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
-
-    .action-panel {
-        background: var(--card-bg);
-        border-radius: var(--radius); padding: 25px;
-        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
-        backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px;
-        min-height: 380px; 
-    }
+    .action-panel { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px; min-height: 380px; }
     .action-panel.active { display: flex; }
-
-    .main-card {
-        background: var(--card-bg);
-        border-radius: var(--radius); padding: 18px 25px; 
-        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
-        backdrop-filter: var(--blur-effect); display: none;
-    }
+    .main-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; }
     .main-card.active { display: block; }
-
-    .action-btn-pill {
-        width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border);
-        padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600;
-        color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
-    }
+    .action-btn-pill { width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
     .action-btn-pill:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.5);}
-
-    .search-input-large {
-        width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); 
-        padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px;
-        color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s;
-    }
+    .search-input-large { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px; color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s; }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
-
-    .iframe-container {
-        display: none; 
-        background: transparent;
-        border: none; 
-        height: 600px; 
-        width: 100%;
-        overflow: hidden;
-    }
-
-    .side-card {
-        background: var(--card-bg);
-        border-radius: var(--radius); padding: 25px;
-        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect);
-    }
+    .iframe-container { display: none; background: transparent; border: none; height: 600px; width: 100%; overflow: hidden; }
+    .side-card { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); }
     .side-card h4 { margin: 0 0 15px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;}
-    
     .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    .plat-mini-btn {
-        background: #000000; border: 1px solid var(--card-border); padding: 12px;
-        border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center;
-        height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-    }
+    .plat-mini-btn { background: #000000; border: 1px solid var(--card-border); padding: 12px; border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center; height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.8); }
     .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
     .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
-
     .provider-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    .contact-btn {
-        background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px;
-        display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s;
-    }
+    .contact-btn { background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s; }
     .contact-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
     .contact-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
-    .contact-btn img { width: 18px; height: 18px; object-fit: contain; }
-
     .menu-list { display: flex; flex-direction: column; gap: 8px; }
-    .menu-btn-item {
-        background: transparent; border: 1px solid transparent; padding: 10px 12px;
-        border-radius: 8px; font-size: 13px; color: var(--text-main); cursor: pointer; 
-        text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif;
-    }
+    .menu-btn-item { background: transparent; border: 1px solid transparent; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: var(--text-main); cursor: pointer; text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif; }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
-
     .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
-    .activity-item {
-        background: #000000; border: 1px solid rgba(255, 255, 255, 0.12);
-        padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s;
-    }
+    .activity-item { background: #000000; border: 1px solid rgba(255, 255, 255, 0.12); padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s; }
     .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.08); }
     .activity-item strong { color: var(--text-main); font-weight: 500; word-break: break-all; font-size: 12px; }
     .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
     .activity-user { color: var(--accent); font-weight: 600; }
-
     .input-classic { width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: #000000; color: white; box-sizing: border-box; outline: none; font-size: 13px;}
     .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,210,255,0.25); }
     .btn-submit { background: var(--accent); color: #000; border: none; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
     .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); color: #fff; }
-
     .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
-
-    /* ESTILOS TABLAS AUDITORIA Y STOCK */
     .table-modern { width: 100%; border-collapse: collapse; text-align: left; }
     .table-modern th { padding: 12px; font-size: 11px; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.15); text-transform: uppercase; letter-spacing: 1px; }
     .table-modern td { padding: 12px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #f8fafc; vertical-align: top; }
-    .badge-status { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-    .badge-status.disp { background: rgba(37,211,102,0.15); color: #25d366; border: 1px solid #25d366; }
-    .badge-status.vendida { background: rgba(229,9,20,0.15); color: #E50914; border: 1px solid #E50914; }
-
     @media (max-width: 1024px) {
         .dashboard-grid { grid-template-columns: 1fr !important; padding: 15px 15px 40px 15px !important; gap: 20px !important; }
         .left-sidebar { min-height: auto !important; }
@@ -358,7 +266,6 @@ app.use(async (req, res, next) => {
     } else { return res.redirect('/'); }
 });
 
-// ✅ PANTALLA DE INICIO (LOGIN)
 app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
@@ -424,7 +331,7 @@ app.get('/', (req, res) => {
             <div class="contact-wrapper">
                 <span class="contact-label">⬇ Ref. Grupo</span>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
                 </a>
             </div>
         </div>
@@ -475,6 +382,7 @@ app.get('/', (req, res) => {
     `);
 });
 
+// ✅ REPARACIÓN DEL REGISTRO Y WHATSAPP DE BIENVENIDA
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
@@ -545,6 +453,157 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
+// ✅ RUTA DEL ADMIN PARA CARGAR STOCK CON PROTECCIÓN ANTI-DUPLICADOS GLOBAL
+app.post('/admin/cargar-stock', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { correos_stock, plataforma } = req.body;
+    const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
+    
+    let duplicadas = 0;
+    let agregadas = 0;
+
+    try {
+        for (let email of lista) {
+            let e = email.trim().toLowerCase();
+            // Verifica si está en stock (libre o vendido) o si un usuario ya lo tiene asignado
+            let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
+            let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
+            
+            if(existsStock || existsCorreos) {
+                duplicadas++;
+            } else {
+                await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]);
+                agregadas++;
+            }
+        }
+        if(duplicadas > 0) {
+            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
+        } else {
+            res.redirect('/dash');
+        }
+    } catch(e) { res.redirect('/dash'); }
+});
+
+// ✅ RUTA DEL ADMIN PARA ASIGNAR CRÉDITOS Y ENVIAR WHATSAPP DE NOTIFICACIÓN
+app.post('/admin/asignar-creditos', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { subadmin_id, cantidad } = req.body;
+    
+    try {
+        const user = await dbGet("SELECT user, telefono, creditos FROM usuarios WHERE id = ?", [subadmin_id]);
+        if(!user) return res.redirect('/dash');
+
+        const monto = parseFloat(cantidad);
+        const nuevoSaldo = user.creditos + monto;
+
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
+
+        // Formatear mensaje para WhatsApp al usuario
+        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
+        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
+        const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
+
+        res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Aviso de Crédito</title>
+            <style>
+                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+                h2 { color: #00D2FF; font-size: 24px; }
+                .btn { background: #00D2FF; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(0,210,255,0.4); margin-top: 20px;}
+            </style>
+        </head>
+        <body>
+            <h2>✅ Crédito Asignado (${nuevoSaldo} Cr)</h2>
+            <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
+            <a href="${link}" class="btn">Notificar al Cliente</a>
+            <br><br>
+            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
+            <script>window.location.replace('${link}');</script>
+        </body>
+        </html>
+        `);
+    } catch(e) { res.redirect('/dash'); }
+});
+
+// ✅ RUTA DEL SUBADMIN PARA COMPRAR (USA CRÉDITO, ASIGNA AUTOMÁTICO, SUMA DEUDA, ENVÍA WA AL ADMIN)
+app.post('/subadmin/comprar', async (req, res) => {
+    if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
+    const paquete = parseInt(req.body.paquete);
+    let costo = 0;
+    
+    if (paquete === 5) costo = 832;
+    else if (paquete === 10) costo = 1560;
+    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
+
+    try {
+        const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
+        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
+
+        const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
+        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
+
+        const nuevoSaldo = user.creditos - costo;
+        const nuevaDeuda = (user.deuda || 0) + costo;
+
+        // Actualizar saldo y deuda
+        await dbRun("UPDATE usuarios SET creditos = ?, deuda = ? WHERE id = ?", [nuevoSaldo, nuevaDeuda, req.session.uid]);
+
+        // Registrar compra en el historial
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
+        const compraId = compraInfo.lastID;
+
+        let correosEntregados = [];
+        // Descontar del stock y asignar MAGIAMENTE al panel del usuario
+        for (let cuenta of disponibles) {
+            await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
+            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
+            // INYECCIÓN MÁGICA: Aparecerá instantáneamente en "Sus correos" para leer el código
+            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
+            correosEntregados.push(cuenta.email);
+        }
+
+        // Preparar notificación por WhatsApp para el Administrador
+        const fechaObj = new Date();
+        const fechaStr = fechaObj.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
+        const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
+
+        const adminPhone = "573012964169";
+        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* $${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
+        const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
+
+        res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Compra Exitosa</title>
+            <style>
+                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+                h2 { color: #25d366; font-size: 24px; }
+                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); margin-top: 20px;}
+            </style>
+        </head>
+        <body>
+            <h2>✅ Compra de ${paquete} Cuentas Exitosa</h2>
+            <p>Las cuentas ya están en tu panel listas para usar.<br>Notifica al administrador para confirmar el comprobante de la transacción.</p>
+            <a href="${linkAdmin}" class="btn">Enviar Comprobante</a>
+            <br><br>
+            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a>
+            <script>window.location.replace('${linkAdmin}');</script>
+        </body>
+        </html>
+        `);
+    } catch(e) {
+        res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
+    }
+});
+
+
 app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
@@ -585,60 +644,6 @@ app.post('/admin/cambiar-rol', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
-// ✅ RUTAS DEL MÓDULO DE STOCK Y CRÉDITOS
-app.post('/admin/cargar-stock', async (req, res) => {
-    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    const { correos_stock, plataforma } = req.body;
-    const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
-    try {
-        for (let email of lista) {
-            await dbRun("INSERT OR IGNORE INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, email.trim().toLowerCase()]);
-        }
-        res.redirect('/dash');
-    } catch(e) { res.redirect('/dash'); }
-});
-
-app.post('/admin/asignar-creditos', async (req, res) => {
-    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    const { subadmin_id, cantidad } = req.body;
-    try {
-        await dbRun("UPDATE usuarios SET creditos = creditos + ? WHERE id = ?", [parseFloat(cantidad), subadmin_id]);
-        res.redirect('/dash');
-    } catch(e) { res.redirect('/dash'); }
-});
-
-app.post('/subadmin/comprar', async (req, res) => {
-    if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
-    const paquete = parseInt(req.body.paquete);
-    let costo = 0;
-    
-    if (paquete === 5) costo = 832;
-    else if (paquete === 10) costo = 1560;
-    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
-
-    try {
-        const user = await dbGet("SELECT creditos FROM usuarios WHERE id = ?", [req.session.uid]);
-        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
-
-        const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
-        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock de cuentas disponible en este momento.'); window.location='/dash';</script>");
-
-        const nuevoSaldo = user.creditos - costo;
-        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, req.session.uid]);
-
-        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
-        const compraId = compraInfo.lastID;
-
-        for (let cuenta of disponibles) {
-            await dbRun("UPDATE stock_cuentas SET estado = 'Vendida' WHERE id = ?", [cuenta.id]);
-            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
-        }
-        res.send("<script>alert('✅ Compra realizada con éxito. Tus cuentas han sido entregadas.'); window.location='/dash';</script>");
-    } catch(e) {
-        res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
-    }
-});
-
 app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
@@ -648,7 +653,7 @@ app.get('/dash', async (req, res) => {
         try {
             const usuarioActual = await dbGet("SELECT * FROM usuarios WHERE id = ?", [req.session.uid]);
             let misCorreos = [];
-            if (esCliente) { misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]); }
+            if (esCliente || esSubAdmin) { misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]); }
 
             let query = esAdminPrincipal ? "SELECT * FROM usuarios" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
@@ -659,7 +664,6 @@ app.get('/dash', async (req, res) => {
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
-            // DATOS DEL STOCK Y CRÉDITOS
             const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible'");
             const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Vendida'");
             const historialCompras = await dbAll(`SELECT c.*, u.user as comprador FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
@@ -764,8 +768,8 @@ app.get('/dash', async (req, res) => {
                 </div>`;
 
                 let avisoSinCorreo = "";
-                if (esCliente && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas por el administrador. Comunícate mediante los botones de contacto para activar tu acceso (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
+                if ((esCliente || esSubAdmin) && misCorreos.length === 0) {
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas. Comunícate mediante los botones de contacto (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
                 }
 
                 panelesCentroHtml += `
@@ -782,12 +786,11 @@ app.get('/dash', async (req, res) => {
                     </div>
                     <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
                         <input type="hidden" name="plataforma" value="${key}">
-                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required ${esCliente && misCorreos.length === 0 ? 'disabled' : ''}>
+                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required ${((esCliente || esSubAdmin) && misCorreos.length === 0) ? 'disabled' : ''}>
                     </form>
                 </div>`;
             });
 
-            // ✅ PANELES ADMINISTRADOR: GESTIÓN DE STOCK Y CRÉDITOS
             if (esAdminPrincipal) {
                 panelesIzquierdosHtml += `
                 <div id="action-stock-admin" class="action-panel">
@@ -801,15 +804,15 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
                 <div id="action-creditos-admin" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Asigna o retira saldo de créditos a tus subadministradores.</p>
+                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Asigna saldo a tus subadministradores y controla su deuda acumulada.</p>
                 </div>
                 <div id="action-historial-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Auditoría General</h4>
                     <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Registro inmutable de todas las cuentas reclamadas por subadministradores.</p>
                 </div>`;
 
-                let subadminsOpcionesHtml = usuarios.filter(u => u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (Saldo actual: ${u.creditos})</option>`).join('');
+                let subadminsOpcionesHtml = usuarios.filter(u => u.rol === 'Subadministrador' || u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (Crédito: ${u.creditos} | Deuda: ${u.deuda})</option>`).join('');
 
                 let historialGlobalHtml = "";
                 if(historialCompras.length === 0) {
@@ -819,7 +822,7 @@ app.get('/dash', async (req, res) => {
                         let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
                         historialGlobalHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
+                            <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad}</td>
                             <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span><br><small style="color:var(--text-muted);">Quedan: ${c.saldo_nuevo}</small></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:10px;">${cuentasEntregadas}</div></td>
@@ -827,27 +830,52 @@ app.get('/dash', async (req, res) => {
                     });
                 }
 
+                // ✅ TABLA DEL ADN DE LAS CUENTAS (HISTORIAL COMPLETO DE STOCK)
+                const stockDB = await dbAll(`SELECT s.*, u.user as comprador FROM stock_cuentas s LEFT JOIN usuarios u ON s.comprador_id = u.id ORDER BY s.id DESC`);
+                let stockAdnHtml = "";
+                if(stockDB.length === 0) {
+                    stockAdnHtml = "<tr><td colspan='4' style='text-align:center;'>No hay stock en la base de datos.</td></tr>";
+                } else {
+                    stockDB.forEach(s => {
+                        let estadoBadge = s.estado === 'Disponible' ? '<span class="badge-status disp">Libre</span>' : '<span class="badge-status vendida">Vendida</span>';
+                        let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
+                        stockAdnHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="font-family:monospace; padding-left:20px;">${s.email}</td>
+                            <td>${estadoBadge}</td>
+                            <td>${compradorTxt}</td>
+                            <td><small style="color:var(--text-muted);">${s.fecha_carga}</small></td>
+                        </tr>`;
+                    });
+                }
+
                 panelesCentroHtml += `
                 <div id="main-stock-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">📦 Cargar Stock de Cuentas</h3>
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">📦 Cargar Stock y Ver Historial</h3>
                     <form action="/admin/cargar-stock" method="POST">
                         <select name="plataforma" class="input-classic" required>
                             <option value="netflix">Netflix</option>
                         </select>
-                        <textarea name="correos_stock" class="input-classic" placeholder="Pega los correos del lote de cuentas separados por espacio o saltos de línea..." rows="10" required></textarea>
-                        <button type="submit" class="btn-submit">Ingresar al Inventario</button>
+                        <textarea name="correos_stock" class="input-classic" placeholder="Pega los correos del lote de cuentas separados por espacio o saltos de línea..." rows="5" required></textarea>
+                        <button type="submit" class="btn-submit">Ingresar al Inventario Seguro</button>
                     </form>
+                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 25px;">
+                        <table class="table-modern">
+                            <thead><tr><th style="padding-left:20px;">Correo (ADN)</th><th>Estado</th><th>Comprador</th><th>Fecha Carga</th></tr></thead>
+                            <tbody>${stockAdnHtml}</tbody>
+                        </table>
+                    </div>
                 </div>
                 <div id="main-creditos-admin" class="main-card">
                     <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">💰 Asignación de Créditos</h3>
                     <form action="/admin/asignar-creditos" method="POST">
                         <select name="subadmin_id" class="input-classic" required>
-                            <option value="" disabled selected>Selecciona al Subadministrador...</option>
+                            <option value="" disabled selected>Selecciona al Usuario/Subadmin...</option>
                             ${subadminsOpcionesHtml}
                         </select>
                         <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Créditos a Asignar (Ej: 832)" required>
                         <p style="font-size:11px; color:var(--text-muted); margin-top:-5px; margin-bottom:15px;">* Usa números negativos para restar saldo.</p>
-                        <button type="submit" class="btn-submit">Actualizar Saldo</button>
+                        <button type="submit" class="btn-submit">Actualizar Saldo y Notificar por WhatsApp</button>
                     </form>
                 </div>
                 <div id="main-historial-compras" class="main-card" style="padding: 10px;">
@@ -864,7 +892,6 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            // ✅ PANEL SUBADMINISTRADOR: TIENDA Y MIS COMPRAS
             if (esSubAdmin) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
@@ -882,7 +909,7 @@ app.get('/dash', async (req, res) => {
                     misComprasHtml = "<tr><td colspan='4' style='text-align:center;'>Aún no has realizado compras.</td></tr>";
                 } else {
                     misComprasLog.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914;">${d.email_cuenta}</div>`).join('');
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
                         misComprasHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
@@ -909,7 +936,7 @@ app.get('/dash', async (req, res) => {
                             <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">832 Cr</p>
                             <form action="/subadmin/comprar" method="POST">
                                 <input type="hidden" name="paquete" value="5">
-                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 5 cuentas por 832 créditos?');">Comprar Ahora</button>
+                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 5 cuentas por 832 créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
                             </form>
                         </div>
                         
@@ -919,7 +946,7 @@ app.get('/dash', async (req, res) => {
                             <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">1,560 Cr</p>
                             <form action="/subadmin/comprar" method="POST">
                                 <input type="hidden" name="paquete" value="10">
-                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 10 cuentas por 1,560 créditos?');">Comprar Ahora</button>
+                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 10 cuentas por 1,560 créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
                             </form>
                         </div>
                     </div>
@@ -1008,7 +1035,6 @@ app.get('/dash', async (req, res) => {
             <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones manuales de tus clientes.</p></div>
             `;
             
-            // ✅ NUEVA LÓGICA DE BASE DE DATOS ORGANIZADA Y JERÁRQUICA
             let tablaUsuariosHtml = "";
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
@@ -1025,8 +1051,8 @@ app.get('/dash', async (req, res) => {
                         if (correosDelUsuario.length > 0) {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.4);" : "background: #000000; border: 1px solid rgba(255,255,255,0.1);";
-                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:6px 10px; border-radius:6px; font-size:11px; margin-bottom:5px;">
+                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.4);" : "background: #000000; border: 1px solid transparent;";
+                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px;">
                                     <span>${c.email}</span>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
                                 </div>`;
@@ -1042,32 +1068,34 @@ app.get('/dash', async (req, res) => {
                                     <option value="Cliente" ${u.rol === 'Cliente' ? 'selected' : ''}>Cliente</option>
                                     <option value="Subadministrador" ${u.rol === 'Subadministrador' ? 'selected' : ''}>Subadmin</option>
                                 </select>
-                                <button type="submit" style="background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer; width: 100%;">Cambiar</button>
+                                <button type="submit" style="background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; width: 100%;">Cambiar</button>
                             </form>`;
                         } else {
-                            selectorRol = `<small style="color:var(--text-muted); font-weight:300; font-size:11px; display:block;">${u.rol}</small>`;
+                            selectorRol = `<small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small>`;
                         }
 
-                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'Subadmin ID: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
+                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
                         let icon = u.rol === 'Subadministrador' ? '👑' : '👤';
                         let rowStyle = isChild ? 'background: rgba(0, 210, 255, 0.05);' : 'background: rgba(255, 255, 255, 0.02); border-top: 1px solid rgba(255,255,255,0.1);';
-                        let paddingL = isChild ? '40px' : '15px';
+                        let paddingL = isChild ? '40px' : '20px';
                         let dateFormated = u.fecha_creacion ? u.fecha_creacion.split('.')[0] : 'Desconocida';
 
                         return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${rowStyle}">
-                            <td style="font-weight: 500; vertical-align: top; padding: 12px 10px 12px ${paddingL}; position: relative;">
-                                ${isChild ? '<div style="position:absolute; left: 15px; top: 0; bottom: 0; width: 2px; background: rgba(0, 210, 255, 0.3);"></div>' : ''}
-                                <span style="color: #fff; font-size: 13px;">${icon} ${u.user}</span>
+                            <td style="font-weight: 500; vertical-align: top; padding-left: ${paddingL}; position: relative;">
+                                ${isChild ? '<div style="position:absolute; left: 20px; top: 0; bottom: 0; width: 2px; background: rgba(0, 210, 255, 0.3);"></div>' : ''}
+                                <span style="${isChild ? 'color: var(--text-muted);' : 'color: #fff;'} font-size: 13px;">${icon} ${u.user}</span>
                                 <div style="margin-top: 5px;">
                                     <small style="color:var(--accent); font-weight:600; font-size:10px; display:block;">🔑 Pass: ${u.pass}</small>
                                     <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📱 Tel: ${u.telefono || 'N/A'}</small>
                                     <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📅 Reg: ${dateFormated}</small>
+                                    ${esAdminPrincipal ? `<small style="color:#25d366; font-weight:600; font-size:10px; margin-top:2px; display:block;">🪙 Cr: ${u.creditos || 0}</small>
+                                    <small style="color:#E50914; font-weight:600; font-size:10px; margin-top:2px; display:block;">🔴 Deuda: ${u.deuda || 0}</small>` : ''}
                                 </div>
                             </td>
-                            <td style="vertical-align: top; width: 90px; padding: 12px 10px;">${selectorRol}</td>
-                            <td style="vertical-align: top; width: 40%; padding: 12px 10px;"><div style="max-height: 120px; overflow-y: auto; padding-right: 5px;">${listaCorreosHtml}</div></td>
-                            <td style="font-size: 10px; color: var(--text-muted); vertical-align: top; padding: 12px 10px;">${idCreadorTexto}</td>
-                            <td style="vertical-align: top; text-align: center; padding: 12px 10px;">
+                            <td style="vertical-align: top; width: 100px;">${selectorRol}</td>
+                            <td style="vertical-align: top; width: 40%;"><div style="max-height: 120px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
+                            <td style="font-size: 11px; color: var(--text-muted); vertical-align: top;">${idCreadorTexto}</td>
+                            <td style="vertical-align: top; text-align: center;">
                                 <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario? ${u.rol === 'Subadministrador' ? '¡ESTO BORRARÁ TAMBIÉN A TODOS SUS CLIENTES Y DATOS!' : ''}');" style="margin:0;">
                                     <input type="hidden" name="user_id" value="${u.id}">
                                     <button type="submit" style="background: rgba(229,9,20,0.1); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; transition:0.3s;" onmouseover="this.style.background='#E50914'; this.style.color='#fff';" onmouseout="this.style.background='rgba(229,9,20,0.1)'; this.style.color='#E50914';">Eliminar</button>
@@ -1080,7 +1108,6 @@ app.get('/dash', async (req, res) => {
                         let subadmins = usuariosVisibles.filter(u => u.rol === 'Subadministrador');
                         let otrosClientes = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
 
-                        // 1. Mostrar Subadmins y sus hijos anidados
                         subadmins.forEach(sa => {
                             tablaUsuariosHtml += renderRow(sa, false);
                             let children = otrosClientes.filter(c => c.creado_por === sa.id);
@@ -1091,44 +1118,16 @@ app.get('/dash', async (req, res) => {
                             }
                         });
 
-                        // 2. Mostrar clientes directos o públicos
                         let huerfanos = otrosClientes.filter(c => !c.creado_por || !subadmins.find(sa => sa.id === c.creado_por));
                         if (huerfanos.length > 0) {
                             tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255,255,255,0.08); text-align: center; font-size: 12px; color: #00D2FF; font-weight: 600; padding: 10px; letter-spacing: 1px;">CLIENTES DIRECTOS / PÚBLICOS</td></tr>`;
                             huerfanos.forEach(h => tablaUsuariosHtml += renderRow(h, false));
                         }
                     } else {
-                        // Subadmin solo ve sus hijos de manera normal
                         usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u, false));
                     }
                 }
             }
-
-            let botonesContactoProveedor = `
-            <style>
-                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
-                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
-            </style>
-            <div class="provider-contact">
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi Telegram</span>
-                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi WhatsApp</span>
-                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Ref. Grupo</span>
-                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
-                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                    </a>
-                </div>
-            </div>`;
 
             res.send(`
             <!DOCTYPE html>
@@ -1243,13 +1242,6 @@ app.get('/dash', async (req, res) => {
                             <div class="plat-mini-grid">
                                 ${botonesPlataformaHtml}
                             </div>
-                            
-                            <div class="side-card" style="margin-top: 20px; background: rgba(0,0,0,0.6);">
-                                <h4 style="margin-bottom: 5px;">💳 MÉTODOS DE PAGO</h4>
-                                ${metodosDePagoHtml}
-                            </div>
-
-                            ${botonesContactoProveedor}
                         </div>
 
                         ${esAdminPrincipal ? `
@@ -1268,126 +1260,6 @@ app.get('/dash', async (req, res) => {
         }
     }
 });
-
-app.post('/admin/eliminar-usuario', async (req, res) => {
-    if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try {
-        const userId = req.body.user_id;
-        if (req.session.rol === 'Subadministrador') {
-            const u = await dbGet("SELECT creado_por FROM usuarios WHERE id = ?", [userId]);
-            if (!u || u.creado_por !== req.session.uid) return res.redirect('/dash');
-            
-            await dbRun("DELETE FROM correos WHERE user_id = ?", [userId]);
-            await dbRun("DELETE FROM reservas WHERE user_id = ?", [userId]);
-            await dbRun("DELETE FROM garantias WHERE user_id = ?", [userId]);
-            await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
-        } else {
-            const children = await dbAll("SELECT id FROM usuarios WHERE creado_por = ?", [userId]);
-            const idsToDelete = [userId, ...children.map(c => c.id)];
-            
-            for(let id of idsToDelete) {
-                await dbRun("DELETE FROM correos WHERE user_id = ?", [id]);
-                await dbRun("DELETE FROM reservas WHERE user_id = ?", [id]);
-                await dbRun("DELETE FROM garantias WHERE user_id = ?", [id]);
-                await dbRun("DELETE FROM usuarios WHERE id = ?", [id]);
-            }
-        }
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/crear', async (req, res) => {
-    let creado_por = (req.session.rol === 'Subadministrador') ? req.session.uid : null;
-    try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/asignar-correo', async (req, res) => {
-    if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try {
-        const targetUserId = req.body.user_id;
-
-        if (req.session.rol === 'Subadministrador') {
-            const verificaPropietario = await dbGet("SELECT id FROM usuarios WHERE id = ? AND (creado_por = ? OR id = ?)", [targetUserId, req.session.uid, req.session.uid]);
-            if (!verificaPropietario) return res.send("<script>alert('⛔ No tienes permiso.'); window.location='/dash';</script>");
-        }
-
-        const correosBrutos = req.body.email.trim();
-        const listaCorreos = correosBrutos.split(/[\s,]+/).filter(e => e.includes('@'));
-        
-        for (let email of listaCorreos) { 
-            email = email.toLowerCase();
-            const existente = await dbGet("SELECT c.id, c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [email]);
-            
-            if (existente) {
-                if (req.session.rol === 'Subadministrador' && existente.user_id === req.session.uid) {
-                    await dbRun("UPDATE correos SET user_id = ? WHERE id = ?", [targetUserId, existente.id]);
-                } else {
-                    return res.send(`<script>alert('Esta cuenta ya está asignada. Cliente actual: ${existente.user} | Correo: ${email}'); window.location='/dash';</script>`);
-                }
-            } else {
-                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [email, targetUserId]); 
-            }
-        }
-        res.redirect('/dash'); 
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/eliminar-correo', async (req, res) => {
-    if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try { await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
-});
-
-async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
-    const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
-    if (!passwordSeleccionado) return null;
-
-    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 5000 } };
-    let connection = null;
-
-    try {
-        connection = await imaps.connect(config);
-        await connection.openBox('INBOX');
-        
-        let keywordPlat = (plataforma && PLATAFORMAS[plataforma]) ? PLATAFORMAS[plataforma].keyword_from : '';
-        let queryStr = `"${correoIngresado}"`;
-        if (keywordPlat) queryStr += ` ${keywordPlat}`;
-
-        let searchResults = await connection.search([['X-GM-RAW', queryStr]], { bodies: ['HEADER.FIELDS (DATE)'] });
-        
-        if (searchResults.length === 0) {
-            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
-        }
-
-        let messages = [];
-        let mail = null;
-
-        if (searchResults.length > 0) {
-            searchResults.sort((a, b) => {
-                let dateA = new Date(a.attributes.date || 0);
-                let dateB = new Date(b.attributes.date || 0);
-                if (dateB.getTime() !== dateA.getTime()) { return dateB - dateA; }
-                return b.attributes.uid - a.attributes.uid;
-            });
-
-            let latestUid = searchResults[0].attributes.uid; 
-            
-            let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
-            if (fetchedMsg.length > 0) {
-                messages = fetchedMsg;
-                mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
-            }
-        }
-        
-        connection.end();
-        if (messages.length > 0 && mail) { return { messages, mail, buzón: correoBuzon }; }
-        return null;
-
-    } catch (err) {
-        console.log(`⚠ Advertencia IMAP (${correoBuzon}):`, err.message);
-        if (connection) connection.end();
-        return null;
-    }
-}
 
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
@@ -1455,9 +1327,9 @@ app.post('/buscar', async (req, res) => {
         let correoIngresado = (email_search || "").trim().toLowerCase();
         
         const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
-        const esCliente = (req.session.rol === 'Cliente');
+        const esCliente = (req.session.rol === 'Cliente' || req.session.rol === 'Subadministrador');
 
-        if (esCliente) {
+        if (esCliente && !esAdminPrincipal) {
             const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
             if (!tieneAcceso) {
                 return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes este correo asignado a tu cuenta. Solicítalo al proveedor.</p></div>`);
