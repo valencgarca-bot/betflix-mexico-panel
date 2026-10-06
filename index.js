@@ -21,7 +21,6 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 📌 CORREO REAL RESTAURADO PARA QUE FUNCIONE EL IMAP Y DEVUELVA LA INFORMACIÓN
 const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
@@ -39,9 +38,11 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS
+// ✅ BASE DE DATOS ESTRUCTURADA
 db.serialize(() => {
-    db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
+    db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT, creditos REAL DEFAULT 0, deuda REAL DEFAULT 0)");
+    
+    // Si la tabla ya existe y le faltan columnas (Manejo de errores silencioso)
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN deuda REAL DEFAULT 0", (err) => {});
@@ -53,7 +54,7 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
     
-    db.run("CREATE TABLE IF NOT EXISTS stock_cuentas (id INTEGER PRIMARY KEY AUTOINCREMENT, plataforma TEXT, email TEXT UNIQUE, estado TEXT DEFAULT 'Disponible', fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("CREATE TABLE IF NOT EXISTS stock_cuentas (id INTEGER PRIMARY KEY AUTOINCREMENT, plataforma TEXT, email TEXT UNIQUE, estado TEXT DEFAULT 'Disponible', fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')), comprador_id INTEGER, compra_id INTEGER, fecha_compra DATETIME)");
     db.run("ALTER TABLE stock_cuentas ADD COLUMN comprador_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN compra_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN fecha_compra DATETIME", (err) => {});
@@ -65,10 +66,10 @@ db.serialize(() => {
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 });
 
-// 🧹 FUNCIÓN DE PURGA INMEDIATA
+// 🧹 PURGA INACTIVOS
 async function purgarUsuariosInactivos() {
     try {
-        const res = await dbRun(`
+        await dbRun(`
             DELETE FROM usuarios 
             WHERE rol = 'Cliente' 
             AND id NOT IN (SELECT DISTINCT user_id FROM correos) 
@@ -79,7 +80,8 @@ async function purgarUsuariosInactivos() {
 purgarUsuariosInactivos();
 setInterval(purgarUsuariosInactivos, 15 * 60 * 1000);
 
-const metodosDePagoHtml = `
+// ✅ CONSTANTES GLOBALES DE INTERFAZ (EVITA ERRORES 'NOT DEFINED')
+const METODOS_PAGO_HTML = `
     <div class="payment-box" style="background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: left;">
         <div class="pay-method" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
             <div class="pay-header" style="font-size: 14px; font-weight: 600; color: #00D2FF; margin-bottom: 8px; text-transform: uppercase;"><span>🇨🇴 Colombia</span></div>
@@ -103,6 +105,47 @@ const metodosDePagoHtml = `
                 <strong style="display: block; font-size: 16px; margin-top: 4px; color: #ffffff; font-family: monospace; letter-spacing: 1px; user-select: all;">638180010102198561</strong>
             </div>
         </div>
+    </div>
+`;
+
+const BOTONES_CONTACTO_HTML = `
+    <style>
+        .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; flex: 1; }
+        .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); margin-bottom: 4px; }
+        .contact-btn { background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s; width: 100%; box-sizing: border-box; }
+        .contact-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
+        .contact-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
+        .contact-btn svg { width: 16px; height: 16px; }
+    </style>
+    <div class="provider-contact" style="display: flex; justify-content: space-between; gap: 10px; margin-top: 20px;">
+        <div class="contact-wrapper">
+            <span class="contact-label">⬇ Mi Telegram</span>
+            <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
+                <svg viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
+            </a>
+        </div>
+        <div class="contact-wrapper">
+            <span class="contact-label">⬇ Mi WhatsApp</span>
+            <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp">
+                <svg viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+            </a>
+        </div>
+        <div class="contact-wrapper">
+            <span class="contact-label">⬇ Ref. Grupo</span>
+            <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp">
+                <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+            </a>
+        </div>
+    </div>
+`;
+
+const LOGOS_HTML = `
+    <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; align-items: center;">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg" height="24" alt="Netflix" style="filter: drop-shadow(0 0 5px rgba(229,9,20,0.8));">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg" height="30" alt="Disney+" style="filter: drop-shadow(0 0 5px rgba(255,255,255,0.8));">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/1/11/Amazon_Prime_Video_logo.svg" height="18" alt="Prime Video" style="filter: drop-shadow(0 0 5px rgba(0,168,225,0.8));">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/Max_logo.svg" height="20" alt="Max" style="filter: drop-shadow(0 0 5px rgba(0,43,231,0.8));">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg" height="24" alt="Spotify" style="filter: drop-shadow(0 0 5px rgba(30,215,96,0.8));">
     </div>
 `;
 
@@ -184,6 +227,8 @@ const CSS_MODERNO = `
         .action-panel, .main-card, .side-card { padding: 18px !important; }
         .user-pill { justify-content: center; }
         .table-modern { display: block; overflow-x: auto; white-space: nowrap; }
+        .provider-contact { flex-direction: column; align-items: stretch; }
+        .contact-btn { width: 100%; margin-bottom: 5px; }
     }
 </style>
 
@@ -246,6 +291,7 @@ const CSS_MODERNO = `
 </script>
 `;
 
+// ✅ RUTAS
 app.use(async (req, res, next) => {
     const rutasAbiertas = ['/', '/login', '/logout', '/registrar-cliente'];
     if (rutasAbiertas.includes(req.path)) return next();
@@ -267,16 +313,6 @@ app.use(async (req, res, next) => {
 app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
-
-    let logosReconocidos = `
-        <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; align-items: center;">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg" height="24" alt="Netflix" style="filter: drop-shadow(0 0 5px rgba(229,9,20,0.8));">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg" height="30" alt="Disney+" style="filter: drop-shadow(0 0 5px rgba(255,255,255,0.8));">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/1/11/Amazon_Prime_Video_logo.svg" height="18" alt="Prime Video" style="filter: drop-shadow(0 0 5px rgba(0,168,225,0.8));">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/Max_logo.svg" height="20" alt="Max" style="filter: drop-shadow(0 0 5px rgba(0,43,231,0.8));">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Spotify_logo_with_text.svg" height="24" alt="Spotify" style="filter: drop-shadow(0 0 5px rgba(30,215,96,0.8));">
-        </div>
-    `;
 
     let mensajeBienvenida = `
         <div style="text-align: center; margin-bottom: 25px;">
@@ -308,30 +344,33 @@ app.get('/', (req, res) => {
         `;
     }
 
-    let redesSociales = `
+    res.send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Acceso - SyncBox</title>
         <style>
-            .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; text-align: center; }
-            .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+            body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
+            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; margin: 15px; }
+            .input-group { margin-bottom: 20px; }
+            .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
+            .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
+            .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
+            .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
+            .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
         </style>
-        <div class="login-contact" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Mi Telegram</span>
-                <a href="https://t.me/SyncBox701" target="_blank" class="contact-icon-btn telegram" title="Telegram" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                </a>
-            </div>
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Mi WhatsApp</span>
-                <a href="https://wa.me/573012964169" target="_blank" class="contact-icon-btn whatsapp" title="WhatsApp Directo" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                </a>
-            </div>
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Ref. Grupo</span>
-                <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                </a>
-            </div>
+    </head>
+    <body>
+        <div class="login-box">
+            ${LOGOS_HTML}
+            ${contenidoForm}
+            <button type="button" onclick="let p = document.getElementById('pagos-box-login'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" style="background: transparent; border: 1px dashed rgba(0,210,255,0.5); color: #00D2FF; padding: 12px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-top: 15px; transition: 0.3s;">💳 Ver Métodos de Pago</button>
+            <div id="pagos-box-login" style="display: none; margin-top: 10px;">${METODOS_PAGO_HTML}</div>
+            <div class="help-text">Panel cifrado. Conexión segura.</div>
+            ${BOTONES_CONTACTO_HTML}
         </div>
     </body>
     </html>
@@ -342,10 +381,8 @@ app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
-        
         const fechaObj = new Date();
         const fechaHoraLocal = fechaObj.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
-
         const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
@@ -367,9 +404,7 @@ app.post('/registrar-cliente', async (req, res) => {
             <h2>✅ ¡Registro Exitoso!</h2>
             <p>Se ha creado tu cuenta. Haz clic abajo para enviar tus datos por WhatsApp y activar tu acceso.</p>
             <a href="${linkRedireccion}" class="btn">Confirmar por WhatsApp</a>
-            <script>
-                window.location.replace('${linkRedireccion}');
-            </script>
+            <script>window.location.replace('${linkRedireccion}');</script>
         </body>
         </html>
         `);
@@ -381,7 +416,6 @@ app.post('/registrar-cliente', async (req, res) => {
 app.post('/login', async (req, res) => {
     const user = (req.body.user || '').trim();
     const pass = (req.body.pass || '').trim();
-    
     try {
         const row = await dbGet("SELECT * FROM usuarios WHERE user = ? AND pass = ?", [user, pass]);
         if (row) {
@@ -398,7 +432,6 @@ app.post('/login', async (req, res) => {
             res.send("<script>alert('⛔ Datos incorrectos.'); window.location='/';</script>"); 
         }
     } catch (err) { 
-        console.error(err);
         res.send(`<script>alert('Error de base de datos en Login: ${err.message}'); window.location='/';</script>`); 
     }
 });
@@ -412,7 +445,7 @@ app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
-        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+        res.send("<script>alert('🛒 Reserva enviada exitosamente.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -420,103 +453,63 @@ app.post('/bot/garantia', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
-        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
+        res.send("<script>alert('🚨 Garantía reportada en sistema.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
 app.post('/admin/resolver-garantia', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
+    try { await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
 app.post('/admin/completar-reserva', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
+    try { await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
 app.post('/admin/cambiar-rol', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    try {
-        await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
+    try { await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
 app.post('/admin/cargar-stock', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
     const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
-    
-    let duplicadas = 0;
-    let agregadas = 0;
-
+    let duplicadas = 0; let agregadas = 0;
     try {
         for (let email of lista) {
             let e = email.trim().toLowerCase();
             let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
             let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
-            
-            if(existsStock || existsCorreos) {
-                duplicadas++;
-            } else {
-                await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]);
-                agregadas++;
-            }
+            if(existsStock || existsCorreos) { duplicadas++; } 
+            else { await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]); agregadas++; }
         }
         if(duplicadas > 0) {
-            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
-        } else {
-            res.redirect('/dash');
-        }
+            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
+        } else { res.redirect('/dash'); }
     } catch(e) { res.redirect('/dash'); }
 });
 
 app.post('/admin/asignar-creditos', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { subadmin_id, cantidad } = req.body;
-    
     try {
         const user = await dbGet("SELECT user, telefono, creditos FROM usuarios WHERE id = ?", [subadmin_id]);
         if(!user) return res.redirect('/dash');
-
         const monto = parseFloat(cantidad);
         const nuevoSaldo = user.creditos + monto;
-
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
-
         let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
         const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
         const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
-
         res.send(`
         <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Aviso de Crédito</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #00D2FF; font-size: 24px; }
-                .btn { background: #00D2FF; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(0,210,255,0.4); margin-top: 20px;}
-            </style>
-        </head>
-        <body>
-            <h2>✅ Crédito Asignado (${nuevoSaldo} Cr)</h2>
-            <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
-            <a href="${link}" class="btn">Notificar al Cliente</a>
-            <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
-            <script>window.location.replace('${link}');</script>
-        </body>
-        </html>
-        `);
+        <html lang="es"><head><meta charset="UTF-8"><title>Aviso de Crédito</title>
+        <style>body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; } h2 { color: #00D2FF; font-size: 24px; } .btn { background: #00D2FF; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 20px;}</style>
+        </head><body><h2>✅ Crédito Asignado (${nuevoSaldo} Cr)</h2><p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
+        <a href="${link}" class="btn">Notificar al Cliente</a><br><br><a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
+        <script>window.location.replace('${link}');</script></body></html>`);
     } catch(e) { res.redirect('/dash'); }
 });
 
@@ -524,26 +517,17 @@ app.post('/subadmin/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
     let costo = 0;
-    
-    if (paquete === 5) costo = 832;
-    else if (paquete === 10) costo = 1560;
-    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
-
+    if (paquete === 5) costo = 832; else if (paquete === 10) costo = 1560; else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
     try {
         const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
-        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
-
+        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes.'); window.location='/dash';</script>");
         const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
-        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
-
+        if (disponibles.length < paquete) return res.send("<script>alert('No hay suficiente stock.'); window.location='/dash';</script>");
         const nuevoSaldo = user.creditos - costo;
         const nuevaDeuda = (user.deuda || 0) + costo;
-
         await dbRun("UPDATE usuarios SET creditos = ?, deuda = ? WHERE id = ?", [nuevoSaldo, nuevaDeuda, req.session.uid]);
-
         const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
         const compraId = compraInfo.lastID;
-
         let correosEntregados = [];
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
@@ -551,41 +535,14 @@ app.post('/subadmin/comprar', async (req, res) => {
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
             correosEntregados.push(cuenta.email);
         }
-
         const fechaObj = new Date();
         const fechaStr = fechaObj.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
         const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
-
         const adminPhone = "573012964169";
         const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* $${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
         const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
-
-        res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Compra Exitosa</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #25d366; font-size: 24px; }
-                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); margin-top: 20px;}
-            </style>
-        </head>
-        <body>
-            <h2>✅ Compra de ${paquete} Cuentas Exitosa</h2>
-            <p>Las cuentas ya están en tu panel listas para usar.<br>Notifica al administrador para confirmar el comprobante de la transacción.</p>
-            <a href="${linkAdmin}" class="btn">Enviar Comprobante</a>
-            <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a>
-            <script>window.location.replace('${linkAdmin}');</script>
-        </body>
-        </html>
-        `);
-    } catch(e) {
-        res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
-    }
+        res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Compra Exitosa</title><style>body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; } h2 { color: #25d366; font-size: 24px; } .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 20px;}</style></head><body><h2>✅ Compra Exitosa</h2><p>Cuentas entregadas en tu panel.</p><a href="${linkAdmin}" class="btn">Enviar Comprobante</a><br><br><a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a><script>window.location.replace('${linkAdmin}');</script></body></html>`);
+    } catch(e) { res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`); }
 });
 
 app.get('/dash', async (req, res) => {
@@ -685,7 +642,7 @@ app.get('/dash', async (req, res) => {
                     <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
                     <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
                         <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️️ Reportar Caída</h5>
+                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
                             <input type="hidden" name="plataforma" value="${key}">
                             <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
                             <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
@@ -1072,33 +1029,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // ✅ DECLARACIÓN DE BOTONES DE CONTACTO (RESTAURADO)
-            let botonesContactoProveedor = `
-            <style>
-                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
-                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
-            </style>
-            <div class="provider-contact">
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi Telegram</span>
-                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi WhatsApp</span>
-                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Ref. Grupo</span>
-                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
-                    </a>
-                </div>
-            </div>`;
-
             res.send(`
             <!DOCTYPE html>
             <html lang="es">
@@ -1218,7 +1148,7 @@ app.get('/dash', async (req, res) => {
                                 ${metodosDePagoHtml}
                             </div>
 
-                            ${botonesContactoProveedor}
+                            ${BOTONES_CONTACTO_HTML}
                         </div>
 
                         ${esAdminPrincipal ? `
