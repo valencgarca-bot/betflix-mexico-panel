@@ -454,46 +454,7 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-app.post('/bot/reservar', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
-        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/bot/garantia', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
-        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/resolver-garantia', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/completar-reserva', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/cambiar-rol', async (req, res) => {
-    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    try {
-        await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
-});
-
+// ✅ RUTA DEL ADMIN PARA CARGAR STOCK CON PROTECCIÓN ANTI-DUPLICADOS GLOBAL
 app.post('/admin/cargar-stock', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
@@ -523,6 +484,7 @@ app.post('/admin/cargar-stock', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
+// ✅ RUTA DEL ADMIN PARA ASIGNAR CRÉDITOS Y ENVIAR WHATSAPP DE NOTIFICACIÓN
 app.post('/admin/asignar-creditos', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { subadmin_id, cantidad } = req.body;
@@ -566,6 +528,7 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
+// ✅ RUTA DEL SUBADMIN PARA COMPRAR (USA CRÉDITO, ASIGNA AUTOMÁTICO, SUMA DEUDA, ENVÍA WA AL ADMIN)
 app.post('/subadmin/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -591,6 +554,7 @@ app.post('/subadmin/comprar', async (req, res) => {
         const compraId = compraInfo.lastID;
 
         let correosEntregados = [];
+        // Descontar del stock y asignar MÁGICAMENTE al panel del usuario
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
             await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
@@ -1118,32 +1082,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            let botonesContactoProveedor = `
-            <style>
-                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
-                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
-            </style>
-            <div class="provider-contact">
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi Telegram</span>
-                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi WhatsApp</span>
-                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Ref. Grupo</span>
-                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                    </a>
-                </div>
-            </div>`;
-
             res.send(`
             <!DOCTYPE html>
             <html lang="es">
@@ -1283,6 +1221,79 @@ app.get('/dash', async (req, res) => {
     }
 });
 
+// ✅ RUTA DEL ADMIN PARA ASIGNAR CORREO: PROTECCIÓN ANTI-DUPLICADOS INTEGRADA
+app.post('/admin/asignar-correo', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try {
+        const targetUserId = req.body.user_id;
+
+        if (req.session.rol === 'Subadministrador') {
+            const verificaPropietario = await dbGet("SELECT id FROM usuarios WHERE id = ? AND (creado_por = ? OR id = ?)", [targetUserId, req.session.uid, req.session.uid]);
+            if (!verificaPropietario) return res.send("<script>alert('⛔ No tienes permiso.'); window.location='/dash';</script>");
+        }
+
+        const correosBrutos = req.body.email.trim();
+        const listaCorreos = correosBrutos.split(/[\s,]+/).filter(e => e.includes('@'));
+        
+        for (let email of listaCorreos) { 
+            email = email.toLowerCase();
+            const existente = await dbGet("SELECT c.id, c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [email]);
+            
+            if (existente) {
+                if (req.session.rol === 'Subadministrador' && existente.user_id === req.session.uid) {
+                    await dbRun("UPDATE correos SET user_id = ? WHERE id = ?", [targetUserId, existente.id]);
+                    // NUEVO: Borrar del stock si estaba allí
+                    await dbRun("DELETE FROM stock_cuentas WHERE email = ?", [email]);
+                } else {
+                    return res.send(`<script>alert('Esta cuenta ya está asignada. Cliente actual: ${existente.user} | Correo: ${email}'); window.location='/dash';</script>`);
+                }
+            } else {
+                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [email, targetUserId]); 
+                // NUEVO: Borrar del stock si estaba allí para evitar doble venta
+                await dbRun("DELETE FROM stock_cuentas WHERE email = ?", [email]);
+            }
+        }
+        res.redirect('/dash'); 
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/eliminar-usuario', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try {
+        const userId = req.body.user_id;
+        if (req.session.rol === 'Subadministrador') {
+            const u = await dbGet("SELECT creado_por FROM usuarios WHERE id = ?", [userId]);
+            if (!u || u.creado_por !== req.session.uid) return res.redirect('/dash');
+            
+            await dbRun("DELETE FROM correos WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM reservas WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM garantias WHERE user_id = ?", [userId]);
+            await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
+        } else {
+            const children = await dbAll("SELECT id FROM usuarios WHERE creado_por = ?", [userId]);
+            const idsToDelete = [userId, ...children.map(c => c.id)];
+            
+            for(let id of idsToDelete) {
+                await dbRun("DELETE FROM correos WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM reservas WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM garantias WHERE user_id = ?", [id]);
+                await dbRun("DELETE FROM usuarios WHERE id = ?", [id]);
+            }
+        }
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/crear', async (req, res) => {
+    let creado_por = (req.session.rol === 'Subadministrador') ? req.session.uid : null;
+    try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/eliminar-correo', async (req, res) => {
+    if (req.session.rol === 'Cliente') return res.redirect('/dash');
+    try { await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
+});
+
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
     if (!passwordSeleccionado) return null;
@@ -1294,14 +1305,12 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         connection = await imaps.connect(config);
         await connection.openBox('INBOX');
         
-        // BÚSQUEDA ROBUSTA: SIN FILTROS RESTRICTIVOS
         let searchResults = await connection.search([['X-GM-RAW', `"${correoIngresado}"`]], { bodies: ['HEADER.FIELDS (DATE)'] });
         
         if (searchResults.length === 0) {
             searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
         }
 
-        // FALLBACK DEFINITIVO: Buscar solo la primera parte del correo (antes del @) si es un dominio raro
         if (searchResults.length === 0 && partes && partes.length > 0) {
             searchResults = await connection.search([['TEXT', partes[0]]], { bodies: ['HEADER.FIELDS (DATE)'] });
         }
@@ -1310,7 +1319,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let mail = null;
 
         if (searchResults.length > 0) {
-            // ORDENAR POR FECHA Y UID PARA ENCONTRAR ESTRICTAMENTE EL ÚLTIMO
             searchResults.sort((a, b) => {
                 let dateA = new Date(a.attributes.date || 0).getTime();
                 let dateB = new Date(b.attributes.date || 0).getTime();
