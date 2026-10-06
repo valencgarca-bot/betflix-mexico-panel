@@ -39,12 +39,12 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS (MÓDULOS DE CRÉDITO Y DEUDA INTEGRADOS)
+// ✅ ESTRUCTURA DE BASE DE DATOS
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {});
-    db.run("ALTER TABLE usuarios ADD COLUMN deuda REAL DEFAULT 0", (err) => {}); // 💰 NUEVO: Deuda acumulada
+    db.run("ALTER TABLE usuarios ADD COLUMN deuda REAL DEFAULT 0", (err) => {});
     
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
@@ -53,7 +53,6 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
     
-    // TABLAS DEL MÓDULO DE STOCK CON HISTORIAL VINCULADO
     db.run("CREATE TABLE IF NOT EXISTS stock_cuentas (id INTEGER PRIMARY KEY AUTOINCREMENT, plataforma TEXT, email TEXT UNIQUE, estado TEXT DEFAULT 'Disponible', fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("ALTER TABLE stock_cuentas ADD COLUMN comprador_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN compra_id INTEGER", (err) => {});
@@ -75,7 +74,6 @@ async function purgarUsuariosInactivos() {
             AND id NOT IN (SELECT DISTINCT user_id FROM correos) 
             AND datetime(fecha_creacion, '+24 hours') <= datetime('now', 'localtime')
         `);
-        if (res.changes > 0) { console.log(`🧹 Purgados ${res.changes} clientes inactivos.`); }
     } catch(err) {}
 }
 purgarUsuariosInactivos();
@@ -175,6 +173,10 @@ const CSS_MODERNO = `
     .table-modern { width: 100%; border-collapse: collapse; text-align: left; }
     .table-modern th { padding: 12px; font-size: 11px; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.15); text-transform: uppercase; letter-spacing: 1px; }
     .table-modern td { padding: 12px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #f8fafc; vertical-align: top; }
+    .badge-status { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+    .badge-status.disp { background: rgba(37,211,102,0.15); color: #25d366; border: 1px solid #25d366; }
+    .badge-status.vendida { background: rgba(229,9,20,0.15); color: #E50914; border: 1px solid #E50914; }
+
     @media (max-width: 1024px) {
         .dashboard-grid { grid-template-columns: 1fr !important; padding: 15px 15px 40px 15px !important; gap: 20px !important; }
         .left-sidebar { min-height: auto !important; }
@@ -382,7 +384,6 @@ app.get('/', (req, res) => {
     `);
 });
 
-// ✅ REPARACIÓN DEL REGISTRO Y WHATSAPP DE BIENVENIDA
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
@@ -453,157 +454,6 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-// ✅ RUTA DEL ADMIN PARA CARGAR STOCK CON PROTECCIÓN ANTI-DUPLICADOS GLOBAL
-app.post('/admin/cargar-stock', async (req, res) => {
-    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    const { correos_stock, plataforma } = req.body;
-    const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
-    
-    let duplicadas = 0;
-    let agregadas = 0;
-
-    try {
-        for (let email of lista) {
-            let e = email.trim().toLowerCase();
-            // Verifica si está en stock (libre o vendido) o si un usuario ya lo tiene asignado
-            let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
-            let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
-            
-            if(existsStock || existsCorreos) {
-                duplicadas++;
-            } else {
-                await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]);
-                agregadas++;
-            }
-        }
-        if(duplicadas > 0) {
-            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
-        } else {
-            res.redirect('/dash');
-        }
-    } catch(e) { res.redirect('/dash'); }
-});
-
-// ✅ RUTA DEL ADMIN PARA ASIGNAR CRÉDITOS Y ENVIAR WHATSAPP DE NOTIFICACIÓN
-app.post('/admin/asignar-creditos', async (req, res) => {
-    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    const { subadmin_id, cantidad } = req.body;
-    
-    try {
-        const user = await dbGet("SELECT user, telefono, creditos FROM usuarios WHERE id = ?", [subadmin_id]);
-        if(!user) return res.redirect('/dash');
-
-        const monto = parseFloat(cantidad);
-        const nuevoSaldo = user.creditos + monto;
-
-        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
-
-        // Formatear mensaje para WhatsApp al usuario
-        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
-        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
-        const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
-
-        res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Aviso de Crédito</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #00D2FF; font-size: 24px; }
-                .btn { background: #00D2FF; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(0,210,255,0.4); margin-top: 20px;}
-            </style>
-        </head>
-        <body>
-            <h2>✅ Crédito Asignado (${nuevoSaldo} Cr)</h2>
-            <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
-            <a href="${link}" class="btn">Notificar al Cliente</a>
-            <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
-            <script>window.location.replace('${link}');</script>
-        </body>
-        </html>
-        `);
-    } catch(e) { res.redirect('/dash'); }
-});
-
-// ✅ RUTA DEL SUBADMIN PARA COMPRAR (USA CRÉDITO, ASIGNA AUTOMÁTICO, SUMA DEUDA, ENVÍA WA AL ADMIN)
-app.post('/subadmin/comprar', async (req, res) => {
-    if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
-    const paquete = parseInt(req.body.paquete);
-    let costo = 0;
-    
-    if (paquete === 5) costo = 832;
-    else if (paquete === 10) costo = 1560;
-    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
-
-    try {
-        const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
-        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
-
-        const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
-        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
-
-        const nuevoSaldo = user.creditos - costo;
-        const nuevaDeuda = (user.deuda || 0) + costo;
-
-        // Actualizar saldo y deuda
-        await dbRun("UPDATE usuarios SET creditos = ?, deuda = ? WHERE id = ?", [nuevoSaldo, nuevaDeuda, req.session.uid]);
-
-        // Registrar compra en el historial
-        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
-        const compraId = compraInfo.lastID;
-
-        let correosEntregados = [];
-        // Descontar del stock y asignar MAGIAMENTE al panel del usuario
-        for (let cuenta of disponibles) {
-            await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
-            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
-            // INYECCIÓN MÁGICA: Aparecerá instantáneamente en "Sus correos" para leer el código
-            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
-            correosEntregados.push(cuenta.email);
-        }
-
-        // Preparar notificación por WhatsApp para el Administrador
-        const fechaObj = new Date();
-        const fechaStr = fechaObj.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
-        const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
-
-        const adminPhone = "573012964169";
-        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* $${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
-        const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
-
-        res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Compra Exitosa</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #25d366; font-size: 24px; }
-                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); margin-top: 20px;}
-            </style>
-        </head>
-        <body>
-            <h2>✅ Compra de ${paquete} Cuentas Exitosa</h2>
-            <p>Las cuentas ya están en tu panel listas para usar.<br>Notifica al administrador para confirmar el comprobante de la transacción.</p>
-            <a href="${linkAdmin}" class="btn">Enviar Comprobante</a>
-            <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a>
-            <script>window.location.replace('${linkAdmin}');</script>
-        </body>
-        </html>
-        `);
-    } catch(e) {
-        res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
-    }
-});
-
-
 app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
@@ -642,6 +492,146 @@ app.post('/admin/cambiar-rol', async (req, res) => {
         await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]);
         res.redirect('/dash');
     } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/cargar-stock', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { correos_stock, plataforma } = req.body;
+    const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
+    
+    let duplicadas = 0;
+    let agregadas = 0;
+
+    try {
+        for (let email of lista) {
+            let e = email.trim().toLowerCase();
+            let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
+            let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
+            
+            if(existsStock || existsCorreos) {
+                duplicadas++;
+            } else {
+                await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]);
+                agregadas++;
+            }
+        }
+        if(duplicadas > 0) {
+            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
+        } else {
+            res.redirect('/dash');
+        }
+    } catch(e) { res.redirect('/dash'); }
+});
+
+app.post('/admin/asignar-creditos', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { subadmin_id, cantidad } = req.body;
+    
+    try {
+        const user = await dbGet("SELECT user, telefono, creditos FROM usuarios WHERE id = ?", [subadmin_id]);
+        if(!user) return res.redirect('/dash');
+
+        const monto = parseFloat(cantidad);
+        const nuevoSaldo = user.creditos + monto;
+
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
+
+        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
+        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
+        const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
+
+        res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Aviso de Crédito</title>
+            <style>
+                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+                h2 { color: #00D2FF; font-size: 24px; }
+                .btn { background: #00D2FF; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(0,210,255,0.4); margin-top: 20px;}
+            </style>
+        </head>
+        <body>
+            <h2>✅ Crédito Asignado (${nuevoSaldo} Cr)</h2>
+            <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
+            <a href="${link}" class="btn">Notificar al Cliente</a>
+            <br><br>
+            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
+            <script>window.location.replace('${link}');</script>
+        </body>
+        </html>
+        `);
+    } catch(e) { res.redirect('/dash'); }
+});
+
+app.post('/subadmin/comprar', async (req, res) => {
+    if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
+    const paquete = parseInt(req.body.paquete);
+    let costo = 0;
+    
+    if (paquete === 5) costo = 832;
+    else if (paquete === 10) costo = 1560;
+    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
+
+    try {
+        const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
+        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
+
+        const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
+        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
+
+        const nuevoSaldo = user.creditos - costo;
+        const nuevaDeuda = (user.deuda || 0) + costo;
+
+        await dbRun("UPDATE usuarios SET creditos = ?, deuda = ? WHERE id = ?", [nuevoSaldo, nuevaDeuda, req.session.uid]);
+
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
+        const compraId = compraInfo.lastID;
+
+        let correosEntregados = [];
+        for (let cuenta of disponibles) {
+            await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
+            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
+            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
+            correosEntregados.push(cuenta.email);
+        }
+
+        const fechaObj = new Date();
+        const fechaStr = fechaObj.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
+        const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
+
+        const adminPhone = "573012964169";
+        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* $${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
+        const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
+
+        res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Compra Exitosa</title>
+            <style>
+                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+                h2 { color: #25d366; font-size: 24px; }
+                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); margin-top: 20px;}
+            </style>
+        </head>
+        <body>
+            <h2>✅ Compra de ${paquete} Cuentas Exitosa</h2>
+            <p>Las cuentas ya están en tu panel listas para usar.<br>Notifica al administrador para confirmar el comprobante de la transacción.</p>
+            <a href="${linkAdmin}" class="btn">Enviar Comprobante</a>
+            <br><br>
+            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a>
+            <script>window.location.replace('${linkAdmin}');</script>
+        </body>
+        </html>
+        `);
+    } catch(e) {
+        res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
+    }
 });
 
 app.get('/dash', async (req, res) => {
@@ -830,7 +820,6 @@ app.get('/dash', async (req, res) => {
                     });
                 }
 
-                // ✅ TABLA DEL ADN DE LAS CUENTAS (HISTORIAL COMPLETO DE STOCK)
                 const stockDB = await dbAll(`SELECT s.*, u.user as comprador FROM stock_cuentas s LEFT JOIN usuarios u ON s.comprador_id = u.id ORDER BY s.id DESC`);
                 let stockAdnHtml = "";
                 if(stockDB.length === 0) {
@@ -1074,7 +1063,7 @@ app.get('/dash', async (req, res) => {
                             selectorRol = `<small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small>`;
                         }
 
-                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
+                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'Subadmin ID: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
                         let icon = u.rol === 'Subadministrador' ? '👑' : '👤';
                         let rowStyle = isChild ? 'background: rgba(0, 210, 255, 0.05);' : 'background: rgba(255, 255, 255, 0.02); border-top: 1px solid rgba(255,255,255,0.1);';
                         let paddingL = isChild ? '40px' : '20px';
@@ -1128,6 +1117,32 @@ app.get('/dash', async (req, res) => {
                     }
                 }
             }
+
+            let botonesContactoProveedor = `
+            <style>
+                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
+                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
+            </style>
+            <div class="provider-contact">
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Mi Telegram</span>
+                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
+                    </a>
+                </div>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Mi WhatsApp</span>
+                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                    </a>
+                </div>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Ref. Grupo</span>
+                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                    </a>
+                </div>
+            </div>`;
 
             res.send(`
             <!DOCTYPE html>
@@ -1242,6 +1257,13 @@ app.get('/dash', async (req, res) => {
                             <div class="plat-mini-grid">
                                 ${botonesPlataformaHtml}
                             </div>
+                            
+                            <div class="side-card" style="margin-top: 20px; background: rgba(0,0,0,0.6);">
+                                <h4 style="margin-bottom: 5px;">💳 MÉTODOS DE PAGO</h4>
+                                ${metodosDePagoHtml}
+                            </div>
+
+                            ${botonesContactoProveedor}
                         </div>
 
                         ${esAdminPrincipal ? `
@@ -1261,6 +1283,61 @@ app.get('/dash', async (req, res) => {
     }
 });
 
+async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
+    const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
+    if (!passwordSeleccionado) return null;
+
+    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 15000 } };
+    let connection = null;
+
+    try {
+        connection = await imaps.connect(config);
+        await connection.openBox('INBOX');
+        
+        // BÚSQUEDA ROBUSTA: SIN FILTROS RESTRICTIVOS
+        let searchResults = await connection.search([['X-GM-RAW', `"${correoIngresado}"`]], { bodies: ['HEADER.FIELDS (DATE)'] });
+        
+        if (searchResults.length === 0) {
+            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
+        }
+
+        // FALLBACK DEFINITIVO: Buscar solo la primera parte del correo (antes del @) si es un dominio raro
+        if (searchResults.length === 0 && partes && partes.length > 0) {
+            searchResults = await connection.search([['TEXT', partes[0]]], { bodies: ['HEADER.FIELDS (DATE)'] });
+        }
+
+        let messages = [];
+        let mail = null;
+
+        if (searchResults.length > 0) {
+            // ORDENAR POR FECHA Y UID PARA ENCONTRAR ESTRICTAMENTE EL ÚLTIMO
+            searchResults.sort((a, b) => {
+                let dateA = new Date(a.attributes.date || 0).getTime();
+                let dateB = new Date(b.attributes.date || 0).getTime();
+                if (dateB !== dateA) { return dateB - dateA; }
+                return b.attributes.uid - a.attributes.uid;
+            });
+
+            let latestUid = searchResults[0].attributes.uid; 
+            
+            let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
+            if (fetchedMsg.length > 0) {
+                messages = fetchedMsg;
+                mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
+            }
+        }
+        
+        connection.end();
+        if (messages.length > 0 && mail) { return { messages, mail, buzón: correoBuzon }; }
+        return null;
+
+    } catch (err) {
+        console.log(`⚠ Advertencia IMAP (${correoBuzon}):`, err.message);
+        if (connection) connection.end();
+        return null;
+    }
+}
+
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
     
@@ -1277,28 +1354,37 @@ app.post('/buscar', async (req, res) => {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.5); border-radius: 10px; }
 
-        * { background-color: transparent !important; background: transparent !important; }
+        .magic-email-wrapper table, .magic-email-wrapper td, .magic-email-wrapper tr, .magic-email-wrapper body, .magic-email-wrapper div {
+            background-color: transparent !important; background: transparent !important; border: none !important;
+        }
         
         .magic-email-wrapper * {
             font-family: 'Inter', sans-serif !important;
             color: #f8fafc !important;
             line-height: 1.6 !important;
-            border: none !important;
             box-shadow: none !important;
         }
 
         .magic-email-wrapper h1, 
         .magic-email-wrapper h2, 
         .magic-email-wrapper h3, 
-        .magic-email-wrapper a, 
         .magic-email-wrapper strong {
             color: #00D2FF !important; 
             text-shadow: 0 0 8px rgba(0, 210, 255, 0.8), 0 0 15px rgba(0, 210, 255, 0.5) !important;
+        }
+        
+        .magic-email-wrapper a {
+            background-color: #E50914 !important;
+            color: #fff !important;
+            padding: 10px 20px !important;
+            border-radius: 4px !important;
+            display: inline-block !important;
             text-decoration: none !important;
+            text-shadow: none !important;
+            font-weight: bold !important;
         }
 
         .magic-email-wrapper p, 
-        .magic-email-wrapper td, 
         .magic-email-wrapper span {
             text-shadow: 0 0 5px rgba(255, 255, 255, 0.3) !important;
             font-size: 15px !important;
