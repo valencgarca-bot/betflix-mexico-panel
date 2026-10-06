@@ -39,11 +39,11 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS AVANZADA (INCLUYE MÓDULO DE STOCK Y CRÉDITOS)
+// ✅ ESTRUCTURA DE BASE DE DATOS
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
-    db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {}); // Nueva columna para economía
+    db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {});
     
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
@@ -52,7 +52,6 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
     
-    // TABLAS DEL MÓDULO DE STOCK INDEPENDIENTE
     db.run("CREATE TABLE IF NOT EXISTS stock_cuentas (id INTEGER PRIMARY KEY AUTOINCREMENT, plataforma TEXT, email TEXT UNIQUE, estado TEXT DEFAULT 'Disponible', fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
@@ -359,6 +358,7 @@ app.use(async (req, res, next) => {
     } else { return res.redirect('/'); }
 });
 
+// ✅ PANTALLA DE INICIO (LOGIN)
 app.get('/', (req, res) => {
     let mode = req.query.mode;
     let contenidoForm = "";
@@ -545,6 +545,46 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
+app.post('/bot/reservar', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
+        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/bot/garantia', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
+        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/resolver-garantia', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/completar-reserva', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/cambiar-rol', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    try {
+        await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
 // ✅ RUTAS DEL MÓDULO DE STOCK Y CRÉDITOS
 app.post('/admin/cargar-stock', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
@@ -597,47 +637,6 @@ app.post('/subadmin/comprar', async (req, res) => {
     } catch(e) {
         res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
     }
-});
-
-
-app.post('/bot/reservar', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
-        res.send("<script>alert('🛒 Reserva manual enviada exitosamente.'); window.location='/dash';</script>");
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/bot/garantia', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
-        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/resolver-garantia', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/completar-reserva', async (req, res) => {
-    if(!req.session.uid) return res.redirect('/');
-    try {
-        await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/cambiar-rol', async (req, res) => {
-    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    try {
-        await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]);
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
 });
 
 app.get('/dash', async (req, res) => {
@@ -716,8 +715,7 @@ app.get('/dash', async (req, res) => {
                     `;
                 }
 
-                // SI ES SUBADMIN MUESTRO EL STOCK AUTOMÁTICO DISPONIBLE EN VIVO
-                let stockEnVivo = stockDisp.count;
+                let stockEnVivo = stockDisp ? stockDisp.count : 0;
                 let msjStock = esSubAdmin ? `📊 Stock en vivo: ${stockEnVivo} Cuentas Netflix Disponibles` : `📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles`;
                 
                 controlesIzquierda += `
@@ -815,10 +813,10 @@ app.get('/dash', async (req, res) => {
 
                 let historialGlobalHtml = "";
                 if(historialCompras.length === 0) {
-                    historialGlobalHtml = "<tr><td colspan='5' style='text-align:center;'>No hay compras registradas.</td></tr>";
+                    historialGlobalHtml = "<tr><td colspan='4' style='text-align:center;'>No hay compras registradas.</td></tr>";
                 } else {
                     historialCompras.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914;">${d.email_cuenta}</div>`).join('');
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
                         historialGlobalHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
@@ -852,11 +850,13 @@ app.get('/dash', async (req, res) => {
                         <button type="submit" class="btn-submit">Actualizar Saldo</button>
                     </form>
                 </div>
-                <div id="main-historial-compras" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Historial de Compras Global</h3>
-                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 10px;">
+                <div id="main-historial-compras" class="main-card" style="padding: 10px;">
+                    <div style="padding: 20px 20px 0 20px;">
+                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Historial de Compras Global</h3>
+                    </div>
+                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
                         <table class="table-modern">
-                            <thead><tr><th>Subadmin</th><th style="text-align:center;">Cant.</th><th>Créditos</th><th>Cuentas Entregadas</th></tr></thead>
+                            <thead><tr><th style="padding-left:20px;">Subadmin</th><th style="text-align:center;">Cant.</th><th>Créditos</th><th>Cuentas Entregadas</th></tr></thead>
                             <tbody>${historialGlobalHtml}</tbody>
                         </table>
                     </div>
@@ -885,7 +885,7 @@ app.get('/dash', async (req, res) => {
                         let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914;">${d.email_cuenta}</div>`).join('');
                         misComprasHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
+                            <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
                             <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:11px;">${cuentasEntregadas}</div></td>
@@ -925,11 +925,13 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
-                <div id="main-mis-compras" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Mis Compras</h3>
-                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 10px;">
+                <div id="main-mis-compras" class="main-card" style="padding: 10px;">
+                    <div style="padding: 20px 20px 0 20px;">
+                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Mis Compras</h3>
+                    </div>
+                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
                         <table class="table-modern">
-                            <thead><tr><th>ID / Fecha</th><th style="text-align:center;">Paquete</th><th>Descuento</th><th>Cuentas Entregadas</th></tr></thead>
+                            <thead><tr><th style="padding-left:20px;">ID / Fecha</th><th style="text-align:center;">Paquete</th><th>Descuento</th><th>Cuentas Entregadas</th></tr></thead>
                             <tbody>${misComprasHtml}</tbody>
                         </table>
                     </div>
@@ -1003,9 +1005,10 @@ app.get('/dash', async (req, res) => {
             <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
             <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y clientes registrados.</p></div>
             <div id="action-garantias-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Sistema Inteligente</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Gestiona alertas y reemplazos en tiempo real.</p></div>
-            <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones de nuevas cuentas de tus clientes.</p></div>
+            <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones manuales de tus clientes.</p></div>
             `;
             
+            // ✅ NUEVA LÓGICA DE BASE DE DATOS ORGANIZADA Y JERÁRQUICA
             let tablaUsuariosHtml = "";
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
@@ -1016,19 +1019,19 @@ app.get('/dash', async (req, res) => {
                 if (usuariosVisibles.length === 0) {
                     tablaUsuariosHtml = "<tr><td colspan='5' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay usuarios registrados aún.</td></tr>";
                 } else {
-                    let renderRow = (u, prefix = "") => {
+                    let renderRow = (u, isChild = false) => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
                         let listaCorreosHtml = "";
                         if (correosDelUsuario.length > 0) {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.4);" : "background: #000000; border: 1px solid transparent;";
-                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px;">
+                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.4);" : "background: #000000; border: 1px solid rgba(255,255,255,0.1);";
+                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:6px 10px; border-radius:6px; font-size:11px; margin-bottom:5px;">
                                     <span>${c.email}</span>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
                                 </div>`;
                             }).join('');
-                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados (Auto-eliminación 24h)</span>"; }
+                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos (Auto-eliminación 24h)</span>"; }
 
                         let selectorRol = "";
                         if (esAdminPrincipal) {
@@ -1039,28 +1042,35 @@ app.get('/dash', async (req, res) => {
                                     <option value="Cliente" ${u.rol === 'Cliente' ? 'selected' : ''}>Cliente</option>
                                     <option value="Subadministrador" ${u.rol === 'Subadministrador' ? 'selected' : ''}>Subadmin</option>
                                 </select>
-                                <button type="submit" style="background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; width: 100%;">Cambiar</button>
+                                <button type="submit" style="background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer; width: 100%;">Cambiar</button>
                             </form>`;
                         } else {
-                            selectorRol = `<small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small>`;
+                            selectorRol = `<small style="color:var(--text-muted); font-weight:300; font-size:11px; display:block;">${u.rol}</small>`;
                         }
 
-                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'ID Creador: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
+                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'Subadmin ID: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
+                        let icon = u.rol === 'Subadministrador' ? '👑' : '👤';
+                        let rowStyle = isChild ? 'background: rgba(0, 210, 255, 0.05);' : 'background: rgba(255, 255, 255, 0.02); border-top: 1px solid rgba(255,255,255,0.1);';
+                        let paddingL = isChild ? '40px' : '15px';
+                        let dateFormated = u.fecha_creacion ? u.fecha_creacion.split('.')[0] : 'Desconocida';
 
-                        return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${prefix ? 'background: rgba(0,210,255,0.03);' : ''}">
-                            <td style="font-weight: 500; vertical-align: top; padding-left: ${prefix ? '30px' : '16px'};">
-                                <span style="${prefix ? 'color: var(--text-muted);' : 'color: #fff;'}">${prefix} 👤 ${u.user}</span>
-                                <br><small style="color:var(--accent); font-weight:600; font-size:10px; margin-top:4px; display:block;">🔑 Pass: ${u.pass}</small>
-                                <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📱 Tel: ${u.telefono || 'N/A'}</small>
-                                <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📅 Reg: ${u.fecha_creacion}</small>
+                        return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${rowStyle}">
+                            <td style="font-weight: 500; vertical-align: top; padding: 12px 10px 12px ${paddingL}; position: relative;">
+                                ${isChild ? '<div style="position:absolute; left: 15px; top: 0; bottom: 0; width: 2px; background: rgba(0, 210, 255, 0.3);"></div>' : ''}
+                                <span style="color: #fff; font-size: 13px;">${icon} ${u.user}</span>
+                                <div style="margin-top: 5px;">
+                                    <small style="color:var(--accent); font-weight:600; font-size:10px; display:block;">🔑 Pass: ${u.pass}</small>
+                                    <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📱 Tel: ${u.telefono || 'N/A'}</small>
+                                    <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📅 Reg: ${dateFormated}</small>
+                                </div>
                             </td>
-                            <td style="vertical-align: top; width: 100px;">${selectorRol}</td>
-                            <td style="vertical-align: top; width: 40%;"><div style="max-height: 120px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
-                            <td style="font-size: 11px; color: var(--text-muted); vertical-align: top;">${idCreadorTexto}</td>
-                            <td style="vertical-align: top; text-align: center;">
+                            <td style="vertical-align: top; width: 90px; padding: 12px 10px;">${selectorRol}</td>
+                            <td style="vertical-align: top; width: 40%; padding: 12px 10px;"><div style="max-height: 120px; overflow-y: auto; padding-right: 5px;">${listaCorreosHtml}</div></td>
+                            <td style="font-size: 10px; color: var(--text-muted); vertical-align: top; padding: 12px 10px;">${idCreadorTexto}</td>
+                            <td style="vertical-align: top; text-align: center; padding: 12px 10px;">
                                 <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario? ${u.rol === 'Subadministrador' ? '¡ESTO BORRARÁ TAMBIÉN A TODOS SUS CLIENTES Y DATOS!' : ''}');" style="margin:0;">
                                     <input type="hidden" name="user_id" value="${u.id}">
-                                    <button type="submit" style="background:#000000; border:1px solid rgba(255, 255, 255, 0.2); color:#E50914; padding:6px 12px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer;">Eliminar</button>
+                                    <button type="submit" style="background: rgba(229,9,20,0.1); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; transition:0.3s;" onmouseover="this.style.background='#E50914'; this.style.color='#fff';" onmouseout="this.style.background='rgba(229,9,20,0.1)'; this.style.color='#E50914';">Eliminar</button>
                                 </form>
                             </td>
                         </tr>`;
@@ -1068,24 +1078,28 @@ app.get('/dash', async (req, res) => {
 
                     if (esAdminPrincipal) {
                         let subadmins = usuariosVisibles.filter(u => u.rol === 'Subadministrador');
-                        let directos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador' && !u.creado_por);
-                        let huerfanos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador' && u.creado_por && !subadmins.find(sa => sa.id === u.creado_por));
+                        let otrosClientes = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
 
+                        // 1. Mostrar Subadmins y sus hijos anidados
                         subadmins.forEach(sa => {
-                            tablaUsuariosHtml += renderRow(sa);
-                            let children = usuariosVisibles.filter(u => u.creado_por === sa.id);
-                            children.forEach(child => {
-                                tablaUsuariosHtml += renderRow(child, "↳ ");
-                            });
+                            tablaUsuariosHtml += renderRow(sa, false);
+                            let children = otrosClientes.filter(c => c.creado_por === sa.id);
+                            if (children.length > 0) {
+                                children.forEach(child => {
+                                    tablaUsuariosHtml += renderRow(child, true);
+                                });
+                            }
                         });
 
-                        if (directos.length > 0 || huerfanos.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255,255,255,0.05); text-align: center; font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: 1px; padding: 10px;">CLIENTES DIRECTOS / REGISTRO PÚBLICO</td></tr>`;
-                            directos.forEach(d => tablaUsuariosHtml += renderRow(d));
-                            huerfanos.forEach(h => tablaUsuariosHtml += renderRow(h));
+                        // 2. Mostrar clientes directos o públicos
+                        let huerfanos = otrosClientes.filter(c => !c.creado_por || !subadmins.find(sa => sa.id === c.creado_por));
+                        if (huerfanos.length > 0) {
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255,255,255,0.08); text-align: center; font-size: 12px; color: #00D2FF; font-weight: 600; padding: 10px; letter-spacing: 1px;">CLIENTES DIRECTOS / PÚBLICOS</td></tr>`;
+                            huerfanos.forEach(h => tablaUsuariosHtml += renderRow(h, false));
                         }
                     } else {
-                        usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u));
+                        // Subadmin solo ve sus hijos de manera normal
+                        usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u, false));
                     }
                 }
             }
@@ -1110,8 +1124,8 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div class="contact-wrapper">
                     <span class="contact-label">⬇ Ref. Grupo</span>
-                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
+                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
+                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
                     </a>
                 </div>
             </div>`;
