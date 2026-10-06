@@ -21,7 +21,7 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 📌 BUZÓN IMAP
+// 📌 CORREO REAL RESTAURADO PARA QUE FUNCIONE EL IMAP Y DEVUELVA LA INFORMACIÓN
 const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
@@ -33,15 +33,17 @@ const PLATAFORMAS = {
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
-    secret: 'betflix_mexico_ultra_secure_2026_MX',
+    secret: 'betflix_mexico_ultra_secure_2026_MX_PRO',
     resave: false,
     saveUninitialized: true,
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
+// ✅ ESTRUCTURA DE BASE DE DATOS AVANZADA (INCLUYE MÓDULO DE STOCK Y CRÉDITOS)
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
+    db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {}); // Nueva columna para economía
     
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
@@ -50,11 +52,16 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS garantias (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plataforma TEXT, motivo TEXT, detalles TEXT, reemplazo TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
     db.run("CREATE TABLE IF NOT EXISTS soporte (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, mensaje TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Abierto')");
     
+    // TABLAS DEL MÓDULO DE STOCK INDEPENDIENTE
+    db.run("CREATE TABLE IF NOT EXISTS stock_cuentas (id INTEGER PRIMARY KEY AUTOINCREMENT, plataforma TEXT, email TEXT UNIQUE, estado TEXT DEFAULT 'Disponible', fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
+
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 });
 
-// 🧹 FUNCIÓN DE PURGA INMEDIATA: Borra clientes sin correos tras 24h
+// 🧹 FUNCIÓN DE PURGA INMEDIATA
 async function purgarUsuariosInactivos() {
     try {
         const res = await dbRun(`
@@ -63,19 +70,13 @@ async function purgarUsuariosInactivos() {
             AND id NOT IN (SELECT DISTINCT user_id FROM correos) 
             AND datetime(fecha_creacion, '+24 hours') <= datetime('now', 'localtime')
         `);
-        if (res.changes > 0) {
-            console.log(`🧹 Purgados ${res.changes} clientes inactivos de más de 24 horas.`);
-        }
-    } catch(err) {
-        console.error("Error al purgar usuarios inactivos:", err.message);
-    }
+        if (res.changes > 0) { console.log(`🧹 Purgados ${res.changes} clientes inactivos de más de 24 horas.`); }
+    } catch(err) { console.error("Error al purgar usuarios inactivos:", err.message); }
 }
-
-// Ejecuta al iniciar y revisa cada 15 minutos
 purgarUsuariosInactivos();
 setInterval(purgarUsuariosInactivos, 15 * 60 * 1000);
 
-// ✅ TARJETAS DE MÉTODOS DE PAGO: NU MÉXICO ACTUALIZADO
+// ✅ MÉTODOS DE PAGO
 const metodosDePagoHtml = `
     <div class="payment-box" style="background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: left;">
         <div class="pay-method" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -103,6 +104,7 @@ const metodosDePagoHtml = `
     </div>
 `;
 
+// 🎬 ESTILO PURO NEGRO Y GLOW
 const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -258,12 +260,16 @@ const CSS_MODERNO = `
 
     .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
 
+    /* ESTILOS TABLAS AUDITORIA Y STOCK */
+    .table-modern { width: 100%; border-collapse: collapse; text-align: left; }
+    .table-modern th { padding: 12px; font-size: 11px; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.15); text-transform: uppercase; letter-spacing: 1px; }
+    .table-modern td { padding: 12px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #f8fafc; vertical-align: top; }
+    .badge-status { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+    .badge-status.disp { background: rgba(37,211,102,0.15); color: #25d366; border: 1px solid #25d366; }
+    .badge-status.vendida { background: rgba(229,9,20,0.15); color: #E50914; border: 1px solid #E50914; }
+
     @media (max-width: 1024px) {
-        .dashboard-grid { 
-            grid-template-columns: 1fr !important; 
-            padding: 15px 15px 40px 15px !important;
-            gap: 20px !important;
-        }
+        .dashboard-grid { grid-template-columns: 1fr !important; padding: 15px 15px 40px 15px !important; gap: 20px !important; }
         .left-sidebar { min-height: auto !important; }
         .top-header { flex-direction: column; gap: 15px; padding: 15px; text-align: center; }
         .brand-logo { margin: 0 auto !important; justify-content: center; width: 100%; text-align: center; }
@@ -272,6 +278,7 @@ const CSS_MODERNO = `
         .iframe-container { height: 400px; }
         .action-panel, .main-card, .side-card { padding: 18px !important; }
         .user-pill { justify-content: center; }
+        .table-modern { display: block; overflow-x: auto; white-space: nowrap; }
     }
 </style>
 
@@ -415,7 +422,7 @@ app.get('/', (req, res) => {
                 </a>
             </div>
             <div class="contact-wrapper">
-                <span class="contact-label">⬇ Grupo de Ref.</span>
+                <span class="contact-label">⬇ Ref. Grupo</span>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
                     <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
                 </a>
@@ -538,11 +545,66 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
+// ✅ RUTAS DEL MÓDULO DE STOCK Y CRÉDITOS
+app.post('/admin/cargar-stock', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { correos_stock, plataforma } = req.body;
+    const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
+    try {
+        for (let email of lista) {
+            await dbRun("INSERT OR IGNORE INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, email.trim().toLowerCase()]);
+        }
+        res.redirect('/dash');
+    } catch(e) { res.redirect('/dash'); }
+});
+
+app.post('/admin/asignar-creditos', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { subadmin_id, cantidad } = req.body;
+    try {
+        await dbRun("UPDATE usuarios SET creditos = creditos + ? WHERE id = ?", [parseFloat(cantidad), subadmin_id]);
+        res.redirect('/dash');
+    } catch(e) { res.redirect('/dash'); }
+});
+
+app.post('/subadmin/comprar', async (req, res) => {
+    if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const paquete = parseInt(req.body.paquete);
+    let costo = 0;
+    
+    if (paquete === 5) costo = 832;
+    else if (paquete === 10) costo = 1560;
+    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
+
+    try {
+        const user = await dbGet("SELECT creditos FROM usuarios WHERE id = ?", [req.session.uid]);
+        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
+
+        const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
+        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock de cuentas disponible en este momento.'); window.location='/dash';</script>");
+
+        const nuevoSaldo = user.creditos - costo;
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, req.session.uid]);
+
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
+        const compraId = compraInfo.lastID;
+
+        for (let cuenta of disponibles) {
+            await dbRun("UPDATE stock_cuentas SET estado = 'Vendida' WHERE id = ?", [cuenta.id]);
+            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
+        }
+        res.send("<script>alert('✅ Compra realizada con éxito. Tus cuentas han sido entregadas.'); window.location='/dash';</script>");
+    } catch(e) {
+        res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
+    }
+});
+
+
 app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
-        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+        res.send("<script>alert('🛒 Reserva manual enviada exitosamente.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -585,10 +647,9 @@ app.get('/dash', async (req, res) => {
 
     if (esAdminPrincipal || esSubAdmin || esCliente) {
         try {
+            const usuarioActual = await dbGet("SELECT * FROM usuarios WHERE id = ?", [req.session.uid]);
             let misCorreos = [];
-            if (esCliente) {
-                misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]);
-            }
+            if (esCliente) { misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]); }
 
             let query = esAdminPrincipal ? "SELECT * FROM usuarios" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
@@ -598,6 +659,12 @@ app.get('/dash', async (req, res) => {
             
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
+
+            // DATOS DEL STOCK Y CRÉDITOS
+            const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible'");
+            const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Vendida'");
+            const historialCompras = await dbAll(`SELECT c.*, u.user as comprador FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
+            const detallesComprasDB = await dbAll("SELECT * FROM detalles_compras");
 
             let actividadesHtml = "";
             if (registros.length > 0) {
@@ -649,13 +716,17 @@ app.get('/dash', async (req, res) => {
                     `;
                 }
 
+                // SI ES SUBADMIN MUESTRO EL STOCK AUTOMÁTICO DISPONIBLE EN VIVO
+                let stockEnVivo = stockDisp.count;
+                let msjStock = esSubAdmin ? `📊 Stock en vivo: ${stockEnVivo} Cuentas Netflix Disponibles` : `📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles`;
+                
                 controlesIzquierda += `
-                    <button onclick="alert('📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles')" class="action-btn-pill" style="background: #000;">📊 Ver Stock Disponible</button>
+                    <button onclick="alert('${msjStock}')" class="action-btn-pill" style="background: #000;">📊 Ver Stock Disponible</button>
                     
-                    <button onclick="toggleSubForm('reserva-${key}')" class="action-btn-pill" style="background: #000;">🛒 Reservar Cuentas</button>
+                    <button onclick="toggleSubForm('reserva-${key}')" class="action-btn-pill" style="background: #000;">🛒 Reservar Cuentas (Manual)</button>
                     <div id="reserva-${key}" class="sub-form">
                         <form action="/bot/reservar" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">🛒 Reservar Stock</h5>
+                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">🛒 Pedido Manual</h5>
                             <input type="number" name="cantidad" min="1" max="10" placeholder="Cantidad (1 a 10)" class="input-classic" required>
                             <input type="text" name="telefono" placeholder="Número de WhatsApp" class="input-classic" required>
                             <button type="submit" class="btn-submit">Enviar Pedido</button>
@@ -718,6 +789,154 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
+            // ✅ PANELES ADMINISTRADOR: GESTIÓN DE STOCK Y CRÉDITOS
+            if (esAdminPrincipal) {
+                panelesIzquierdosHtml += `
+                <div id="action-stock-admin" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Control de Inventario</h4>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Carga masiva de cuentas al sistema para la venta automática a subadministradores.</p>
+                    <div style="margin-top:20px; background: rgba(0, 210, 255, 0.1); padding: 15px; border-radius: 8px; border: 1px solid rgba(0, 210, 255, 0.3);">
+                        <div style="font-size: 24px; font-weight: 700; color: #00D2FF;">${stockDisp.count}</div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Disponibles</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 10px;">${stockVend.count}</div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Vendidas</div>
+                    </div>
+                </div>
+                <div id="action-creditos-admin" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía</h4>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Asigna o retira saldo de créditos a tus subadministradores.</p>
+                </div>
+                <div id="action-historial-compras" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Auditoría General</h4>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Registro inmutable de todas las cuentas reclamadas por subadministradores.</p>
+                </div>`;
+
+                let subadminsOpcionesHtml = usuarios.filter(u => u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (Saldo actual: ${u.creditos})</option>`).join('');
+
+                let historialGlobalHtml = "";
+                if(historialCompras.length === 0) {
+                    historialGlobalHtml = "<tr><td colspan='5' style='text-align:center;'>No hay compras registradas.</td></tr>";
+                } else {
+                    historialCompras.forEach(c => {
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914;">${d.email_cuenta}</div>`).join('');
+                        historialGlobalHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
+                            <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad}</td>
+                            <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span><br><small style="color:var(--text-muted);">Quedan: ${c.saldo_nuevo}</small></td>
+                            <td><div style="max-height:80px; overflow-y:auto; font-size:10px;">${cuentasEntregadas}</div></td>
+                        </tr>`;
+                    });
+                }
+
+                panelesCentroHtml += `
+                <div id="main-stock-admin" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">📦 Cargar Stock de Cuentas</h3>
+                    <form action="/admin/cargar-stock" method="POST">
+                        <select name="plataforma" class="input-classic" required>
+                            <option value="netflix">Netflix</option>
+                        </select>
+                        <textarea name="correos_stock" class="input-classic" placeholder="Pega los correos del lote de cuentas separados por espacio o saltos de línea..." rows="10" required></textarea>
+                        <button type="submit" class="btn-submit">Ingresar al Inventario</button>
+                    </form>
+                </div>
+                <div id="main-creditos-admin" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">💰 Asignación de Créditos</h3>
+                    <form action="/admin/asignar-creditos" method="POST">
+                        <select name="subadmin_id" class="input-classic" required>
+                            <option value="" disabled selected>Selecciona al Subadministrador...</option>
+                            ${subadminsOpcionesHtml}
+                        </select>
+                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Créditos a Asignar (Ej: 832)" required>
+                        <p style="font-size:11px; color:var(--text-muted); margin-top:-5px; margin-bottom:15px;">* Usa números negativos para restar saldo.</p>
+                        <button type="submit" class="btn-submit">Actualizar Saldo</button>
+                    </form>
+                </div>
+                <div id="main-historial-compras" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Historial de Compras Global</h3>
+                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 10px;">
+                        <table class="table-modern">
+                            <thead><tr><th>Subadmin</th><th style="text-align:center;">Cant.</th><th>Créditos</th><th>Cuentas Entregadas</th></tr></thead>
+                            <tbody>${historialGlobalHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
+                `;
+            }
+
+            // ✅ PANEL SUBADMINISTRADOR: TIENDA Y MIS COMPRAS
+            if (esSubAdmin) {
+                panelesIzquierdosHtml += `
+                <div id="action-comprar-stock" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Tienda de Cuentas</h4>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Compra cuentas de Netflix de forma instantánea usando tu saldo de créditos.</p>
+                </div>
+                <div id="action-mis-compras" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Mi Inventario</h4>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las cuentas que has comprado anteriormente.</p>
+                </div>`;
+
+                let misComprasHtml = "";
+                let misComprasLog = historialCompras.filter(c => c.subadmin_id === req.session.uid);
+                if(misComprasLog.length === 0) {
+                    misComprasHtml = "<tr><td colspan='4' style='text-align:center;'>Aún no has realizado compras.</td></tr>";
+                } else {
+                    misComprasLog.forEach(c => {
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914;">${d.email_cuenta}</div>`).join('');
+                        misComprasHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
+                            <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
+                            <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span></td>
+                            <td><div style="max-height:80px; overflow-y:auto; font-size:11px;">${cuentasEntregadas}</div></td>
+                        </tr>`;
+                    });
+                }
+
+                panelesCentroHtml += `
+                <div id="main-comprar-stock" class="main-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🛒 Tienda Mayorista</h3>
+                        <div style="background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.3); padding: 8px 15px; border-radius: 50px; font-size: 13px; font-weight: 600; color: #fff;">
+                            Saldo: <span style="color:#00D2FF;">${usuarioActual.creditos || 0} Cr</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                            <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
+                            <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 24px;">5 Cuentas</h2>
+                            <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">832 Cr</p>
+                            <form action="/subadmin/comprar" method="POST">
+                                <input type="hidden" name="paquete" value="5">
+                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 5 cuentas por 832 créditos?');">Comprar Ahora</button>
+                            </form>
+                        </div>
+                        
+                        <div style="background: #000; border: 1px solid rgba(0,210,255,0.3); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,210,255,0.1);">
+                            <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
+                            <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 24px;">10 Cuentas</h2>
+                            <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">1,560 Cr</p>
+                            <form action="/subadmin/comprar" method="POST">
+                                <input type="hidden" name="paquete" value="10">
+                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 10 cuentas por 1,560 créditos?');">Comprar Ahora</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="main-mis-compras" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Mis Compras</h3>
+                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 10px;">
+                        <table class="table-modern">
+                            <thead><tr><th>ID / Fecha</th><th style="text-align:center;">Paquete</th><th>Descuento</th><th>Cuentas Entregadas</th></tr></thead>
+                            <tbody>${misComprasHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
+                `;
+            }
+
             if (esAdminPrincipal || esSubAdmin) {
                 let listadoReservas = "";
                 if(reservas.length === 0) listadoReservas = "<p style='color:var(--text-muted); font-size:12px;'>No hay reservas pendientes.</p>";
@@ -725,7 +944,7 @@ app.get('/dash', async (req, res) => {
                     if(r.estado === 'Pendiente') {
                         listadoReservas += `
                         <div style="background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">🛒 PEDIDO: ${r.cantidad} Cuentas</strong>
+                            <strong style="color: var(--accent);">🛒 PEDIDO MANUAL: ${r.cantidad} Cuentas</strong>
                             <p style="margin: 5px 0; font-size: 12px;"><strong>Cliente:</strong> ${r.cliente_nombre} | <strong>WhatsApp:</strong> ${r.telefono}</p>
                             <p style="margin: 5px 0 15px 0; font-size: 11px; color: var(--text-muted);"><strong>Fecha:</strong> ${r.fecha}</p>
                             <form action="/admin/completar-reserva" method="POST" style="margin:0;">
@@ -738,7 +957,7 @@ app.get('/dash', async (req, res) => {
 
                 panelesCentroHtml += `
                 <div id="main-reservas-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: var(--accent);">🛒 Pedidos de Cuentas (Reservas)</h3>
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: var(--accent);">🛒 Reservas (Proceso Manual)</h3>
                     <div style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
                         ${listadoReservas}
                     </div>
@@ -928,7 +1147,10 @@ app.get('/dash', async (req, res) => {
                         <div style="margin-top: auto; padding-top: 20px;">
                             <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
                                 <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
-                                <div class="info"><strong>${req.session.user}</strong><span>${req.session.rol} ▾</span></div>
+                                <div class="info">
+                                    <strong>${req.session.user}</strong>
+                                    <span>${req.session.rol} ${esSubAdmin ? `| 🪙 ${usuarioActual.creditos || 0} Cr.` : ''}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -963,13 +1185,13 @@ app.get('/dash', async (req, res) => {
                                 </form>
                             </div>
                             <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
-                                <table style="width: 100%; border-collapse: collapse;">
+                                <table class="table-modern">
                                     <thead><tr>
-                                        <th style="padding-left: 20px; border-bottom: 1px solid rgba(255,255,255,0.15);">Usuario</th>
-                                        <th style="border-bottom: 1px solid rgba(255,255,255,0.15);">Rol</th>
-                                        <th style="width: 40%; border-bottom: 1px solid rgba(255,255,255,0.15);">Correos Vinculados</th>
-                                        <th style="border-bottom: 1px solid rgba(255,255,255,0.15);">Creador</th>
-                                        <th style="text-align:center; border-bottom: 1px solid rgba(255,255,255,0.15);">Acción</th>
+                                        <th style="padding-left: 20px;">Usuario</th>
+                                        <th>Rol</th>
+                                        <th style="width: 40%;">Correos Vinculados</th>
+                                        <th>Creador</th>
+                                        <th style="text-align:center;">Acción</th>
                                     </tr></thead>
                                     <tbody>${tablaUsuariosHtml}</tbody>
                                 </table>
@@ -985,12 +1207,21 @@ app.get('/dash', async (req, res) => {
                         <div class="side-card">
                             <h4>Administración</h4>
                             <div class="menu-list">
+                                ${(esAdminPrincipal) ? `
+                                <button class="menu-btn-item" onclick="openTab('stock-admin')">📦 Gestión de Stock</button>
+                                <button class="menu-btn-item" onclick="openTab('creditos-admin')">💰 Asignar Créditos</button>
+                                <button class="menu-btn-item" onclick="openTab('historial-compras')">🧾 Historial Global</button>
+                                ` : ''}
+                                ${(esSubAdmin) ? `
+                                <button class="menu-btn-item" onclick="openTab('comprar-stock')" style="color: #00D2FF; font-weight: 600;">🛒 Tienda de Cuentas</button>
+                                <button class="menu-btn-item" onclick="openTab('mis-compras')">🧾 Mis Compras</button>
+                                ` : ''}
                                 ${(esAdminPrincipal || esSubAdmin) ? `
                                 <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
                                 <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
-                                <button class="menu-btn-item" onclick="openTab('reservas-admin')" style="color: var(--accent); font-weight: 600;">🛒 Ver Reservas</button>
-                                <button class="menu-btn-item" onclick="openTab('garantias-admin')" style="color: #00D2FF; font-weight: 600;">🚨 Alertas y Garantías</button>
+                                <button class="menu-btn-item" onclick="openTab('reservas-admin')" style="color: var(--accent); font-weight: 600;">🛒 Reservas (Manuales)</button>
+                                <button class="menu-btn-item" onclick="openTab('garantias-admin')" style="color: #E50914; font-weight: 600;">🚨 Alertas y Garantías</button>
                                 ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar accesos.</p>`}
                             </div>
                             
@@ -999,7 +1230,6 @@ app.get('/dash', async (req, res) => {
                                 ${botonesPlataformaHtml}
                             </div>
                             
-                            <!-- TARJETA FIJA DE MÉTODOS DE PAGO EN EL DASHBOARD -->
                             <div class="side-card" style="margin-top: 20px; background: rgba(0,0,0,0.6);">
                                 <h4 style="margin-bottom: 5px;">💳 MÉTODOS DE PAGO</h4>
                                 ${metodosDePagoHtml}
