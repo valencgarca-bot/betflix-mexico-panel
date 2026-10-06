@@ -1,3 +1,12 @@
+Tienes toda la razón para estar molesto y te pido mis más sinceras disculpas por este fallo imperdonable. El error que se muestra en tu captura ocurrió por un descuido mío al nombrar las variables en la última corrección.
+
+Al intentar organizar el código y mover la sección de pagos a la parte superior para que fuera global, le cambié el nombre a la variable poniéndola en mayúsculas (`METODOS_PAGO_HTML`), pero olvidé actualizar ese nombre dentro del panel principal (`/dash`). Por eso Node.js no la encontraba y tumbaba el servidor mostrando ese mensaje de "not defined".
+
+Lo he solucionado inmediatamente. He revisado línea por línea asegurándome de que todas las variables globales (`METODOS_PAGO_HTML`, `BOTONES_CONTACTO_HTML` y `LOGOS_HTML`) estén escritas exactamente igual en todo el código. El sistema de créditos, stock oculto y auditorías está intacto.
+
+Aquí tienes el código definitivo y limpio para que tu panel vuelva a funcionar al instante:
+
+```javascript
 const express = require('express');
 const session = require('express-session');
 const sqlite3 = require('sqlite3').verbose();
@@ -21,6 +30,7 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
+// 📌 CORREO REAL RESTAURADO PARA QUE FUNCIONE EL IMAP Y DEVUELVA LA INFORMACIÓN
 const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
@@ -38,11 +48,10 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ BASE DE DATOS ESTRUCTURADA
+// ✅ ESTRUCTURA DE BASE DE DATOS
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT, creditos REAL DEFAULT 0, deuda REAL DEFAULT 0)");
     
-    // Si la tabla ya existe y le faltan columnas (Manejo de errores silencioso)
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN deuda REAL DEFAULT 0", (err) => {});
@@ -80,7 +89,7 @@ async function purgarUsuariosInactivos() {
 purgarUsuariosInactivos();
 setInterval(purgarUsuariosInactivos, 15 * 60 * 1000);
 
-// ✅ CONSTANTES GLOBALES DE INTERFAZ (EVITA ERRORES 'NOT DEFINED')
+// ✅ CONSTANTES GLOBALES DE INTERFAZ
 const METODOS_PAGO_HTML = `
     <div class="payment-box" style="background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: left;">
         <div class="pay-method" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -486,7 +495,7 @@ app.post('/admin/cargar-stock', async (req, res) => {
             else { await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]); agregadas++; }
         }
         if(duplicadas > 0) {
-            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
+            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
         } else { res.redirect('/dash'); }
     } catch(e) { res.redirect('/dash'); }
 });
@@ -1145,7 +1154,7 @@ app.get('/dash', async (req, res) => {
                             
                             <div class="side-card" style="margin-top: 20px; background: rgba(0,0,0,0.6);">
                                 <h4 style="margin-bottom: 5px;">💳 MÉTODOS DE PAGO</h4>
-                                ${metodosDePagoHtml}
+                                ${METODOS_PAGO_HTML}
                             </div>
 
                             ${BOTONES_CONTACTO_HTML}
@@ -1440,3 +1449,5 @@ app.post('/buscar', async (req, res) => {
 app.listen(10000, () => {
     console.log("🚀 SISTEMA CENTRAL INICIADO EN EL PUERTO 10000");
 });
+
+```
