@@ -39,7 +39,7 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS
+// ✅ ESTRUCTURA DE BASE DE DATOS (MÓDULOS DE CRÉDITO Y DEUDA INTEGRADOS)
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
@@ -152,10 +152,6 @@ const CSS_MODERNO = `
     .plat-mini-btn { background: #000000; border: 1px solid var(--card-border); padding: 12px; border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center; height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.8); }
     .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
     .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
-    .provider-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    .contact-btn { background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s; }
-    .contact-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
-    .contact-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
     .menu-list { display: flex; flex-direction: column; gap: 8px; }
     .menu-btn-item { background: transparent; border: 1px solid transparent; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: var(--text-main); cursor: pointer; text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif; }
     .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
@@ -333,51 +329,9 @@ app.get('/', (req, res) => {
             <div class="contact-wrapper">
                 <span class="contact-label">⬇ Ref. Grupo</span>
                 <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                    <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
                 </a>
             </div>
-        </div>
-    `;
-
-    res.send(`
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Acceso - SyncBox</title>
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-            body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
-            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; margin: 15px; }
-            .input-group { margin-bottom: 20px; }
-            .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
-            .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
-            .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
-            .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
-            .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
-            
-            .contact-icon-btn {
-                background: #000; border: 1px solid rgba(255,255,255,0.15); padding: 10px; border-radius: 10px;
-                display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s;
-            }
-            .contact-icon-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
-            .contact-icon-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
-            .contact-icon-btn svg { width: 16px; height: 16px; }
-        </style>
-    </head>
-    <body>
-        <div class="login-box">
-            ${logosReconocidos}
-            ${contenidoForm}
-            
-            <button type="button" onclick="let p = document.getElementById('pagos-box-login'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" style="background: transparent; border: 1px dashed rgba(0,210,255,0.5); color: #00D2FF; padding: 12px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-top: 15px; transition: 0.3s;">💳 Ver Métodos de Pago</button>
-            <div id="pagos-box-login" style="display: none; margin-top: 10px;">
-                ${metodosDePagoHtml}
-            </div>
-
-            <div class="help-text">Panel cifrado. Conexión segura.</div>
-            ${redesSociales}
         </div>
     </body>
     </html>
@@ -454,7 +408,46 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-// ✅ RUTA DEL ADMIN PARA CARGAR STOCK CON PROTECCIÓN ANTI-DUPLICADOS GLOBAL
+app.post('/bot/reservar', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
+        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/bot/garantia', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
+        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/resolver-garantia', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/completar-reserva', async (req, res) => {
+    if(!req.session.uid) return res.redirect('/');
+    try {
+        await dbRun("UPDATE reservas SET estado = 'Atendido' WHERE id = ?", [req.body.reserva_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
+app.post('/admin/cambiar-rol', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    try {
+        await dbRun("UPDATE usuarios SET rol = ? WHERE id = ?", [req.body.nuevo_rol, req.body.user_id]);
+        res.redirect('/dash');
+    } catch(err) { res.redirect('/dash'); }
+});
+
 app.post('/admin/cargar-stock', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
@@ -484,7 +477,6 @@ app.post('/admin/cargar-stock', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// ✅ RUTA DEL ADMIN PARA ASIGNAR CRÉDITOS Y ENVIAR WHATSAPP DE NOTIFICACIÓN
 app.post('/admin/asignar-creditos', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { subadmin_id, cantidad } = req.body;
@@ -528,7 +520,6 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// ✅ RUTA DEL SUBADMIN PARA COMPRAR (USA CRÉDITO, ASIGNA AUTOMÁTICO, SUMA DEUDA, ENVÍA WA AL ADMIN)
 app.post('/subadmin/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -554,7 +545,6 @@ app.post('/subadmin/comprar', async (req, res) => {
         const compraId = compraInfo.lastID;
 
         let correosEntregados = [];
-        // Descontar del stock y asignar MÁGICAMENTE al panel del usuario
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
             await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
@@ -1082,6 +1072,33 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
+            // ✅ DEFINICIÓN RESTAURADA DE BOTONES DE CONTACTO
+            let botonesContactoProveedor = `
+            <style>
+                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
+                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
+            </style>
+            <div class="provider-contact">
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Mi Telegram</span>
+                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
+                    </a>
+                </div>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Mi WhatsApp</span>
+                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                    </a>
+                </div>
+                <div class="contact-wrapper">
+                    <span class="contact-label">⬇ Ref. Grupo</span>
+                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo Ventas
+                    </a>
+                </div>
+            </div>`;
+
             res.send(`
             <!DOCTYPE html>
             <html lang="es">
@@ -1219,79 +1236,6 @@ app.get('/dash', async (req, res) => {
             res.send(`<script>alert('Error crítico de servidor: ${err.message}'); window.location='/';</script>`); 
         }
     }
-});
-
-// ✅ RUTA DEL ADMIN PARA ASIGNAR CORREO: PROTECCIÓN ANTI-DUPLICADOS INTEGRADA
-app.post('/admin/asignar-correo', async (req, res) => {
-    if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try {
-        const targetUserId = req.body.user_id;
-
-        if (req.session.rol === 'Subadministrador') {
-            const verificaPropietario = await dbGet("SELECT id FROM usuarios WHERE id = ? AND (creado_por = ? OR id = ?)", [targetUserId, req.session.uid, req.session.uid]);
-            if (!verificaPropietario) return res.send("<script>alert('⛔ No tienes permiso.'); window.location='/dash';</script>");
-        }
-
-        const correosBrutos = req.body.email.trim();
-        const listaCorreos = correosBrutos.split(/[\s,]+/).filter(e => e.includes('@'));
-        
-        for (let email of listaCorreos) { 
-            email = email.toLowerCase();
-            const existente = await dbGet("SELECT c.id, c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [email]);
-            
-            if (existente) {
-                if (req.session.rol === 'Subadministrador' && existente.user_id === req.session.uid) {
-                    await dbRun("UPDATE correos SET user_id = ? WHERE id = ?", [targetUserId, existente.id]);
-                    // NUEVO: Borrar del stock si estaba allí
-                    await dbRun("DELETE FROM stock_cuentas WHERE email = ?", [email]);
-                } else {
-                    return res.send(`<script>alert('Esta cuenta ya está asignada. Cliente actual: ${existente.user} | Correo: ${email}'); window.location='/dash';</script>`);
-                }
-            } else {
-                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [email, targetUserId]); 
-                // NUEVO: Borrar del stock si estaba allí para evitar doble venta
-                await dbRun("DELETE FROM stock_cuentas WHERE email = ?", [email]);
-            }
-        }
-        res.redirect('/dash'); 
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/eliminar-usuario', async (req, res) => {
-    if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try {
-        const userId = req.body.user_id;
-        if (req.session.rol === 'Subadministrador') {
-            const u = await dbGet("SELECT creado_por FROM usuarios WHERE id = ?", [userId]);
-            if (!u || u.creado_por !== req.session.uid) return res.redirect('/dash');
-            
-            await dbRun("DELETE FROM correos WHERE user_id = ?", [userId]);
-            await dbRun("DELETE FROM reservas WHERE user_id = ?", [userId]);
-            await dbRun("DELETE FROM garantias WHERE user_id = ?", [userId]);
-            await dbRun("DELETE FROM usuarios WHERE id = ?", [userId]);
-        } else {
-            const children = await dbAll("SELECT id FROM usuarios WHERE creado_por = ?", [userId]);
-            const idsToDelete = [userId, ...children.map(c => c.id)];
-            
-            for(let id of idsToDelete) {
-                await dbRun("DELETE FROM correos WHERE user_id = ?", [id]);
-                await dbRun("DELETE FROM reservas WHERE user_id = ?", [id]);
-                await dbRun("DELETE FROM garantias WHERE user_id = ?", [id]);
-                await dbRun("DELETE FROM usuarios WHERE id = ?", [id]);
-            }
-        }
-        res.redirect('/dash');
-    } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/crear', async (req, res) => {
-    let creado_por = (req.session.rol === 'Subadministrador') ? req.session.uid : null;
-    try { await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [req.body.n, req.body.c, req.body.r, creado_por]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
-});
-
-app.post('/admin/eliminar-correo', async (req, res) => {
-    if (req.session.rol === 'Cliente') return res.redirect('/dash');
-    try { await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]); res.redirect('/dash'); } catch(err) { res.redirect('/dash'); }
 });
 
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
