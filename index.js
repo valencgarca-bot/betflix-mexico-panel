@@ -61,6 +61,9 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
 
+    // 📋 REGISTRO DE ASIGNACIONES MANUALES (ADMIN)
+    db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
+
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 });
@@ -68,7 +71,7 @@ db.serialize(() => {
 // 🧹 FUNCIÓN DE PURGA INMEDIATA
 async function purgarUsuariosInactivos() {
     try {
-        const res = await dbRun(`
+        await dbRun(`
             DELETE FROM usuarios 
             WHERE rol = 'Cliente' 
             AND id NOT IN (SELECT DISTINCT user_id FROM correos) 
@@ -494,6 +497,56 @@ app.post('/admin/cambiar-rol', async (req, res) => {
     } catch(err) { res.redirect('/dash'); }
 });
 
+app.post('/admin/crear', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { n, c, r } = req.body;
+    try {
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid]);
+        res.redirect('/dash');
+    } catch(err) {
+        res.send("<script>alert('Error al crear usuario o ya existe.'); window.location='/dash';</script>");
+    }
+});
+
+app.post('/admin/asignar-correo', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { user_id, email } = req.body;
+    const lista = email.split(/[\s,]+/).filter(e => e.includes('@'));
+    try {
+        for (let mail of lista) {
+            let e = mail.trim().toLowerCase();
+            let exist = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
+            if (!exist) {
+                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+            }
+        }
+        res.redirect('/dash');
+    } catch(err) {
+        res.redirect('/dash');
+    }
+});
+
+app.post('/admin/eliminar-correo', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    try {
+        await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]);
+        res.redirect('/dash');
+    } catch(err) {
+        res.redirect('/dash');
+    }
+});
+
+app.post('/admin/eliminar-usuario', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    try {
+        await dbRun("DELETE FROM correos WHERE user_id = ?", [req.body.user_id]);
+        await dbRun("DELETE FROM usuarios WHERE id = ?", [req.body.user_id]);
+        res.redirect('/dash');
+    } catch(err) {
+        res.redirect('/dash');
+    }
+});
+
 app.post('/admin/cargar-stock', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
@@ -564,6 +617,46 @@ app.post('/admin/asignar-creditos', async (req, res) => {
         </html>
         `);
     } catch(e) { res.redirect('/dash'); }
+});
+
+// 🎯 RUTA PARA ASIGNACIÓN MANUAL DESDE EL STOCK
+app.post('/admin/asignar-manual', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { cuenta_id, receptor_id } = req.body;
+
+    if (!cuenta_id || !receptor_id) {
+        return res.send("<script>alert('⛔ Selecciona una cuenta del stock y un usuario receptor.'); window.location='/dash';</script>");
+    }
+
+    try {
+        // 1. Verificar estrictamente que la cuenta exista en el stock y esté 'Disponible'
+        const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE id = ? AND estado = 'Disponible'", [cuenta_id]);
+        if (!cuenta) {
+            return res.send("<script>alert('⛔ La cuenta seleccionada no existe o ya no está disponible en el stock.'); window.location='/dash';</script>");
+        }
+
+        // 2. Verificar que no haya sido vinculada previamente
+        const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
+        if (yaVinculada) {
+            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
+            return res.send("<script>alert('⛔ Esta cuenta ya se encontraba asignada a un usuario previamente.'); window.location='/dash';</script>");
+        }
+
+        // 3. Cambiar estado a 'Asignada' en stock y registrar al receptor
+        await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
+
+        // 4. Vincular el correo al usuario receptor (aparecerá en Mis cuentas)
+        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
+
+        // 5. Registrar la operación en el historial
+        await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
+
+        res.send(`<script>alert('✅ Asignación manual completada exitosamente.\\n\\nCuenta: ${cuenta.email}\\nEliminada del stock disponible y agregada a las cuentas del usuario.'); window.location='/dash';</script>`);
+
+    } catch(e) {
+        console.error(e);
+        res.send(`<script>alert('Error en la asignación manual: ${e.message}'); window.location='/dash';</script>`);
+    }
 });
 
 app.post('/subadmin/comprar', async (req, res) => {
@@ -655,7 +748,11 @@ app.get('/dash', async (req, res) => {
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
             const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible'");
-            const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Vendida'");
+            const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Vendida' OR estado = 'Asignada'");
+            
+            const stockCuentasDisponibles = await dbAll("SELECT id, email, plataforma FROM stock_cuentas WHERE estado = 'Disponible' ORDER BY id DESC");
+            const historialAsignaciones = await dbAll("SELECT h.*, u.user as receptor, a.user as admin FROM historial_asignaciones h JOIN usuarios u ON h.receptor_id = u.id JOIN usuarios a ON h.admin_id = a.id ORDER BY h.id DESC");
+
             const historialCompras = await dbAll(`SELECT c.*, u.user as comprador FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
             const detallesComprasDB = await dbAll("SELECT * FROM detalles_compras");
 
@@ -781,6 +878,8 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
+            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
+
             if (esAdminPrincipal) {
                 panelesIzquierdosHtml += `
                 <div id="action-stock-admin" class="action-panel">
@@ -790,8 +889,12 @@ app.get('/dash', async (req, res) => {
                         <div style="font-size: 24px; font-weight: 700; color: #00D2FF;">${stockDisp.count}</div>
                         <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Disponibles</div>
                         <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 10px;">${stockVend.count}</div>
-                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Vendidas</div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Vendidas / Asignadas</div>
                     </div>
+                </div>
+                <div id="action-asignacion-manual" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Asignación Directa</h4>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Selecciona una cuenta del stock disponible y entrégala manualmente a un usuario.</p>
                 </div>
                 <div id="action-creditos-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
@@ -801,6 +904,30 @@ app.get('/dash', async (req, res) => {
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Auditoría General</h4>
                     <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Registro inmutable de todas las cuentas reclamadas por subadministradores.</p>
                 </div>`;
+
+                let opcionesStockDispHtml = stockCuentasDisponibles.length > 0
+                    ? stockCuentasDisponibles.map(c => `<option value="${c.id}">${c.email} (${c.plataforma.toUpperCase()})</option>`).join('')
+                    : '<option value="" disabled>-- No hay cuentas disponibles en el stock --</option>';
+
+                let historialAsigRows = "";
+                if (historialAsignaciones.length === 0) {
+                    historialAsigRows = "<tr><td colspan='6' style='text-align:center; padding:15px; color:var(--text-muted);'>No hay asignaciones manuales registradas.</td></tr>";
+                } else {
+                    historialAsignaciones.forEach(h => {
+                        let fechaObj = new Date(h.fecha);
+                        let fechaFormatted = fechaObj.toLocaleDateString('es-CO');
+                        let horaFormatted = fechaObj.toLocaleTimeString('es-CO');
+                        historialAsigRows += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="font-family:monospace; padding-left:15px; color:#E50914; font-weight:600;">${h.email}</td>
+                            <td><span style="color:#00D2FF; font-weight:600;">@${h.receptor}</span></td>
+                            <td><span style="color:var(--text-muted);">@${h.admin}</span></td>
+                            <td><small style="color:#fff;">${fechaFormatted} ${horaFormatted}</small></td>
+                            <td><span style="color:var(--accent); font-size:11px;">${h.tipo_operacion}</span></td>
+                            <td><span class="badge-status disp" style="color:#25d366; border-color:#25d366;">${h.estado}</span></td>
+                        </tr>`;
+                    });
+                }
 
                 let subadminsOpcionesHtml = usuarios.filter(u => u.rol === 'Subadministrador' || u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (Crédito: ${u.creditos} | Deuda: ${u.deuda})</option>`).join('');
 
@@ -826,8 +953,12 @@ app.get('/dash', async (req, res) => {
                     stockAdnHtml = "<tr><td colspan='4' style='text-align:center;'>No hay stock en la base de datos.</td></tr>";
                 } else {
                     stockDB.forEach(s => {
-                        let estadoBadge = s.estado === 'Disponible' ? '<span class="badge-status disp">Libre</span>' : '<span class="badge-status vendida">Vendida</span>';
-                        let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
+                        let estadoBadge = s.estado === 'Disponible' 
+                            ? '<span class="badge-status disp">Libre</span>' 
+                            : (s.estado === 'Asignada' 
+                                ? '<span class="badge-status vendida" style="border-color:#00D2FF; color:#00D2FF; background:rgba(0,210,255,0.15);">Asignada</span>' 
+                                : '<span class="badge-status vendida">Vendida</span>');
+                        let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra || 'N/A'}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
                         stockAdnHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="font-family:monospace; padding-left:20px;">${s.email}</td>
@@ -850,11 +981,59 @@ app.get('/dash', async (req, res) => {
                     </form>
                     <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 25px;">
                         <table class="table-modern">
-                            <thead><tr><th style="padding-left:20px;">Correo (ADN)</th><th>Estado</th><th>Comprador</th><th>Fecha Carga</th></tr></thead>
+                            <thead><tr><th style="padding-left:20px;">Correo (ADN)</th><th>Estado</th><th>Comprador / Receptor</th><th>Fecha Carga</th></tr></thead>
                             <tbody>${stockAdnHtml}</tbody>
                         </table>
                     </div>
                 </div>
+
+                <!-- 🎯 TARJETA DE ASIGNACIÓN MANUAL -->
+                <div id="main-asignacion-manual" class="main-card">
+                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual de Cuenta desde el Stock</h3>
+                    <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
+                        Selecciona una cuenta disponible del stock para entregársela directamente a un usuario. La cuenta se eliminará inmediatamente del stock disponible y se vinculará a las cuentas del cliente.
+                    </p>
+                    
+                    <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+                        <div style="margin-bottom: 15px;">
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Cuenta disponible en Stock:</label>
+                            <select name="cuenta_id" class="input-classic" required>
+                                <option value="" disabled selected>-- Selecciona una cuenta --</option>
+                                ${opcionesStockDispHtml}
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Usuario receptor (Cliente / Subadmin):</label>
+                            <select name="receptor_id" class="input-classic" required>
+                                <option value="" disabled selected>-- Selecciona al usuario --</option>
+                                ${clientesOpcionesHtml}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación manual? La cuenta se transferirá al usuario y se eliminará del stock disponible.');">Asignar Cuenta Manualmente</button>
+                    </form>
+
+                    <div style="margin-top: 30px;">
+                        <h4 style="margin:0 0 15px 0; font-size:14px; color:#00D2FF; text-transform:uppercase; letter-spacing:1px;">📋 Historial de Asignación Manual</h4>
+                        <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
+                            <table class="table-modern">
+                                <thead>
+                                    <tr>
+                                        <th style="padding-left:15px;">Cuenta</th>
+                                        <th>Usuario Receptor</th>
+                                        <th>Administrador</th>
+                                        <th>Fecha y Hora</th>
+                                        <th>Tipo</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${historialAsigRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="main-creditos-admin" class="main-card">
                     <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">💰 Asignación de Créditos</h3>
                     <form action="/admin/asignar-creditos" method="POST">
@@ -1026,7 +1205,6 @@ app.get('/dash', async (req, res) => {
             
             let tablaUsuariosHtml = "";
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
-            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
             
             if (esAdminPrincipal || esSubAdmin) {
                 let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben' && u.user !== 'dueño') : usuarios.filter(u => u.creado_por === req.session.uid);
@@ -1237,6 +1415,7 @@ app.get('/dash', async (req, res) => {
                             <div class="menu-list">
                                 ${(esAdminPrincipal) ? `
                                 <button class="menu-btn-item" onclick="openTab('stock-admin')">📦 Gestión de Stock</button>
+                                <button class="menu-btn-item" onclick="openTab('asignacion-manual')" style="color: #00D2FF; font-weight: 600;">🎯 Asignación Manual</button>
                                 <button class="menu-btn-item" onclick="openTab('creditos-admin')">💰 Asignar Créditos</button>
                                 <button class="menu-btn-item" onclick="openTab('historial-compras')">🧾 Historial Global</button>
                                 ` : ''}
@@ -1294,14 +1473,12 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         connection = await imaps.connect(config);
         await connection.openBox('INBOX');
         
-        // BÚSQUEDA ROBUSTA: SIN FILTROS RESTRICTIVOS
         let searchResults = await connection.search([['X-GM-RAW', `"${correoIngresado}"`]], { bodies: ['HEADER.FIELDS (DATE)'] });
         
         if (searchResults.length === 0) {
             searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
         }
 
-        // FALLBACK DEFINITIVO: Buscar solo la primera parte del correo (antes del @) si es un dominio raro
         if (searchResults.length === 0 && partes && partes.length > 0) {
             searchResults = await connection.search([['TEXT', partes[0]]], { bodies: ['HEADER.FIELDS (DATE)'] });
         }
@@ -1310,7 +1487,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         let mail = null;
 
         if (searchResults.length > 0) {
-            // ORDENAR POR FECHA Y UID PARA ENCONTRAR ESTRICTAMENTE EL ÚLTIMO
             searchResults.sort((a, b) => {
                 let dateA = new Date(a.attributes.date || 0).getTime();
                 let dateB = new Date(b.attributes.date || 0).getTime();
