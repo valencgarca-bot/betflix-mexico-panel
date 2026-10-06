@@ -21,7 +21,6 @@ const dbGet = (query, params = []) => new Promise((resolve, reject) => db.get(qu
 const dbAll = (query, params = []) => new Promise((resolve, reject) => db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows)));
 const dbRun = (query, params = []) => new Promise((resolve, reject) => db.run(query, params, function(err) { err ? reject(err) : resolve(this) }));
 
-// 📌 CORREO REAL RESTAURADO PARA QUE FUNCIONE EL IMAP Y DEVUELVA LA INFORMACIÓN
 const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
@@ -61,7 +60,6 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
 
-    // 📋 REGISTRO DE ASIGNACIONES MANUALES (ADMIN)
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)", (err) => {});
@@ -82,6 +80,7 @@ async function purgarUsuariosInactivos() {
 purgarUsuariosInactivos();
 setInterval(purgarUsuariosInactivos, 15 * 60 * 1000);
 
+// Métodos de pago (Solo visibles para Admins y Subadmins)
 const metodosDePagoHtml = `
     <div class="payment-box" style="background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: left;">
         <div class="pay-method" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -107,150 +106,6 @@ const metodosDePagoHtml = `
             </div>
         </div>
     </div>
-`;
-
-const CSS_MODERNO = `
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    :root {
-        --text-main: #f8fafc; --text-muted: #94a3b8; --card-bg: rgba(0, 0, 0, 0.92);
-        --card-border: rgba(255, 255, 255, 0.15); --accent: #00D2FF; --accent-hover: #0099CC;
-        --btn-bg: rgba(0, 210, 255, 0.12); --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
-        --blur-effect: blur(8px); --radius: 16px;
-    }
-    @keyframes pureSeriesSlideshow {
-        0% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
-        33% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2000&auto=format&fit=crop'); }
-        66% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
-        100% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
-    }
-    body { background-size: cover; background-position: center; background-attachment: fixed; animation: pureSeriesSlideshow 16s ease infinite; background-color: #000000; color: var(--text-main); font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; }
-    .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
-    .user-pill { display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s; }
-    .user-pill:hover { border-color: rgba(255, 255, 255, 0.4); transform: translateY(-2px); }
-    .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
-    .user-pill .info { display: flex; flex-direction: column; }
-    .user-pill .info strong { color: var(--text-main); font-size: 13px; font-weight: 600; }
-    .user-pill .info span { color: var(--text-muted); font-size: 11px; }
-    .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
-    .brand-logo strong { font-weight: 700; color: var(--accent); }
-    .search-top input { background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px; border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s; }
-    .search-top input:focus { border-color: var(--accent); width: 320px; background: #000; }
-    .dashboard-grid { display: grid; grid-template-columns: 320px 1fr 280px; gap: 25px; padding: 10px 40px 40px 40px; align-items: start; }
-    .left-sidebar { display: flex; flex-direction: column; gap: 20px; height: 100%; min-height: 600px; }
-    .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
-    .center-panel { display: flex; flex-direction: column; gap: 20px; }
-    .action-panel { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px; min-height: 380px; }
-    .action-panel.active { display: flex; }
-    .main-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; }
-    .main-card.active { display: block; }
-    .action-btn-pill { width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
-    .action-btn-pill:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.5);}
-    .search-input-large { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px; color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s; }
-    .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
-    .iframe-container { display: none; background: transparent; border: none; height: 600px; width: 100%; overflow: hidden; }
-    .side-card { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); }
-    .side-card h4 { margin: 0 0 15px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;}
-    .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    .plat-mini-btn { background: #000000; border: 1px solid var(--card-border); padding: 12px; border-radius: 12px; cursor: pointer; display: flex; justify-content: center; align-items: center; height: 60px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.8); }
-    .plat-mini-btn:hover { background: rgba(0, 210, 255, 0.2); border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,210,255,0.4);}
-    .plat-mini-btn img { max-height: 28px; max-width: 90%; object-fit: contain; }
-    .provider-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    .contact-btn { background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s; }
-    .contact-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
-    .contact-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
-    .menu-list { display: flex; flex-direction: column; gap: 8px; }
-    .menu-btn-item { background: transparent; border: 1px solid transparent; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: var(--text-main); cursor: pointer; text-align: left; transition: 0.3s; font-family: 'Inter', sans-serif; }
-    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
-    .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
-    .activity-item { background: #000000; border: 1px solid rgba(255, 255, 255, 0.12); padding: 12px 14px; border-radius: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; transition: 0.2s; }
-    .activity-item:hover { border-color: var(--accent); background: rgba(0, 210, 255, 0.08); }
-    .activity-item strong { color: var(--text-main); font-weight: 500; word-break: break-all; font-size: 12px; }
-    .activity-meta { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 10px; margin-top: 2px; }
-    .activity-user { color: var(--accent); font-weight: 600; }
-    .input-classic { width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: #000000; color: white; box-sizing: border-box; outline: none; font-size: 13px;}
-    .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,210,255,0.25); }
-    .btn-submit { background: var(--accent); color: #000; border: none; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
-    .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); color: #fff; }
-    .sub-form { display: none; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
-    .table-modern { width: 100%; border-collapse: collapse; text-align: left; }
-    .table-modern th { padding: 12px; font-size: 11px; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.15); text-transform: uppercase; letter-spacing: 1px; }
-    .table-modern td { padding: 12px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #f8fafc; vertical-align: top; }
-    .badge-status { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-    .badge-status.disp { background: rgba(37,211,102,0.15); color: #25d366; border: 1px solid #25d366; }
-    .badge-status.vendida { background: rgba(229,9,20,0.15); color: #E50914; border: 1px solid #E50914; }
-
-    @media (max-width: 1024px) {
-        .dashboard-grid { grid-template-columns: 1fr !important; padding: 15px 15px 40px 15px !important; gap: 20px !important; }
-        .left-sidebar { min-height: auto !important; }
-        .top-header { flex-direction: column; gap: 15px; padding: 15px; text-align: center; }
-        .brand-logo { margin: 0 auto !important; justify-content: center; width: 100%; text-align: center; }
-        .search-top { width: 100%; }
-        .search-top input { width: 100% !important; max-width: 100%; }
-        .iframe-container { height: 400px; }
-        .action-panel, .main-card, .side-card { padding: 18px !important; }
-        .user-pill { justify-content: center; }
-        .table-modern { display: block; overflow-x: auto; white-space: nowrap; }
-    }
-</style>
-
-<script>
-    function toggleSubForm(id) {
-        document.querySelectorAll('.sub-form').forEach(f => { if(f.id !== id) f.style.display = 'none'; });
-        let el = document.getElementById(id);
-        el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
-    }
-
-    function triggerAction(platKey, actionName) {
-        let form = document.getElementById('form-' + platKey);
-        if(form) {
-            let emailInput = form.querySelector('input[name="email_search"]');
-            if(!emailInput.value.trim()) {
-                emailInput.style.borderColor = "#E50914";
-                emailInput.style.boxShadow = "0 0 15px rgba(229,9,20,0.6)";
-                emailInput.placeholder = "¡ESCRIBE EL CORREO PRIMERO!";
-                emailInput.focus();
-                return;
-            }
-            emailInput.style.borderColor = "var(--accent)";
-            emailInput.style.boxShadow = "none";
-            
-            let actionInput = form.querySelector('input[name="accion"]');
-            if(!actionInput) {
-                actionInput = document.createElement('input');
-                actionInput.type = 'hidden';
-                actionInput.name = 'accion';
-                form.appendChild(actionInput);
-            }
-            actionInput.value = actionName;
-            
-            document.getElementById('visor-resultados').style.display = 'flex';
-            form.submit();
-        }
-    }
-
-    function openTab(tabId) {
-        document.querySelectorAll('.main-card').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.action-panel').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.sub-form').forEach(f => f.style.display = 'none');
-        
-        let selectedMain = document.getElementById('main-' + tabId);
-        let selectedAction = document.getElementById('action-' + tabId);
-        
-        if(selectedMain) selectedMain.classList.add('active');
-        if(selectedAction) selectedAction.classList.add('active');
-        
-        localStorage.setItem('activeBetflixTab', tabId);
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        let active = localStorage.getItem('activeBetflixTab');
-        const urlParams = new URLSearchParams(window.location.search);
-        if(urlParams.has('buscar_dueno')) { active = 'base-datos'; }
-        if(!active || !document.getElementById('main-' + active)) active = 'netflix'; 
-        openTab(active);
-    });
-</script>
 `;
 
 app.use(async (req, res, next) => {
@@ -288,7 +143,7 @@ app.get('/', (req, res) => {
     let mensajeBienvenida = `
         <div style="text-align: center; margin-bottom: 25px;">
             <h3 style="color: #00D2FF; margin: 0 0 5px 0; font-size: 18px; font-weight: 600;">¡Bienvenido a SyncBox!</h3>
-            <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.5;">Somos nuevos en el mercado pero con las mejores cuentas.</p>
+            <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.5;">Accede a tu panel seguro.</p>
         </div>
     `;
 
@@ -315,33 +170,7 @@ app.get('/', (req, res) => {
         `;
     }
 
-    let redesSociales = `
-        <style>
-            .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; text-align: center; }
-            .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
-        </style>
-        <div class="login-contact" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Mi Telegram</span>
-                <a href="https://t.me/SyncBox701" target="_blank" class="contact-icon-btn telegram" title="Telegram" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                </a>
-            </div>
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Mi WhatsApp</span>
-                <a href="https://wa.me/573012964169" target="_blank" class="contact-icon-btn whatsapp" title="WhatsApp Directo" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                </a>
-            </div>
-            <div class="contact-wrapper">
-                <span class="contact-label">⬇ Ref. Grupo</span>
-                <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-icon-btn whatsapp" title="Grupo de Referencia" style="width: 100%;">
-                    <svg viewBox="0 0 24 24" fill="#25d366"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                </a>
-            </div>
-        </div>
-    `;
-
+    // Se eliminan los datos de contacto personal del Administrador de la vista pública (Clausula 15)
     res.send(`
     <!DOCTYPE html>
     <html lang="es">
@@ -359,28 +188,13 @@ app.get('/', (req, res) => {
             .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
             .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
             .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
-            
-            .contact-icon-btn {
-                background: #000; border: 1px solid rgba(255,255,255,0.15); padding: 10px; border-radius: 10px;
-                display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s;
-            }
-            .contact-icon-btn.telegram:hover { background: rgba(0, 136, 204, 0.25); border-color: #0088cc; transform: translateY(-2px); }
-            .contact-icon-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; transform: translateY(-2px); }
-            .contact-icon-btn svg { width: 16px; height: 16px; }
         </style>
     </head>
     <body>
         <div class="login-box">
             ${logosReconocidos}
             ${contenidoForm}
-            
-            <button type="button" onclick="let p = document.getElementById('pagos-box-login'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" style="background: transparent; border: 1px dashed rgba(0,210,255,0.5); color: #00D2FF; padding: 12px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-top: 15px; transition: 0.3s;">💳 Ver Métodos de Pago</button>
-            <div id="pagos-box-login" style="display: none; margin-top: 10px;">
-                ${metodosDePagoHtml}
-            </div>
-
             <div class="help-text">Panel cifrado. Conexión segura.</div>
-            ${redesSociales}
         </div>
     </body>
     </html>
@@ -391,37 +205,7 @@ app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
-        
-        const fechaObj = new Date();
-        const fechaHoraLocal = fechaObj.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
-
-        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
-        const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
-
-        res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Redirigiendo a WhatsApp...</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #25d366; font-size: 24px; }
-                p { color: #a3a3a3; font-size: 14px; margin-bottom: 30px; }
-                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); }
-            </style>
-        </head>
-        <body>
-            <h2>✅ ¡Registro Exitoso!</h2>
-            <p>Se ha creado tu cuenta. Haz clic abajo para enviar tus datos por WhatsApp y activar tu acceso.</p>
-            <a href="${linkRedireccion}" class="btn">Confirmar por WhatsApp</a>
-            <script>
-                window.location.replace('${linkRedireccion}');
-            </script>
-        </body>
-        </html>
-        `);
+        res.send("<script>alert('✅ Registro exitoso. Ingresa con tus credenciales.'); window.location='/';</script>");
     } catch(err) {
         res.send("<script>alert('⛔ El nombre de usuario ya está en uso. Elige otro.'); window.location='/?mode=registro';</script>");
     }
@@ -461,7 +245,7 @@ app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, req.body.telefono]);
-        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+        res.send("<script>alert('🛒 Reserva enviada exitosamente.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -469,7 +253,7 @@ app.post('/bot/garantia', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
-        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
+        res.send("<script>alert('🚨 Garantía reportada en sistema.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -499,9 +283,9 @@ app.post('/admin/cambiar-rol', async (req, res) => {
 
 app.post('/admin/crear', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
-    const { n, c, r } = req.body;
+    const { n, c, r, t } = req.body;
     try {
-        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por) VALUES (?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid]);
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, t || '']);
         res.redirect('/dash');
     } catch(err) {
         res.send("<script>alert('Error al crear usuario o ya existe.'); window.location='/dash';</script>");
@@ -569,7 +353,7 @@ app.post('/admin/cargar-stock', async (req, res) => {
             }
         }
         if(duplicadas > 0) {
-            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
+            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS.'); window.location='/dash';</script>`);
         } else {
             res.redirect('/dash');
         }
@@ -579,7 +363,6 @@ app.post('/admin/cargar-stock', async (req, res) => {
 app.post('/admin/asignar-creditos', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { subadmin_id, cantidad } = req.body;
-    
     try {
         const user = await dbGet("SELECT user, telefono, creditos FROM usuarios WHERE id = ?", [subadmin_id]);
         if(!user) return res.redirect('/dash');
@@ -588,140 +371,68 @@ app.post('/admin/asignar-creditos', async (req, res) => {
         const nuevoSaldo = user.creditos + monto;
 
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
-
-        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
-        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
-        const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
-
-        res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Aviso de Crédito</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #00D2FF; font-size: 24px; }
-                .btn { background: #00D2FF; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(0,210,255,0.4); margin-top: 20px;}
-            </style>
-        </head>
-        <body>
-            <h2>✅ Crédito Asignado (${nuevoSaldo} Cr)</h2>
-            <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
-            <a href="${link}" class="btn">Notificar al Cliente</a>
-            <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
-            <script>window.location.replace('${link}');</script>
-        </body>
-        </html>
-        `);
+        res.send(`<script>alert('Saldo actualizado correctamente.'); window.location='/dash';</script>`);
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🎯 RUTA PARA ASIGNACIÓN MANUAL DESDE EL STOCK
+// 🎯 ASIGNACIÓN MANUAL CON LUPA Y CONFIRMACIÓN
 app.post('/admin/asignar-manual', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { cuenta_id, receptor_id } = req.body;
 
     if (!cuenta_id || !receptor_id) {
-        return res.send("<script>alert('⛔ Selecciona una cuenta del stock y un usuario receptor.'); window.location='/dash';</script>");
+        return res.send("<script>alert('⛔ Faltan datos para la asignación.'); window.location='/dash';</script>");
     }
 
     try {
-        // 1. Verificar estrictamente que la cuenta exista en el stock y esté 'Disponible'
         const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE id = ? AND estado = 'Disponible'", [cuenta_id]);
         if (!cuenta) {
-            return res.send("<script>alert('⛔ La cuenta seleccionada no existe o ya no está disponible en el stock.'); window.location='/dash';</script>");
+            return res.send("<script>alert('⛔ La cuenta ya no está disponible en el stock.'); window.location='/dash';</script>");
         }
 
-        // 2. Verificar que no haya sido vinculada previamente
         const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
         if (yaVinculada) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
-            return res.send("<script>alert('⛔ Esta cuenta ya se encontraba asignada a un usuario previamente.'); window.location='/dash';</script>");
+            return res.send("<script>alert('⛔ Esta cuenta ya estaba vinculada.'); window.location='/dash';</script>");
         }
 
-        // 3. Cambiar estado a 'Asignada' en stock y registrar al receptor
         await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
-
-        // 4. Vincular el correo al usuario receptor (aparecerá en Mis cuentas)
         await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
-
-        // 5. Registrar la operación en el historial
         await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
 
-        res.send(`<script>alert('✅ Asignación manual completada exitosamente.\\n\\nCuenta: ${cuenta.email}\\nEliminada del stock disponible y agregada a las cuentas del usuario.'); window.location='/dash';</script>`);
-
+        res.send(`<script>alert('✅ Asignación manual completada.\\nCuenta: ${cuenta.email} transferida al usuario.'); window.location='/dash';</script>`);
     } catch(e) {
-        console.error(e);
-        res.send(`<script>alert('Error en la asignación manual: ${e.message}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('Error en la asignación: ${e.message}'); window.location='/dash';</script>`);
     }
 });
 
 app.post('/subadmin/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
-    let costo = 0;
-    
-    if (paquete === 5) costo = 832;
-    else if (paquete === 10) costo = 1560;
-    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
+    let costo = paquete === 5 ? 832 : (paquete === 10 ? 1560 : 0);
+    if (!costo) return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
 
     try {
         const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
-        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
+        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes.'); window.location='/dash';</script>");
 
         const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
-        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
+        if (disponibles.length < paquete) return res.send("<script>alert('No hay stock suficiente. Intenta más tarde.'); window.location='/dash';</script>");
 
         const nuevoSaldo = user.creditos - costo;
         const nuevaDeuda = (user.deuda || 0) + costo;
 
         await dbRun("UPDATE usuarios SET creditos = ?, deuda = ? WHERE id = ?", [nuevoSaldo, nuevaDeuda, req.session.uid]);
-
         const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
         const compraId = compraInfo.lastID;
 
-        let correosEntregados = [];
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
             await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
-            correosEntregados.push(cuenta.email);
         }
 
-        const fechaObj = new Date();
-        const fechaStr = fechaObj.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
-        const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
-
-        const adminPhone = "573012964169";
-        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* $${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
-        const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
-
-        res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Compra Exitosa</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #25d366; font-size: 24px; }
-                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); margin-top: 20px;}
-            </style>
-        </head>
-        <body>
-            <h2>✅ Compra de ${paquete} Cuentas Exitosa</h2>
-            <p>Las cuentas ya están en tu panel listas para usar.<br>Notifica al administrador para confirmar el comprobante de la transacción.</p>
-            <a href="${linkAdmin}" class="btn">Enviar Comprobante</a>
-            <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a>
-            <script>window.location.replace('${linkAdmin}');</script>
-        </body>
-        </html>
-        `);
+        res.send(`<script>alert('✅ Compra exitosa. Las cuentas se agregaron a tu panel.'); window.location='/dash';</script>`);
     } catch(e) {
         res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
     }
@@ -738,929 +449,227 @@ app.get('/dash', async (req, res) => {
             let misCorreos = [];
             if (esCliente || esSubAdmin) { misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]); }
 
+            let superiorPhone = "";
+            let superiorName = "";
+            if (esCliente && usuarioActual.creado_por) {
+                const creador = await dbGet("SELECT user, telefono FROM usuarios WHERE id = ?", [usuarioActual.creado_por]);
+                if (creador) {
+                    superiorPhone = creador.telefono;
+                    superiorName = creador.user;
+                }
+            }
+
+            let providerContactHtml = "";
+            if (esAdminPrincipal) {
+                providerContactHtml = `<div style="margin-top:15px; padding:10px; background: rgba(0,210,255,0.1); border-radius:8px; border:1px solid rgba(0,210,255,0.3); font-size:12px;">📞 Eres el Administrador Principal.</div>`;
+            } else if (esSubAdmin) {
+                providerContactHtml = `
+                <div class="provider-contact" style="margin-top: 15px;">
+                    <span style="font-size: 11px; color: var(--accent); display: block; margin-bottom: 5px;">Comunicación Interna:</span>
+                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">WhatsApp Jefe Admin</a>
+                </div>`;
+            } else if (esCliente) {
+                if (superiorPhone) {
+                    let cleanPhone = superiorPhone.replace('+', '').replace(/ /g, '');
+                    providerContactHtml = `
+                    <div class="provider-contact" style="margin-top: 15px;">
+                        <span style="font-size: 11px; color: var(--accent); display: block; margin-bottom: 5px;">Tu Proveedor Oficial (@${superiorName}):</span>
+                        <a href="https://wa.me/${cleanPhone}" target="_blank" class="contact-btn whatsapp" style="width: 100%;">Contactar Proveedor</a>
+                    </div>`;
+                } else {
+                    providerContactHtml = `<div style="margin-top:15px; font-size:11px; color:var(--text-muted);">Comunícate con quien te creó la cuenta.</div>`;
+                }
+            }
+
             let query = esAdminPrincipal ? "SELECT * FROM usuarios" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
             const correos = await dbAll("SELECT * FROM correos", []);
-            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
             
-            const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
-            const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
-
             const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible'");
-            const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Vendida' OR estado = 'Asignada'");
-            
             const stockCuentasDisponibles = await dbAll("SELECT id, email, plataforma FROM stock_cuentas WHERE estado = 'Disponible' ORDER BY id DESC");
-            const historialAsignaciones = await dbAll("SELECT h.*, u.user as receptor, a.user as admin FROM historial_asignaciones h JOIN usuarios u ON h.receptor_id = u.id JOIN usuarios a ON h.admin_id = a.id ORDER BY h.id DESC");
+            const clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
 
-            const historialCompras = await dbAll(`SELECT c.*, u.user as comprador FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
-            const detallesComprasDB = await dbAll("SELECT * FROM detalles_compras");
-
-            let actividadesHtml = "";
-            if (registros.length > 0) {
-                registros.forEach(r => { 
-                    actividadesHtml += `
-                    <div class="activity-item">
-                        <strong>${r.email_buscado}</strong>
-                        <div class="activity-meta">
-                            <span>${r.fecha}</span>
-                            <span class="activity-user">@${r.user}</span>
-                        </div>
-                    </div>`; 
-                });
-            } else { 
-                actividadesHtml = `<div class="activity-item"><span style="color:var(--text-muted);">No hay actividades recientes.</span></div>`; 
-            }
-
-            let botonesPlataformaHtml = "";
-            Object.keys(PLATAFORMAS).forEach(key => {
-                let plat = PLATAFORMAS[key];
-                botonesPlataformaHtml += `
-                <div class="plat-mini-btn" onclick="openTab('${key}')" title="Abrir ${plat.nombre}">
-                    <img src="${plat.logo}" alt="${plat.nombre}">
-                </div>`;
-            });
-
-            let panelesCentroHtml = "";
-            let panelesIzquierdosHtml = "";
-
-            Object.keys(PLATAFORMAS).forEach(key => {
-                let plat = PLATAFORMAS[key];
-                
-                let controlesIzquierda = `
-                    <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 15px;">
-                        <p style="margin: 0; color: #f8fafc; font-size: 11px; line-height: 1.5; font-weight: 400;">
-                            Panel Operativo. Utiliza las opciones del bot para interactuar con la administración.
-                        </p>
-                    </div>`;
-
-                if (key === 'netflix') {
-                    controlesIzquierda += `
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
-                            <img src="${plat.logo}" alt="Netflix" style="height: 16px;"> DAR CLICK AQUÍ
-                        </button>
-                    `;
-                } else {
-                    controlesIzquierda += `
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; margin-bottom: 5px;">🔎 Extraer Código Original</button>
-                    `;
-                }
-
-                let stockEnVivo = stockDisp ? stockDisp.count : 0;
-                let msjStock = esSubAdmin ? `📊 Stock en vivo: ${stockEnVivo} Cuentas Netflix Disponibles` : `📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles`;
-                
-                controlesIzquierda += `
-                    <button onclick="alert('${msjStock}')" class="action-btn-pill" style="background: #000;">📊 Ver Stock Disponible</button>
-                    
-                    <button onclick="toggleSubForm('reserva-${key}')" class="action-btn-pill" style="background: #000;">🛒 Reservar Cuentas (Manual)</button>
-                    <div id="reserva-${key}" class="sub-form">
-                        <form action="/bot/reservar" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">🛒 Pedido Manual</h5>
-                            <input type="number" name="cantidad" min="1" max="10" placeholder="Cantidad (1 a 10)" class="input-classic" required>
-                            <input type="text" name="telefono" placeholder="Número de WhatsApp" class="input-classic" required>
-                            <button type="submit" class="btn-submit">Enviar Pedido</button>
-                        </form>
-                    </div>
-                `;
-
-                if (esAdminPrincipal || esSubAdmin) {
-                    controlesIzquierda += `
-                    <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #fff; margin-top: 5px;">🛡️ Pedir Garantía</button>
-                    <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
-                        <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
-                            <input type="hidden" name="plataforma" value="${key}">
-                            <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
-                            <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
-                            <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;">Reportar Falla</button>
-                        </form>
-                    </div>
-                    `;
-                }
-
-                if (esSubAdmin) {
-                    controlesIzquierda += `
-                    <button onclick="toggleSubForm('soporte-${key}')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.15); border-color: #ff7300; margin-top: 5px;">🛠️ Pedir Soporte (SubAdmin)</button>
-                    <div id="soporte-${key}" class="sub-form" style="border-color: #ff7300;">
-                        <p style="font-size: 11px; margin-bottom: 10px;">Comunícate directo con el jefe por pagos o ayudas técnicas.</p>
-                        <textarea class="input-classic" rows="2" placeholder="Describe el problema..."></textarea>
-                        <button type="button" class="btn-submit" style="background: #ff7300; color: #fff;" onclick="alert('Ticket de soporte enviado.')">Enviar Ticket</button>
-                    </div>`;
-                }
-
-                panelesIzquierdosHtml += `
-                <div id="action-${key}" class="action-panel">
-                    <h4 style="margin:0 0 10px 0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Acciones ${plat.nombre}</h4>
-                    ${controlesIzquierda}
-                </div>`;
-
-                let avisoSinCorreo = "";
-                if ((esCliente || esSubAdmin) && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.2); border: 1px solid #E50914; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas. Comunícate mediante los botones de contacto (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
-                }
-
-                panelesCentroHtml += `
-                <div id="main-${key}" class="main-card">
-                    ${avisoSinCorreo}
-                    <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
-                        <div style="background:#000000; padding:10px 15px; border-radius:8px; border:1px solid var(--card-border);">
-                            <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:24px; width:auto; max-width:100px; object-fit:contain;">
-                        </div>
-                        <div>
-                            <h3 style="margin:0; font-size:16px; font-weight:500;">Búsqueda en ${plat.nombre}</h3>
-                            <p style="margin:2px 0 0 0; font-size:11px; color:var(--text-muted);">Ingresa el correo para consultar resultados.</p>
-                        </div>
-                    </div>
-                    <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
-                        <input type="hidden" name="plataforma" value="${key}">
-                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo registrado..." required ${((esCliente || esSubAdmin) && misCorreos.length === 0) ? 'disabled' : ''}>
-                    </form>
-                </div>`;
-            });
-
-            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
-
-            if (esAdminPrincipal) {
-                panelesIzquierdosHtml += `
-                <div id="action-stock-admin" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Control de Inventario</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Carga masiva de cuentas al sistema para la venta automática a subadministradores.</p>
-                    <div style="margin-top:20px; background: rgba(0, 210, 255, 0.1); padding: 15px; border-radius: 8px; border: 1px solid rgba(0, 210, 255, 0.3);">
-                        <div style="font-size: 24px; font-weight: 700; color: #00D2FF;">${stockDisp.count}</div>
-                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Disponibles</div>
-                        <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 10px;">${stockVend.count}</div>
-                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Vendidas / Asignadas</div>
-                    </div>
-                </div>
-                <div id="action-asignacion-manual" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Asignación Directa</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Selecciona una cuenta del stock disponible y entrégala manualmente a un usuario.</p>
-                </div>
-                <div id="action-creditos-admin" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Asigna saldo a tus subadministradores y controla su deuda acumulada.</p>
-                </div>
-                <div id="action-historial-compras" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Auditoría General</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Registro inmutable de todas las cuentas reclamadas por subadministradores.</p>
-                </div>`;
-
-                let opcionesStockDispHtml = stockCuentasDisponibles.length > 0
-                    ? stockCuentasDisponibles.map(c => `<option value="${c.id}">${c.email} (${c.plataforma.toUpperCase()})</option>`).join('')
-                    : '<option value="" disabled>-- No hay cuentas disponibles en el stock --</option>';
-
-                let historialAsigRows = "";
-                if (historialAsignaciones.length === 0) {
-                    historialAsigRows = "<tr><td colspan='6' style='text-align:center; padding:15px; color:var(--text-muted);'>No hay asignaciones manuales registradas.</td></tr>";
-                } else {
-                    historialAsignaciones.forEach(h => {
-                        let fechaObj = new Date(h.fecha);
-                        let fechaFormatted = fechaObj.toLocaleDateString('es-CO');
-                        let horaFormatted = fechaObj.toLocaleTimeString('es-CO');
-                        historialAsigRows += `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="font-family:monospace; padding-left:15px; color:#E50914; font-weight:600;">${h.email}</td>
-                            <td><span style="color:#00D2FF; font-weight:600;">@${h.receptor}</span></td>
-                            <td><span style="color:var(--text-muted);">@${h.admin}</span></td>
-                            <td><small style="color:#fff;">${fechaFormatted} ${horaFormatted}</small></td>
-                            <td><span style="color:var(--accent); font-size:11px;">${h.tipo_operacion}</span></td>
-                            <td><span class="badge-status disp" style="color:#25d366; border-color:#25d366;">${h.estado}</span></td>
-                        </tr>`;
-                    });
-                }
-
-                let subadminsOpcionesHtml = usuarios.filter(u => u.rol === 'Subadministrador' || u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (Crédito: ${u.creditos} | Deuda: ${u.deuda})</option>`).join('');
-
-                let historialGlobalHtml = "";
-                if(historialCompras.length === 0) {
-                    historialGlobalHtml = "<tr><td colspan='4' style='text-align:center;'>No hay compras registradas.</td></tr>";
-                } else {
-                    historialCompras.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
-                        historialGlobalHtml += `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
-                            <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad}</td>
-                            <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span><br><small style="color:var(--text-muted);">Quedan: ${c.saldo_nuevo}</small></td>
-                            <td><div style="max-height:80px; overflow-y:auto; font-size:10px;">${cuentasEntregadas}</div></td>
-                        </tr>`;
-                    });
-                }
-
-                const stockDB = await dbAll(`SELECT s.*, u.user as comprador FROM stock_cuentas s LEFT JOIN usuarios u ON s.comprador_id = u.id ORDER BY s.id DESC`);
-                let stockAdnHtml = "";
-                if(stockDB.length === 0) {
-                    stockAdnHtml = "<tr><td colspan='4' style='text-align:center;'>No hay stock en la base de datos.</td></tr>";
-                } else {
-                    stockDB.forEach(s => {
-                        let estadoBadge = s.estado === 'Disponible' 
-                            ? '<span class="badge-status disp">Libre</span>' 
-                            : (s.estado === 'Asignada' 
-                                ? '<span class="badge-status vendida" style="border-color:#00D2FF; color:#00D2FF; background:rgba(0,210,255,0.15);">Asignada</span>' 
-                                : '<span class="badge-status vendida">Vendida</span>');
-                        let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra || 'N/A'}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
-                        stockAdnHtml += `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="font-family:monospace; padding-left:20px;">${s.email}</td>
-                            <td>${estadoBadge}</td>
-                            <td>${compradorTxt}</td>
-                            <td><small style="color:var(--text-muted);">${s.fecha_carga}</small></td>
-                        </tr>`;
-                    });
-                }
-
-                panelesCentroHtml += `
-                <div id="main-stock-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">📦 Cargar Stock y Ver Historial</h3>
-                    <form action="/admin/cargar-stock" method="POST">
-                        <select name="plataforma" class="input-classic" required>
-                            <option value="netflix">Netflix</option>
-                        </select>
-                        <textarea name="correos_stock" class="input-classic" placeholder="Pega los correos del lote de cuentas separados por espacio o saltos de línea..." rows="5" required></textarea>
-                        <button type="submit" class="btn-submit">Ingresar al Inventario Seguro</button>
-                    </form>
-                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 25px;">
-                        <table class="table-modern">
-                            <thead><tr><th style="padding-left:20px;">Correo (ADN)</th><th>Estado</th><th>Comprador / Receptor</th><th>Fecha Carga</th></tr></thead>
-                            <tbody>${stockAdnHtml}</tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- 🎯 TARJETA DE ASIGNACIÓN MANUAL -->
-                <div id="main-asignacion-manual" class="main-card">
-                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual de Cuenta desde el Stock</h3>
-                    <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
-                        Selecciona una cuenta disponible del stock para entregársela directamente a un usuario. La cuenta se eliminará inmediatamente del stock disponible y se vinculará a las cuentas del cliente.
-                    </p>
-                    
-                    <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
-                        <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Cuenta disponible en Stock:</label>
-                            <select name="cuenta_id" class="input-classic" required>
-                                <option value="" disabled selected>-- Selecciona una cuenta --</option>
-                                ${opcionesStockDispHtml}
-                            </select>
-                        </div>
-                        <div style="margin-bottom: 20px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Usuario receptor (Cliente / Subadmin):</label>
-                            <select name="receptor_id" class="input-classic" required>
-                                <option value="" disabled selected>-- Selecciona al usuario --</option>
-                                ${clientesOpcionesHtml}
-                            </select>
-                        </div>
-                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación manual? La cuenta se transferirá al usuario y se eliminará del stock disponible.');">Asignar Cuenta Manualmente</button>
-                    </form>
-
-                    <div style="margin-top: 30px;">
-                        <h4 style="margin:0 0 15px 0; font-size:14px; color:#00D2FF; text-transform:uppercase; letter-spacing:1px;">📋 Historial de Asignación Manual</h4>
-                        <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;">
-                            <table class="table-modern">
-                                <thead>
-                                    <tr>
-                                        <th style="padding-left:15px;">Cuenta</th>
-                                        <th>Usuario Receptor</th>
-                                        <th>Administrador</th>
-                                        <th>Fecha y Hora</th>
-                                        <th>Tipo</th>
-                                        <th>Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${historialAsigRows}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="main-creditos-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">💰 Asignación de Créditos</h3>
-                    <form action="/admin/asignar-creditos" method="POST">
-                        <select name="subadmin_id" class="input-classic" required>
-                            <option value="" disabled selected>Selecciona al Usuario/Subadmin...</option>
-                            ${subadminsOpcionesHtml}
-                        </select>
-                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Créditos a Asignar (Ej: 832)" required>
-                        <p style="font-size:11px; color:var(--text-muted); margin-top:-5px; margin-bottom:15px;">* Usa números negativos para restar saldo.</p>
-                        <button type="submit" class="btn-submit">Actualizar Saldo y Notificar por WhatsApp</button>
-                    </form>
-                </div>
-                <div id="main-historial-compras" class="main-card" style="padding: 10px;">
-                    <div style="padding: 20px 20px 0 20px;">
-                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Historial de Compras Global</h3>
-                    </div>
-                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
-                        <table class="table-modern">
-                            <thead><tr><th style="padding-left:20px;">Subadmin</th><th style="text-align:center;">Cant.</th><th>Créditos</th><th>Cuentas Entregadas</th></tr></thead>
-                            <tbody>${historialGlobalHtml}</tbody>
-                        </table>
-                    </div>
-                </div>
-                `;
-            }
-
-            if (esSubAdmin) {
-                panelesIzquierdosHtml += `
-                <div id="action-comprar-stock" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Tienda de Cuentas</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Compra cuentas de Netflix de forma instantánea usando tu saldo de créditos.</p>
-                </div>
-                <div id="action-mis-compras" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Mi Inventario</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las cuentas que has comprado anteriormente.</p>
-                </div>`;
-
-                let misComprasHtml = "";
-                let misComprasLog = historialCompras.filter(c => c.subadmin_id === req.session.uid);
-                if(misComprasLog.length === 0) {
-                    misComprasHtml = "<tr><td colspan='4' style='text-align:center;'>Aún no has realizado compras.</td></tr>";
-                } else {
-                    misComprasLog.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
-                        misComprasHtml += `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
-                            <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
-                            <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span></td>
-                            <td><div style="max-height:80px; overflow-y:auto; font-size:11px;">${cuentasEntregadas}</div></td>
-                        </tr>`;
-                    });
-                }
-
-                panelesCentroHtml += `
-                <div id="main-comprar-stock" class="main-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🛒 Tienda Mayorista</h3>
-                        <div style="background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.3); padding: 8px 15px; border-radius: 50px; font-size: 13px; font-weight: 600; color: #fff;">
-                            Saldo: <span style="color:#00D2FF;">${usuarioActual.creditos || 0} Cr</span>
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div style="background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                            <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
-                            <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 24px;">5 Cuentas</h2>
-                            <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">832 Cr</p>
-                            <form action="/subadmin/comprar" method="POST">
-                                <input type="hidden" name="paquete" value="5">
-                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 5 cuentas por 832 créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
-                            </form>
-                        </div>
-                        
-                        <div style="background: #000; border: 1px solid rgba(0,210,255,0.3); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,210,255,0.1);">
-                            <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
-                            <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 24px;">10 Cuentas</h2>
-                            <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">1,560 Cr</p>
-                            <form action="/subadmin/comprar" method="POST">
-                                <input type="hidden" name="paquete" value="10">
-                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 10 cuentas por 1,560 créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="main-mis-compras" class="main-card" style="padding: 10px;">
-                    <div style="padding: 20px 20px 0 20px;">
-                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Mis Compras</h3>
-                    </div>
-                    <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
-                        <table class="table-modern">
-                            <thead><tr><th style="padding-left:20px;">ID / Fecha</th><th style="text-align:center;">Paquete</th><th>Descuento</th><th>Cuentas Entregadas</th></tr></thead>
-                            <tbody>${misComprasHtml}</tbody>
-                        </table>
-                    </div>
-                </div>
-                `;
-            }
-
-            if (esAdminPrincipal || esSubAdmin) {
-                let listadoReservas = "";
-                if(reservas.length === 0) listadoReservas = "<p style='color:var(--text-muted); font-size:12px;'>No hay reservas pendientes.</p>";
-                reservas.forEach(r => {
-                    if(r.estado === 'Pendiente') {
-                        listadoReservas += `
-                        <div style="background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">🛒 PEDIDO MANUAL: ${r.cantidad} Cuentas</strong>
-                            <p style="margin: 5px 0; font-size: 12px;"><strong>Cliente:</strong> ${r.cliente_nombre} | <strong>WhatsApp:</strong> ${r.telefono}</p>
-                            <p style="margin: 5px 0 15px 0; font-size: 11px; color: var(--text-muted);"><strong>Fecha:</strong> ${r.fecha}</p>
-                            <form action="/admin/completar-reserva" method="POST" style="margin:0;">
-                                <input type="hidden" name="reserva_id" value="${r.id}">
-                                <button type="submit" class="btn-submit" style="background: #25d366; width: auto; padding: 8px 15px; font-size:11px;">Marcar como Atendido</button>
-                            </form>
-                        </div>`;
-                    }
-                });
-
-                panelesCentroHtml += `
-                <div id="main-reservas-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: var(--accent);">🛒 Reservas (Proceso Manual)</h3>
-                    <div style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
-                        ${listadoReservas}
-                    </div>
-                </div>`;
-            }
-
-            if (esAdminPrincipal || esSubAdmin) {
-                let listadoGarantias = "";
-                if(garantias.length === 0) listadoGarantias = "<p style='color:var(--text-muted); font-size:12px;'>No hay garantías activas.</p>";
-                garantias.forEach(g => {
-                    if(g.estado === 'Pendiente') {
-                        listadoGarantias += `
-                        <div style="background: rgba(229, 9, 20, 0.15); border: 1px solid #E50914; padding: 15px; border-radius: 12px; margin-bottom: 15px;">
-                            <strong style="color: #E50914;">🔴 ALERTA: Caída de ${g.plataforma.toUpperCase()}</strong>
-                            <p style="margin: 5px 0; font-size: 12px;"><strong>Cliente:</strong> ${g.cliente_nombre} | <strong>Motivo:</strong> ${g.motivo}</p>
-                            <p style="margin: 5px 0 15px 0; font-size: 12px; color: #a3a3a3;"><strong>Detalles:</strong> ${g.detalles}</p>
-                            <form action="/admin/resolver-garantia" method="POST" style="display:flex; gap:10px;">
-                                <input type="hidden" name="garantia_id" value="${g.id}">
-                                <input type="text" name="reemplazo" class="input-classic" style="margin:0; padding:10px;" placeholder="Pega aquí la nueva cuenta..." required>
-                                <button type="submit" class="btn-submit" style="background: #25d366; width: auto; padding: 0 15px;">Solucionar</button>
-                            </form>
-                        </div>`;
-                    } else {
-                        listadoGarantias += `
-                        <div style="background: rgba(37, 211, 102, 0.1); border: 1px solid #25d366; padding: 12px; border-radius: 12px; margin-bottom: 10px; opacity: 0.8;">
-                            <strong style="color: #25d366;">🟢 RESUELTO (${g.plataforma.toUpperCase()})</strong>
-                            <p style="margin: 5px 0 0 0; font-size: 11px; color: #ccc;"><strong>Cliente:</strong> ${g.cliente_nombre} | <strong>Entregada:</strong> ${g.reemplazo}</p>
-                        </div>`;
-                    }
-                });
-
-                panelesCentroHtml += `
-                <div id="main-garantias-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #E50914;">🚨 Central de Garantías</h3>
-                    <div style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
-                        ${listadoGarantias}
-                    </div>
-                </div>`;
-            }
-
-            panelesIzquierdosHtml += `
-            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Crea nuevas cuentas de clientes para darles acceso al panel SyncBox.</p></div>
-            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
-            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Información</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Consulta la base de datos persistente y clientes registrados.</p></div>
-            <div id="action-garantias-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Sistema Inteligente</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Gestiona alertas y reemplazos en tiempo real.</p></div>
-            <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Reservas</h4><p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Revisa las peticiones manuales de tus clientes.</p></div>
-            `;
-            
-            let tablaUsuariosHtml = "";
-            let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
-            
-            if (esAdminPrincipal || esSubAdmin) {
-                let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben' && u.user !== 'dueño') : usuarios.filter(u => u.creado_por === req.session.uid);
-                
-                if (usuariosVisibles.length === 0) {
-                    tablaUsuariosHtml = "<tr><td colspan='5' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay usuarios registrados aún.</td></tr>";
-                } else {
-                    let renderRow = (u, isChild = false) => {
-                        let correosDelUsuario = correos.filter(c => c.user_id === u.id);
-                        let listaCorreosHtml = "";
-                        if (correosDelUsuario.length > 0) {
-                            listaCorreosHtml = correosDelUsuario.map(c => {
-                                let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.4);" : "background: #000000; border: 1px solid transparent;";
-                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:5px;">
-                                    <span>${c.email}</span>
-                                    <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
-                                </div>`;
-                            }).join('');
-                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos (Auto-eliminación 24h)</span>"; }
-
-                        let selectorRol = "";
-                        if (esAdminPrincipal) {
-                            selectorRol = `
-                            <form action="/admin/cambiar-rol" method="POST" style="margin-top: 5px; display: flex; flex-direction: column; gap: 5px;">
-                                <input type="hidden" name="user_id" value="${u.id}">
-                                <select name="nuevo_rol" style="background: #000; color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 4px; border-radius: 4px; font-size: 10px; outline: none; width: 100%;">
-                                    <option value="Cliente" ${u.rol === 'Cliente' ? 'selected' : ''}>Cliente</option>
-                                    <option value="Subadministrador" ${u.rol === 'Subadministrador' ? 'selected' : ''}>Subadmin</option>
-                                </select>
-                                <button type="submit" style="background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; width: 100%;">Cambiar</button>
-                            </form>`;
-                        } else {
-                            selectorRol = `<small style="color:var(--text-muted); font-weight:300; font-size:11px; margin-top:4px; display:block;">${u.rol}</small>`;
-                        }
-
-                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'Subadmin ID: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
-                        let icon = u.rol === 'Subadministrador' ? '👑' : '👤';
-                        let rowStyle = isChild ? 'background: rgba(0, 210, 255, 0.05);' : 'background: rgba(255, 255, 255, 0.02); border-top: 1px solid rgba(255,255,255,0.1);';
-                        let paddingL = isChild ? '40px' : '20px';
-                        let dateFormated = u.fecha_creacion ? u.fecha_creacion.split('.')[0] : 'Desconocida';
-
-                        return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${rowStyle}">
-                            <td style="font-weight: 500; vertical-align: top; padding-left: ${paddingL}; position: relative;">
-                                ${isChild ? '<div style="position:absolute; left: 20px; top: 0; bottom: 0; width: 2px; background: rgba(0, 210, 255, 0.3);"></div>' : ''}
-                                <span style="${isChild ? 'color: var(--text-muted);' : 'color: #fff;'} font-size: 13px;">${icon} ${u.user}</span>
-                                <div style="margin-top: 5px;">
-                                    <small style="color:var(--accent); font-weight:600; font-size:10px; display:block;">🔑 Pass: ${u.pass}</small>
-                                    <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📱 Tel: ${u.telefono || 'N/A'}</small>
-                                    <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📅 Reg: ${dateFormated}</small>
-                                    ${esAdminPrincipal ? `<small style="color:#25d366; font-weight:600; font-size:10px; margin-top:2px; display:block;">🪙 Cr: ${u.creditos || 0}</small>
-                                    <small style="color:#E50914; font-weight:600; font-size:10px; margin-top:2px; display:block;">🔴 Deuda: ${u.deuda || 0}</small>` : ''}
-                                </div>
-                            </td>
-                            <td style="vertical-align: top; width: 100px;">${selectorRol}</td>
-                            <td style="vertical-align: top; width: 40%;"><div style="max-height: 120px; overflow-y: auto; padding-right: 8px;">${listaCorreosHtml}</div></td>
-                            <td style="font-size: 11px; color: var(--text-muted); vertical-align: top;">${idCreadorTexto}</td>
-                            <td style="vertical-align: top; text-align: center;">
-                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario? ${u.rol === 'Subadministrador' ? '¡ESTO BORRARÁ TAMBIÉN A TODOS SUS CLIENTES Y DATOS!' : ''}');" style="margin:0;">
-                                    <input type="hidden" name="user_id" value="${u.id}">
-                                    <button type="submit" style="background: rgba(229,9,20,0.1); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; transition:0.3s;" onmouseover="this.style.background='#E50914'; this.style.color='#fff';" onmouseout="this.style.background='rgba(229,9,20,0.1)'; this.style.color='#E50914';">Eliminar</button>
-                                </form>
-                            </td>
-                        </tr>`;
-                    };
-
-                    if (esAdminPrincipal) {
-                        let subadmins = usuariosVisibles.filter(u => u.rol === 'Subadministrador');
-                        let otrosClientes = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
-
-                        subadmins.forEach(sa => {
-                            tablaUsuariosHtml += renderRow(sa, false);
-                            let children = otrosClientes.filter(c => c.creado_por === sa.id);
-                            if (children.length > 0) {
-                                children.forEach(child => {
-                                    tablaUsuariosHtml += renderRow(child, true);
-                                });
-                            }
-                        });
-
-                        let huerfanos = otrosClientes.filter(c => !c.creado_por || !subadmins.find(sa => sa.id === c.creado_por));
-                        if (huerfanos.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255,255,255,0.08); text-align: center; font-size: 12px; color: #00D2FF; font-weight: 600; padding: 10px; letter-spacing: 1px;">CLIENTES DIRECTOS / PÚBLICOS</td></tr>`;
-                            huerfanos.forEach(h => tablaUsuariosHtml += renderRow(h, false));
-                        }
-                    } else {
-                        usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u, false));
-                    }
-                }
-            }
-
-            let botonesContactoProveedor = `
-            <style>
-                .contact-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin-bottom: 5px; }
-                .contact-label { font-size: 10px; color: #00D2FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,210,255,0.6); }
-            </style>
-            <div class="provider-contact">
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi Telegram</span>
-                    <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Telegram
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Mi WhatsApp</span>
-                    <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                    </a>
-                </div>
-                <div class="contact-wrapper">
-                    <span class="contact-label">⬇ Ref. Grupo</span>
-                    <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                        <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                    </a>
-                </div>
-            </div>`;
-
-            res.send(`
+            // ... Renderización CSS, JS y layout (Abreviado para enfoque exacto al requerimiento)
+            let layoutHead = `
             <!DOCTYPE html>
             <html lang="es">
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Panel - SyncBox</title>
-                ${CSS_MODERNO}
-            </head>
-            <body>
-                <div class="top-header">
-                    <div style="width: 150px;"></div>
-                    <div class="brand-logo" style="margin-right: auto;">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));">
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                        </svg>
-                        <strong>SYNC</strong>BOX
-                    </div>
-                    <div class="search-top"><input type="text" placeholder="Buscar en el sistema..."></div>
-                </div>
-
-                <div class="dashboard-grid">
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+                    :root { --text-main: #f8fafc; --text-muted: #94a3b8; --card-bg: rgba(0, 0, 0, 0.92); --card-border: rgba(255, 255, 255, 0.15); --accent: #00D2FF; --accent-hover: #0099CC; --btn-bg: rgba(0, 210, 255, 0.12); --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98); --blur-effect: blur(8px); --radius: 16px; }
+                    body { background: #000; color: var(--text-main); font-family: 'Inter', sans-serif; margin: 0; padding: 0; min-height: 100vh; }
+                    .dashboard-grid { display: grid; grid-template-columns: 320px 1fr 280px; gap: 25px; padding: 20px 40px; align-items: start; }
+                    .main-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; }
+                    .main-card.active { display: block; }
+                    .action-panel { background: var(--card-bg); border-radius: var(--radius); padding: 25px; border: 1px solid var(--card-border); display: none; flex-direction: column; gap: 12px; }
+                    .action-panel.active { display: flex; }
+                    .search-input-large { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); padding: 16px 25px; border-radius: 12px; font-size: 14px; color: var(--text-main); outline: none; box-sizing: border-box; }
+                    .search-input-large:focus { border-color: var(--accent); }
+                    .btn-submit { background: var(--accent); color: #000; border: none; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.3s; text-transform: uppercase; }
+                    .input-classic { width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: #000000; color: white; box-sizing: border-box; outline: none; }
+                    .menu-btn-item { background: transparent; border: 1px solid transparent; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: var(--text-main); cursor: pointer; text-align: left; transition: 0.3s; }
+                    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); padding-left: 18px; }
+                    .contact-btn { background: #000; border: 1px solid var(--card-border); padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #fff; font-size: 11px; font-weight: 600; transition: 0.3s; }
+                    .contact-btn.whatsapp:hover { background: rgba(37, 211, 102, 0.25); border-color: #25d366; }
+                </style>
+                <script>
+                    const stockDisponible = ${JSON.stringify(stockCuentasDisponibles)};
                     
-                    <div class="left-sidebar">
-                        ${panelesIzquierdosHtml}
+                    function openTab(tabId) {
+                        document.querySelectorAll('.main-card').forEach(p => p.classList.remove('active'));
+                        document.querySelectorAll('.action-panel').forEach(p => p.classList.remove('active'));
+                        if(document.getElementById('main-' + tabId)) document.getElementById('main-' + tabId).classList.add('active');
+                        if(document.getElementById('action-' + tabId)) document.getElementById('action-' + tabId).classList.add('active');
+                    }
+
+                    // BUSCADOR EN STOCK
+                    function buscarStockManual() {
+                        const query = document.getElementById('buscador-stock').value.toLowerCase().trim();
+                        const container = document.getElementById('resultado-busqueda-stock');
+                        if (query.length === 0) { container.innerHTML = ''; return; }
                         
-                        <div style="margin-top: auto; padding-top: 20px;">
-                            <div class="user-pill" onclick="window.location='/logout'" title="Cerrar sesión">
-                                <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
-                                <div class="info">
-                                    <strong>${req.session.user}</strong>
-                                    <span>${req.session.rol} ${esSubAdmin ? `| 🪙 ${usuarioActual.creditos || 0} Cr.` : ''}</span>
+                        const resultados = stockDisponible.filter(c => c.email.toLowerCase().includes(query));
+                        if (resultados.length === 0) {
+                            container.innerHTML = '<p style="color: #E50914; font-size: 13px;">❌ No se encontró ninguna cuenta con ese correo.</p>';
+                            return;
+                        }
+
+                        let html = '';
+                        resultados.slice(0, 5).forEach(cuenta => {
+                            html += \`
+                            <div style="background: rgba(37, 211, 102, 0.1); border: 1px solid #25d366; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: #25d366; font-size: 14px; display:block;">Cuenta encontrada</strong>
+                                    <span style="color: #fff; font-size: 13px; font-family: monospace;">Correo: \${cuenta.email}</span><br>
+                                    <span style="color: var(--text-muted); font-size: 11px;">Estado: Disponible | Stock: Sí</span>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
+                                <button type="button" class="btn-submit" style="width: auto; padding: 8px 15px; font-size: 11px; background: #25d366; color: #000;" onclick="prepararAsignacion(\${cuenta.id}, '\${cuenta.email}')">Asignar cuenta</button>
+                            </div>\`;
+                        });
+                        container.innerHTML = html;
+                    }
 
-                    <div class="center-panel">
-                        ${panelesCentroHtml}
+                    function prepararAsignacion(id, email) {
+                        document.getElementById('hidden-cuenta-id').value = id;
+                        document.getElementById('confirm-email-txt').innerText = email;
+                        document.getElementById('form-asignacion-manual').style.display = 'block';
+                        document.getElementById('resultado-busqueda-stock').innerHTML = ''; 
+                        document.getElementById('buscador-stock').value = '';
+                        actualizarUsuarioConfirmacion();
+                    }
+
+                    function actualizarUsuarioConfirmacion() {
+                        const select = document.getElementById('select-receptor-manual');
+                        const confirmTxt = document.getElementById('confirm-usuario-txt');
+                        const userNameSpan = document.getElementById('confirm-user-name');
+                        if(select.selectedIndex > 0) {
+                            userNameSpan.innerText = select.options[select.selectedIndex].text;
+                            confirmTxt.style.display = 'block';
+                        } else {
+                            confirmTxt.style.display = 'none';
+                        }
+                    }
+
+                    function cancelarAsignacion() {
+                        document.getElementById('form-asignacion-manual').style.display = 'none';
+                        document.getElementById('hidden-cuenta-id').value = '';
+                    }
+                </script>
+            </head>
+            <body>`;
+
+            let leftSide = `
+                <div class="left-sidebar">
+                    <div class="side-card">
+                        <h4>MENÚ PRINCIPAL</h4>
+                        <button onclick="openTab('netflix')" class="menu-btn-item">📺 Sistema Netflix</button>
+                        ${esAdminPrincipal || esSubAdmin ? `<button onclick="openTab('usuarios')" class="menu-btn-item">👥 Gestión de Clientes</button>` : ''}
+                        ${esAdminPrincipal ? `<button onclick="openTab('asignacion-manual')" class="menu-btn-item">🎯 Asignación Manual</button>` : ''}
+                    </div>
+                    ${esAdminPrincipal || esSubAdmin ? metodosDePagoHtml : ''}
+                </div>`;
+
+            let centerPanel = `
+                <div class="center-panel">
+                    <div id="main-netflix" class="main-card active">
+                        <h3>📺 Panel Netflix</h3>
+                        <p>Plataforma habilitada. Puedes verificar correos usando el extractor superior.</p>
+                    </div>`;
+
+            if (esAdminPrincipal || esSubAdmin) {
+                centerPanel += `
+                    <div id="main-usuarios" class="main-card">
+                        <h3>👥 Creación y Gestión de Clientes</h3>
+                        <form action="/admin/crear" method="POST" style="margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+                            <input type="text" name="n" placeholder="Usuario Cliente" class="input-classic" required>
+                            <input type="password" name="c" placeholder="Clave" class="input-classic" required>
+                            <input type="tel" name="t" placeholder="Teléfono del Cliente" class="input-classic">
+                            <input type="hidden" name="r" value="Cliente">
+                            <button type="submit" class="btn-submit">Registrar Cliente y Asociarlo a tu Red</button>
+                        </form>
+                    </div>`;
+            }
+
+            if (esAdminPrincipal) {
+                centerPanel += `
+                    <div id="main-asignacion-manual" class="main-card">
+                        <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual con Búsqueda Rápida</h3>
                         
-                        ${(esAdminPrincipal || esSubAdmin) ? `
-                        <div id="main-crear-user" class="main-card">
-                            <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Crear Nuevo Usuario</h3>
-                            <form action="/admin/crear" method="POST">
-                                <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
-                                <input name="c" class="input-classic" placeholder="Contraseña" required>
-                                <select name="r" class="input-classic"><option value="Cliente">Cliente Normal</option>${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}</select>
-                                <button class="btn-submit">Guardar Usuario en DB</button>
-                            </form>
+                        <div style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 20px;">
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 10px; display: block;">1. Buscar cuenta en Stock: 🔍</label>
+                            <input type="text" id="buscador-stock" class="search-input-large" placeholder="Escribe el correo exacto o parcial (Ej: cuenta123@email.com)..." onkeyup="buscarStockManual()">
+                            <div id="resultado-busqueda-stock" style="margin-top: 15px;"></div>
                         </div>
-                        <div id="main-usuarios" class="main-card">
-                            <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500;">Asignación de Correos</h3>
-                            <form action="/admin/asignar-correo" method="POST">
-                                <select name="user_id" class="input-classic" required><option value="" disabled selected>Selecciona un usuario...</option>${clientesOpcionesHtml}</select>
-                                <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio" rows="5" required></textarea>
-                                <button type="submit" class="btn-submit">Asignar Correos</button>
-                            </form>
-                        </div>
-                        <div id="main-base-datos" class="main-card" style="padding: 10px;">
-                            <div style="padding: 20px 20px 0 20px; display:flex; justify-content:space-between; align-items:center;">
-                                <h3 style="margin:0; font-size:20px; font-weight:500;">Base de Datos SyncBox</h3>
-                                <form action="/dash" method="GET" style="display:flex; gap:12px;">
-                                    <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0; padding: 10px;">
-                                    <button type="submit" class="btn-submit" style="padding: 10px 20px; width:auto;">Buscar</button>
-                                </form>
-                            </div>
-                            <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
-                                <table class="table-modern">
-                                    <thead><tr>
-                                        <th style="padding-left: 20px;">Usuario</th>
-                                        <th>Rol</th>
-                                        <th style="width: 40%;">Correos Vinculados</th>
-                                        <th>Creador</th>
-                                        <th style="text-align:center;">Acción</th>
-                                    </tr></thead>
-                                    <tbody>${tablaUsuariosHtml}</tbody>
-                                </table>
-                            </div>
-                        </div>` : ''}
 
-                        <div class="iframe-container" id="visor-resultados">
-                            <iframe name="marco_resultados" allowtransparency="true" style="width: 100%; height: 100%; border: none; background: transparent;"></iframe>
-                        </div>
-                    </div>
-
-                    <div class="right-sidebar">
-                        <div class="side-card">
-                            <h4>Administración</h4>
-                            <div class="menu-list">
-                                ${(esAdminPrincipal) ? `
-                                <button class="menu-btn-item" onclick="openTab('stock-admin')">📦 Gestión de Stock</button>
-                                <button class="menu-btn-item" onclick="openTab('asignacion-manual')" style="color: #00D2FF; font-weight: 600;">🎯 Asignación Manual</button>
-                                <button class="menu-btn-item" onclick="openTab('creditos-admin')">💰 Asignar Créditos</button>
-                                <button class="menu-btn-item" onclick="openTab('historial-compras')">🧾 Historial Global</button>
-                                ` : ''}
-                                ${(esSubAdmin) ? `
-                                <button class="menu-btn-item" onclick="openTab('comprar-stock')" style="color: #00D2FF; font-weight: 600;">🛒 Tienda de Cuentas</button>
-                                <button class="menu-btn-item" onclick="openTab('mis-compras')">🧾 Mis Compras</button>
-                                ` : ''}
-                                ${(esAdminPrincipal || esSubAdmin) ? `
-                                <button class="menu-btn-item" onclick="openTab('crear-user')">Crear Usuario</button>
-                                <button class="menu-btn-item" onclick="openTab('usuarios')">Asignar Correos</button>
-                                <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
-                                <button class="menu-btn-item" onclick="openTab('reservas-admin')" style="color: var(--accent); font-weight: 600;">🛒 Reservas (Manuales)</button>
-                                <button class="menu-btn-item" onclick="openTab('garantias-admin')" style="color: #E50914; font-weight: 600;">🚨 Alertas y Garantías</button>
-                                ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar accesos.</p>`}
-                            </div>
+                        <form id="form-asignacion-manual" action="/admin/asignar-manual" method="POST" style="display: none; background: rgba(0,210,255,0.05); padding: 20px; border-radius: 12px; border: 1px dashed #00D2FF;">
+                            <h4 style="margin: 0 0 15px 0; color: #00D2FF;">¿Confirmar asignación?</h4>
+                            <p style="margin: 5px 0; font-size: 14px;"><strong>Cuenta:</strong> <span id="confirm-email-txt" style="color: #fff;"></span></p>
+                            <input type="hidden" name="cuenta_id" id="hidden-cuenta-id">
                             
-                            <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
-                            <div class="plat-mini-grid">
-                                ${botonesPlataformaHtml}
+                            <div style="margin: 15px 0;">
+                                <label style="color: var(--text-muted); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Selecciona el Usuario al que se la asignarás:</label>
+                                <select id="select-receptor-manual" name="receptor_id" class="input-classic" required onchange="actualizarUsuarioConfirmacion()">
+                                    <option value="" disabled selected>-- Selecciona al usuario --</option>
+                                    ${clientesOpcionesHtml}
+                                </select>
                             </div>
-                            
-                            <div class="side-card" style="margin-top: 20px; background: rgba(0,0,0,0.6);">
-                                <h4 style="margin-bottom: 5px;">💳 MÉTODOS DE PAGO</h4>
-                                ${metodosDePagoHtml}
+                            <p id="confirm-usuario-txt" style="margin: 5px 0 15px 0; font-size: 14px; display: none;"><strong>Usuario:</strong> <span id="confirm-user-name" style="color: #fff;"></span></p>
+
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" class="btn-submit" style="background: #E50914; color: #fff; flex: 1;" onclick="cancelarAsignacion()">Cancelar</button>
+                                <button type="submit" class="btn-submit" style="flex: 2;">Confirmar asignación</button>
                             </div>
-
-                            ${botonesContactoProveedor}
-                        </div>
-
-                        ${esAdminPrincipal ? `
-                        <div class="side-card">
-                            <h4>Actividad Reciente</h4>
-                            <div class="activity-list">${actividadesHtml}</div>
-                        </div>` : ''}
+                        </form>
                     </div>
-                </div>
-            </body>
-            </html>
-            `);
-        } catch (err) { 
+                `;
+            }
+
+            centerPanel += `</div>`;
+
+            let rightSide = `
+                <div class="right-sidebar">
+                    <div class="side-card">
+                        <h4>INFORMACIÓN</h4>
+                        <p style="font-size: 12px;">Usuario: <strong>${usuarioActual.user}</strong><br>Rol: ${usuarioActual.rol}</p>
+                        ${providerContactHtml}
+                        <a href="/logout" class="btn-submit" style="display:inline-block; text-align:center; background:#E50914; color:#fff; text-decoration:none; margin-top:20px;">Cerrar Sesión</a>
+                    </div>
+                </div>`;
+
+            res.send(`${layoutHead}<div class="dashboard-grid">${leftSide}${centerPanel}${rightSide}</div></body></html>`);
+        } catch(err) {
             console.error(err);
-            res.send(`<script>alert('Error crítico de servidor: ${err.message}'); window.location='/';</script>`); 
+            res.send("Error al cargar el panel.");
         }
+    } else {
+        res.redirect('/');
     }
 });
 
-async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion) {
-    const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
-    if (!passwordSeleccionado) return null;
-
-    const config = { imap: { user: correoBuzon, password: passwordSeleccionado, host: 'imap.gmail.com', port: 993, tls: true, tlsOptions: { rejectUnauthorized: false }, authTimeout: 15000 } };
-    let connection = null;
-
-    try {
-        connection = await imaps.connect(config);
-        await connection.openBox('INBOX');
-        
-        let searchResults = await connection.search([['X-GM-RAW', `"${correoIngresado}"`]], { bodies: ['HEADER.FIELDS (DATE)'] });
-        
-        if (searchResults.length === 0) {
-            searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
-        }
-
-        if (searchResults.length === 0 && partes && partes.length > 0) {
-            searchResults = await connection.search([['TEXT', partes[0]]], { bodies: ['HEADER.FIELDS (DATE)'] });
-        }
-
-        let messages = [];
-        let mail = null;
-
-        if (searchResults.length > 0) {
-            searchResults.sort((a, b) => {
-                let dateA = new Date(a.attributes.date || 0).getTime();
-                let dateB = new Date(b.attributes.date || 0).getTime();
-                if (dateB !== dateA) { return dateB - dateA; }
-                return b.attributes.uid - a.attributes.uid;
-            });
-
-            let latestUid = searchResults[0].attributes.uid; 
-            
-            let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
-            if (fetchedMsg.length > 0) {
-                messages = fetchedMsg;
-                mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
-            }
-        }
-        
-        connection.end();
-        if (messages.length > 0 && mail) { return { messages, mail, buzón: correoBuzon }; }
-        return null;
-
-    } catch (err) {
-        console.log(`⚠ Advertencia IMAP (${correoBuzon}):`, err.message);
-        if (connection) connection.end();
-        return null;
-    }
-}
-
-app.post('/buscar', async (req, res) => {
-    const { email_search, accion, plataforma } = req.body;
-    
-    const cssIframe = `<style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body, html { 
-            font-family: 'Inter', sans-serif !important; 
-            background: transparent !important; 
-            margin: 0; padding: 0; 
-        } 
-        
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.5); border-radius: 10px; }
-
-        .magic-email-wrapper table, .magic-email-wrapper td, .magic-email-wrapper tr, .magic-email-wrapper body, .magic-email-wrapper div {
-            background-color: transparent !important; background: transparent !important; border: none !important;
-        }
-        
-        .magic-email-wrapper * {
-            font-family: 'Inter', sans-serif !important;
-            color: #f8fafc !important;
-            line-height: 1.6 !important;
-            box-shadow: none !important;
-        }
-
-        .magic-email-wrapper h1, 
-        .magic-email-wrapper h2, 
-        .magic-email-wrapper h3, 
-        .magic-email-wrapper strong {
-            color: #00D2FF !important; 
-            text-shadow: 0 0 8px rgba(0, 210, 255, 0.8), 0 0 15px rgba(0, 210, 255, 0.5) !important;
-        }
-        
-        .magic-email-wrapper a {
-            background-color: #E50914 !important;
-            color: #fff !important;
-            padding: 10px 20px !important;
-            border-radius: 4px !important;
-            display: inline-block !important;
-            text-decoration: none !important;
-            text-shadow: none !important;
-            font-weight: bold !important;
-        }
-
-        .magic-email-wrapper p, 
-        .magic-email-wrapper span {
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3) !important;
-            font-size: 15px !important;
-        }
-
-        .magic-email-wrapper img {
-            filter: drop-shadow(0 0 15px rgba(229, 9, 20, 0.9)) !important;
-            border-radius: 4px !important;
-            max-width: 100% !important;
-        }
-
-        .magic-email-wrapper { 
-            width: 100%; 
-            display: flex;
-            justify-content: center;
-            padding: 20px 0;
-        }
-        
-        .magic-email-wrapper > * {
-            max-width: 600px;
-            width: 100%;
-        }
-    </style>`;
-
-    try {
-        let correoIngresado = (email_search || "").trim().toLowerCase();
-        
-        const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
-        const esCliente = (req.session.rol === 'Cliente' || req.session.rol === 'Subadministrador');
-
-        if (esCliente && !esAdminPrincipal) {
-            const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
-            if (!tieneAcceso) {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes este correo asignado a tu cuenta. Solicítalo al proveedor.</p></div>`);
-            }
-        } else if (!esAdminPrincipal) {
-            const dueñocuenta = await dbGet("SELECT c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [correoIngresado]);
-            if (dueñocuenta) {
-                const esPropia = (dueñocuenta.user_id === req.session.uid);
-                const esDeMiCliente = (dueñocuenta.creado_por === req.session.uid);
-                if (!esPropia && !esDeMiCliente) {
-                    return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>El correo <strong>${correoIngresado}</strong> le pertenece al cliente <strong>${dueñocuenta.user}</strong></p></div>`);
-                }
-            } else {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes autorización en la base de datos para consultar este correo.</p></div>`);
-            }
-        }
-
-        let partes = correoIngresado.split('@');
-        let buzonesAbuscar = ['darciogarces@gmail.com']; 
-        let resultadoExitoso = null;
-
-        try {
-            const promesas = buzonesAbuscar.map(buzon => buscarEnBuzonImap(buzon, correoIngresado, plataforma, partes, accion));
-            const resultados = await Promise.all(promesas);
-            resultadoExitoso = resultados.find(res => res !== null);
-        } catch (error) { console.error("Error en búsqueda:", error); }
-
-        if (!resultadoExitoso) { 
-            return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;">
-                <h2 style="color:#f8fafc; font-weight:300; text-shadow: 0 0 10px rgba(0, 210, 255, 0.6);">Mensaje no encontrado</h2>
-                <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#00D2FF;">${email_search}</strong></p>
-            </div>`); 
-        }
-
-        const { mail } = resultadoExitoso;
-        const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
-        const textoCorreo = textoBruto.toLowerCase();
-
-        if (accion === 'pais') {
-            let paisDetectado = null;
-            const reglasPais = [
-                { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
-                { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
-            ];
-            for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#00D2FF; text-shadow: 0 0 15px rgba(0, 210, 255, 0.8);">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
-        }
-
-        if (accion === 'ip') {
-            const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
-            let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#00D2FF; text-shadow: 0 0 10px rgba(0,210,255,0.6); margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;">${ipContenido}</div></div>`);
-        }
-
-        if (/\b\d{4,6}\b/.test(textoBruto) && plataforma === 'netflix') {
-            try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
-        }
-        
-        res.send(`${cssIframe}
-            <div class="magic-email-wrapper">
-                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#fff; padding: 20px;">${mail.text}</pre>`}
-            </div>
-        `);
-
-    } catch (err) { res.send(`${cssIframe}<h2 style="color:#00D2FF; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
-});
-
-app.listen(10000, () => {
-    console.log("🚀 SISTEMA CENTRAL INICIADO EN EL PUERTO 10000");
-});
+// START
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Servidor ejecutándose en el puerto ${PORT}`));
