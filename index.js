@@ -67,9 +67,7 @@ db.serialize(() => {
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 
     // 🚀 ACTUALIZAR TELÉFONOS ANTIGUOS AGREGANDO +52 SI NO TIENEN EL +
-    db.run("UPDATE usuarios SET telefono = '+52' || telefono WHERE telefono IS NOT NULL AND telefono != '' AND telefono NOT LIKE '+%'", (err) => {
-        if (!err) console.log("✅ Números de teléfono antiguos actualizados con +52.");
-    });
+    db.run("UPDATE usuarios SET telefono = '+52' || telefono WHERE telefono IS NOT NULL AND telefono != '' AND telefono NOT LIKE '+%'", (err) => {});
 });
 
 // 🧹 FUNCIÓN DE PURGA INMEDIATA
@@ -476,19 +474,51 @@ app.post('/admin/crear', async (req, res) => {
     }
 });
 
+// 🚀 RUTAS CORREGIDAS PARA PERMITIR A SUBADMINISTRADORES COMPARTIR CUENTAS CON SUS CLIENTES
 app.post('/admin/asignar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { user_id, email } = req.body;
     const lista = email.split(/[\s,]+/).filter(e => e.includes('@'));
+    
+    let asignados = 0;
+    let denegados = 0;
+
     try {
         for (let mail of lista) {
             let e = mail.trim().toLowerCase();
-            let exist = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
-            if (!exist) {
-                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+            
+            if (req.session.rol === 'Administrador') {
+                // Admin puede asignar libremente sin restricciones a cualquier usuario
+                let existForUser = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
+                if (!existForUser) {
+                    await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                    asignados++;
+                }
+            } else if (req.session.rol === 'Subadministrador') {
+                // Subadmin solo puede asignar cuentas A SUS CLIENTES y de las cuales ÉL YA SEA PROPIETARIO
+                let esMiCliente = await dbGet("SELECT id FROM usuarios WHERE id = ? AND creado_por = ?", [user_id, req.session.uid]);
+                if (esMiCliente) {
+                    let tengoElCorreo = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, req.session.uid]);
+                    if (tengoElCorreo) {
+                        let existForClient = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
+                        if (!existForClient) {
+                            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                            asignados++;
+                        }
+                    } else {
+                        denegados++;
+                    }
+                } else {
+                    denegados++;
+                }
             }
         }
-        res.redirect('/dash');
+        
+        if (denegados > 0 && req.session.rol === 'Subadministrador') {
+            res.send(`<script>alert('✅ Se asignaron ${asignados} correos. \\n\\n⛔ Se denegaron ${denegados} correos porque NO te pertenecen o intentaste asignarlos a un usuario que no es tu cliente.'); window.location='/dash';</script>`);
+        } else {
+            res.redirect('/dash');
+        }
     } catch(err) {
         res.redirect('/dash');
     }
@@ -497,7 +527,15 @@ app.post('/admin/asignar-correo', async (req, res) => {
 app.post('/admin/eliminar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
-        await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]);
+        if (req.session.rol === 'Administrador') {
+            await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]);
+        } else {
+            // Subadmin solo puede borrar los correos propios o los vinculados a sus clientes directos
+            let target = await dbGet("SELECT c.user_id, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.id = ?", [req.body.correo_id]);
+            if (target && (target.user_id === req.session.uid || target.creado_por === req.session.uid)) {
+                await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]);
+            }
+        }
         res.redirect('/dash');
     } catch(err) {
         res.redirect('/dash');
@@ -507,8 +545,17 @@ app.post('/admin/eliminar-correo', async (req, res) => {
 app.post('/admin/eliminar-usuario', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
-        await dbRun("DELETE FROM correos WHERE user_id = ?", [req.body.user_id]);
-        await dbRun("DELETE FROM usuarios WHERE id = ?", [req.body.user_id]);
+        if (req.session.rol === 'Administrador') {
+            await dbRun("DELETE FROM correos WHERE user_id = ?", [req.body.user_id]);
+            await dbRun("DELETE FROM usuarios WHERE id = ?", [req.body.user_id]);
+        } else {
+            // Subadmin solo puede eliminar a sus propios clientes
+            let target = await dbGet("SELECT id FROM usuarios WHERE id = ? AND creado_por = ?", [req.body.user_id, req.session.uid]);
+            if (target) {
+                await dbRun("DELETE FROM correos WHERE user_id = ?", [req.body.user_id]);
+                await dbRun("DELETE FROM usuarios WHERE id = ?", [req.body.user_id]);
+            }
+        }
         res.redirect('/dash');
     } catch(err) {
         res.redirect('/dash');
@@ -557,7 +604,7 @@ app.post('/admin/asignar-creditos', async (req, res) => {
 
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
 
-        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\\s/g, '') : '';
+        let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
         const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
         const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
 
@@ -587,7 +634,6 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🎯 RUTA PARA ASIGNACIÓN MANUAL DESDE EL STOCK
 app.post('/admin/asignar-manual', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { cuenta_id, receptor_id } = req.body;
@@ -1263,7 +1309,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // 🎯 LÓGICA DE CONTACTO Y PRIVACIDAD SEGÚN TIPO DE USUARIO
             let botonesContactoProveedor = "";
             if (esAdminPrincipal || esSubAdmin) {
                 // Subadministrador ve tu información
