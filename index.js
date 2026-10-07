@@ -474,7 +474,6 @@ app.post('/admin/crear', async (req, res) => {
     }
 });
 
-// 🚀 RUTAS CORREGIDAS PARA PERMITIR A SUBADMINISTRADORES COMPARTIR CUENTAS CON SUS CLIENTES
 app.post('/admin/asignar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { user_id, email } = req.body;
@@ -488,14 +487,12 @@ app.post('/admin/asignar-correo', async (req, res) => {
             let e = mail.trim().toLowerCase();
             
             if (req.session.rol === 'Administrador') {
-                // Admin puede asignar libremente sin restricciones a cualquier usuario
                 let existForUser = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
                 if (!existForUser) {
                     await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
                     asignados++;
                 }
             } else if (req.session.rol === 'Subadministrador') {
-                // Subadmin solo puede asignar cuentas A SUS CLIENTES y de las cuales ÉL YA SEA PROPIETARIO
                 let esMiCliente = await dbGet("SELECT id FROM usuarios WHERE id = ? AND creado_por = ?", [user_id, req.session.uid]);
                 if (esMiCliente) {
                     let tengoElCorreo = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, req.session.uid]);
@@ -530,7 +527,6 @@ app.post('/admin/eliminar-correo', async (req, res) => {
         if (req.session.rol === 'Administrador') {
             await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]);
         } else {
-            // Subadmin solo puede borrar los correos propios o los vinculados a sus clientes directos
             let target = await dbGet("SELECT c.user_id, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.id = ?", [req.body.correo_id]);
             if (target && (target.user_id === req.session.uid || target.creado_por === req.session.uid)) {
                 await dbRun("DELETE FROM correos WHERE id = ?", [req.body.correo_id]);
@@ -549,7 +545,6 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
             await dbRun("DELETE FROM correos WHERE user_id = ?", [req.body.user_id]);
             await dbRun("DELETE FROM usuarios WHERE id = ?", [req.body.user_id]);
         } else {
-            // Subadmin solo puede eliminar a sus propios clientes
             let target = await dbGet("SELECT id FROM usuarios WHERE id = ? AND creado_por = ?", [req.body.user_id, req.session.uid]);
             if (target) {
                 await dbRun("DELETE FROM correos WHERE user_id = ?", [req.body.user_id]);
@@ -605,7 +600,7 @@ app.post('/admin/asignar-creditos', async (req, res) => {
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
 
         let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
-        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar:\n- 5 cuentas por $832 MXN.\n- 10 cuentas por $1.560 MXN.\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
+        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar paquetes desde 1 cuenta ($185) hasta 10 cuentas ($1,560).\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
         const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
 
         res.send(`
@@ -671,7 +666,11 @@ app.post('/subadmin/comprar', async (req, res) => {
     const paquete = parseInt(req.body.paquete);
     let costo = 0;
     
-    if (paquete === 5) costo = 832;
+    if (paquete === 1) costo = 185;
+    else if (paquete === 2) costo = 370;
+    else if (paquete === 3) costo = 555;
+    else if (paquete === 4) costo = 740;
+    else if (paquete === 5) costo = 832;
     else if (paquete === 10) costo = 1560;
     else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
 
@@ -990,7 +989,6 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
-                <!-- 🎯 TARJETA DE ASIGNACIÓN MANUAL CON LUPA Y BUSCADOR -->
                 <div id="main-asignacion-manual" class="main-card">
                     <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual de Cuenta</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
@@ -1073,7 +1071,8 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            if (esSubAdmin) {
+            // 🎯 TIENDA DE CUENTAS VISIBLE PARA CLIENTES Y SUBADMINISTRADORES
+            if (esSubAdmin || esCliente) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Tienda de Cuentas</h4>
@@ -1101,35 +1100,39 @@ app.get('/dash', async (req, res) => {
                     });
                 }
 
+                // Generar dinámicamente las 6 tarjetas de compra (1 a 10 cuentas)
+                const paquetesNetflix = [
+                    { cant: 1, costo: 185 },
+                    { cant: 2, costo: 370 },
+                    { cant: 3, costo: 555 },
+                    { cant: 4, costo: 740 },
+                    { cant: 5, costo: 832 },
+                    { cant: 10, costo: 1560 }
+                ];
+
+                let tarjetasTienda = paquetesNetflix.map(p => `
+                    <div style="background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: 0.3s;" onmouseover="this.style.borderColor='var(--accent)';" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';">
+                        <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
+                        <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 22px;">${p.cant} Cuenta${p.cant > 1 ? 's' : ''}</h2>
+                        <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">${p.costo.toLocaleString()} Cr</p>
+                        <form action="/subadmin/comprar" method="POST">
+                            <input type="hidden" name="paquete" value="${p.cant}">
+                            <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta${p.cant > 1 ? 's' : ''} por ${p.costo.toLocaleString()} créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
+                        </form>
+                    </div>
+                `).join('');
+
                 panelesCentroHtml += `
                 <div id="main-comprar-stock" class="main-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🛒 Tienda Mayorista</h3>
+                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🛒 Tienda de Cuentas</h3>
                         <div style="background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.3); padding: 8px 15px; border-radius: 50px; font-size: 13px; font-weight: 600; color: #fff;">
                             Saldo: <span style="color:#00D2FF;">${usuarioActual.creditos || 0} Cr</span>
                         </div>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div style="background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                            <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
-                            <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 24px;">5 Cuentas</h2>
-                            <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">832 Cr</p>
-                            <form action="/subadmin/comprar" method="POST">
-                                <input type="hidden" name="paquete" value="5">
-                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 5 cuentas por 832 créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
-                            </form>
-                        </div>
-                        
-                        <div style="background: #000; border: 1px solid rgba(0,210,255,0.3); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,210,255,0.1);">
-                            <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
-                            <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 24px;">10 Cuentas</h2>
-                            <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">1,560 Cr</p>
-                            <form action="/subadmin/comprar" method="POST">
-                                <input type="hidden" name="paquete" value="10">
-                                <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar 10 cuentas por 1,560 créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
-                            </form>
-                        </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                        ${tarjetasTienda}
                     </div>
                 </div>
 
@@ -1311,7 +1314,6 @@ app.get('/dash', async (req, res) => {
 
             let botonesContactoProveedor = "";
             if (esAdminPrincipal || esSubAdmin) {
-                // Subadministrador ve tu información
                 botonesContactoProveedor = `
                 <div class="provider-contact">
                     <div class="contact-wrapper">
@@ -1334,7 +1336,6 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>`;
             } else if (esCliente && usuarioActual.creado_por) {
-                // Cliente solo ve el número de su subadministrador
                 const creador = usuarios.find(u => u.id === usuarioActual.creado_por);
                 if (creador && creador.telefono) {
                     let telefonoLimpio = creador.telefono.replace(/\s+/g, '').replace('+', '');
@@ -1383,7 +1384,7 @@ app.get('/dash', async (req, res) => {
                                 <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
                                 <div class="info">
                                     <strong>${req.session.user}</strong>
-                                    <span>${req.session.rol} ${esSubAdmin ? `| 🪙 ${usuarioActual.creditos || 0} Cr.` : ''}</span>
+                                    <span>${req.session.rol} ${(esSubAdmin || esCliente) ? `| 🪙 ${usuarioActual.creditos || 0} Cr.` : ''}</span>
                                 </div>
                             </div>
                         </div>
@@ -1448,7 +1449,7 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('creditos-admin')">💰 Asignar Créditos</button>
                                 <button class="menu-btn-item" onclick="openTab('historial-compras')">🧾 Historial Global</button>
                                 ` : ''}
-                                ${(esSubAdmin) ? `
+                                ${(esSubAdmin || esCliente) ? `
                                 <button class="menu-btn-item" onclick="openTab('comprar-stock')" style="color: #00D2FF; font-weight: 600;">🛒 Tienda de Cuentas</button>
                                 <button class="menu-btn-item" onclick="openTab('mis-compras')">🧾 Mis Compras</button>
                                 ` : ''}
@@ -1458,7 +1459,7 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('base-datos')">Ver Base de Datos</button>
                                 <button class="menu-btn-item" onclick="openTab('reservas-admin')" style="color: var(--accent); font-weight: 600;">🛒 Reservas (Manuales)</button>
                                 <button class="menu-btn-item" onclick="openTab('garantias-admin')" style="color: #E50914; font-weight: 600;">🚨 Alertas y Garantías</button>
-                                ` : `<p style="font-size:12px; color:var(--text-muted); margin:0;">Panel exclusivo para Clientes. Contacta al proveedor para activar accesos.</p>`}
+                                ` : ''}
                             </div>
                             
                             <h4 style="margin: 25px 0 10px 0;">Plataformas</h4>
