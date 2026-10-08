@@ -474,6 +474,7 @@ app.post('/admin/crear', async (req, res) => {
     }
 });
 
+// 🚀 LÓGICA DE ASIGNACIÓN CORREGIDA CONTRA DUPLICADOS GLOBALES
 app.post('/admin/asignar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { user_id, email } = req.body;
@@ -481,42 +482,64 @@ app.post('/admin/asignar-correo', async (req, res) => {
     
     let asignados = 0;
     let denegados = 0;
+    let msjDenegados = [];
 
     try {
         for (let mail of lista) {
             let e = mail.trim().toLowerCase();
             
+            let dueñosActuales = await dbAll("SELECT u.id, u.user, u.rol FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [e]);
+            
             if (req.session.rol === 'Administrador') {
-                let existForUser = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
-                if (!existForUser) {
-                    await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
-                    asignados++;
+                let dueñoDiferente = dueñosActuales.find(d => d.id !== parseInt(user_id));
+                
+                if (dueñoDiferente) {
+                    denegados++;
+                    msjDenegados.push(`- ${e} (Ya lo tiene asignado: ${dueñoDiferente.user})`);
+                } else {
+                    let yaLoTiene = dueñosActuales.find(d => d.id === parseInt(user_id));
+                    if (!yaLoTiene) {
+                        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                        asignados++;
+                    }
                 }
             } else if (req.session.rol === 'Subadministrador') {
                 let esMiCliente = await dbGet("SELECT id FROM usuarios WHERE id = ? AND creado_por = ?", [user_id, req.session.uid]);
                 if (esMiCliente) {
-                    let tengoElCorreo = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, req.session.uid]);
-                    if (tengoElCorreo) {
-                        let existForClient = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
-                        if (!existForClient) {
-                            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
-                            asignados++;
+                    let yoLoTengo = dueñosActuales.find(d => d.id === req.session.uid);
+                    if (yoLoTengo) {
+                        let otroCliente = dueñosActuales.find(d => d.id !== req.session.uid && d.id !== parseInt(user_id));
+                        if (otroCliente) {
+                            denegados++;
+                            msjDenegados.push(`- ${e} (Ya lo tiene tu cliente: ${otroCliente.user})`);
+                        } else {
+                            let yaLoTieneElClienteDestino = dueñosActuales.find(d => d.id === parseInt(user_id));
+                            if (!yaLoTieneElClienteDestino) {
+                                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                                asignados++;
+                            }
                         }
                     } else {
                         denegados++;
+                        msjDenegados.push(`- ${e} (No te pertenece)`);
                     }
                 } else {
                     denegados++;
+                    msjDenegados.push(`- ${e} (No es tu cliente)`);
                 }
             }
         }
         
-        if (denegados > 0 && req.session.rol === 'Subadministrador') {
-            res.send(`<script>alert('✅ Se asignaron ${asignados} correos. \\n\\n⛔ Se denegaron ${denegados} correos porque NO te pertenecen o intentaste asignarlos a un usuario que no es tu cliente.'); window.location='/dash';</script>`);
+        if (denegados > 0) {
+            let erroresStr = msjDenegados.slice(0, 5).join('\\n');
+            if (msjDenegados.length > 5) erroresStr += '\\n... y otros más.';
+            let alertMsg = `✅ Asignados: ${asignados}\\n⛔ Denegados o duplicados: ${denegados}\\n\\nMotivo:\\n${erroresStr}`;
+            res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
         } else {
-            res.redirect('/dash');
+            res.send(`<script>alert('✅ Se asignaron exitosamente ${asignados} correos a este usuario.'); window.location='/dash';</script>`);
         }
     } catch(err) {
+        console.error(err);
         res.redirect('/dash');
     }
 });
@@ -800,7 +823,6 @@ app.get('/dash', async (req, res) => {
                         </p>
                     </div>`;
 
-                // 🚀 AGREGAMOS EL BOTÓN "VER PAÍS" EN NETFLIX
                 if (key === 'netflix') {
                     controlesIzquierda += `
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
