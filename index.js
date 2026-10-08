@@ -805,10 +805,12 @@ app.get('/dash', async (req, res) => {
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
                             <img src="${plat.logo}" alt="Netflix" style="height: 16px;"> DAR CLICK AQUÍ
                         </button>
+                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.1); color: #00D2FF; border: 1px solid #00D2FF; margin-bottom: 5px;">🌍 Ver País de la Cuenta</button>
                     `;
                 } else {
                     controlesIzquierda += `
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; margin-bottom: 5px;">🔎 Extraer Código Original</button>
+                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.1); color: #00D2FF; border: 1px solid #00D2FF; margin-bottom: 5px;">🌍 Ver País de la Cuenta</button>
                     `;
                 }
 
