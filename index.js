@@ -481,64 +481,42 @@ app.post('/admin/asignar-correo', async (req, res) => {
     
     let asignados = 0;
     let denegados = 0;
-    let msjDenegados = [];
 
     try {
         for (let mail of lista) {
             let e = mail.trim().toLowerCase();
             
-            let dueñosActuales = await dbAll("SELECT u.id, u.user, u.rol FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [e]);
-            
             if (req.session.rol === 'Administrador') {
-                let dueñoDiferente = dueñosActuales.find(d => d.id !== parseInt(user_id));
-                
-                if (dueñoDiferente) {
-                    denegados++;
-                    msjDenegados.push(`- ${e} (Ya lo tiene asignado: ${dueñoDiferente.user})`);
-                } else {
-                    let yaLoTiene = dueñosActuales.find(d => d.id === parseInt(user_id));
-                    if (!yaLoTiene) {
-                        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
-                        asignados++;
-                    }
+                let existForUser = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
+                if (!existForUser) {
+                    await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                    asignados++;
                 }
             } else if (req.session.rol === 'Subadministrador') {
                 let esMiCliente = await dbGet("SELECT id FROM usuarios WHERE id = ? AND creado_por = ?", [user_id, req.session.uid]);
                 if (esMiCliente) {
-                    let yoLoTengo = dueñosActuales.find(d => d.id === req.session.uid);
-                    if (yoLoTengo) {
-                        let otroCliente = dueñosActuales.find(d => d.id !== req.session.uid && d.id !== parseInt(user_id));
-                        if (otroCliente) {
-                            denegados++;
-                            msjDenegados.push(`- ${e} (Ya lo tiene tu cliente: ${otroCliente.user})`);
-                        } else {
-                            let yaLoTieneElClienteDestino = dueñosActuales.find(d => d.id === parseInt(user_id));
-                            if (!yaLoTieneElClienteDestino) {
-                                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
-                                asignados++;
-                            }
+                    let tengoElCorreo = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, req.session.uid]);
+                    if (tengoElCorreo) {
+                        let existForClient = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
+                        if (!existForClient) {
+                            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                            asignados++;
                         }
                     } else {
                         denegados++;
-                        msjDenegados.push(`- ${e} (No te pertenece)`);
                     }
                 } else {
                     denegados++;
-                    msjDenegados.push(`- ${e} (No es tu cliente)`);
                 }
             }
         }
         
-        if (denegados > 0) {
-            let erroresStr = msjDenegados.slice(0, 5).join('\\n');
-            if (msjDenegados.length > 5) erroresStr += '\\n... y otros más.';
-            let alertMsg = `✅ Asignados: ${asignados}\\n⛔ Denegados o duplicados: ${denegados}\\n\\nMotivo:\\n${erroresStr}`;
-            res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
+        if (denegados > 0 && req.session.rol === 'Subadministrador') {
+            res.send(`<script>alert('✅ Se asignaron ${asignados} correos. \\n\\n⛔ Se denegaron ${denegados} correos porque NO te pertenecen o intentaste asignarlos a un usuario que no es tu cliente.'); window.location='/dash';</script>`);
         } else {
-            res.send(`<script>alert('✅ Se asignaron exitosamente ${asignados} correos a este usuario.'); window.location='/dash';</script>`);
+            res.redirect('/dash');
         }
     } catch(err) {
-        console.error(err);
         res.redirect('/dash');
     }
 });
@@ -651,62 +629,35 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🚀 NUEVA LÓGICA DE ASIGNACIÓN MANUAL MASIVA (CON TEXTAREA)
 app.post('/admin/asignar-manual', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    const { correos_asignar, receptor_id } = req.body;
+    const { cuenta_id, receptor_id } = req.body;
 
-    if (!correos_asignar || !receptor_id) {
-        return res.send("<script>alert('⛔ Debes ingresar las cuentas y seleccionar el usuario receptor.'); window.location='/dash';</script>");
+    if (!cuenta_id || !receptor_id) {
+        return res.send("<script>alert('⛔ Selecciona una cuenta del stock y un usuario receptor.'); window.location='/dash';</script>");
     }
 
-    const lista = correos_asignar.split(/[\s,]+/).filter(e => e.includes('@'));
-    
-    let asignadasOK = 0;
-    let fallidas = 0;
-    let msjFallidas = [];
-
     try {
-        for (let mail of lista) {
-            let email = mail.trim().toLowerCase();
-            
-            // 1. Verificar que esté en el stock disponible
-            const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE email = ? AND estado = 'Disponible'", [email]);
-            
-            if (!cuenta) {
-                fallidas++;
-                msjFallidas.push(`- ${email} (No está disponible en el stock)`);
-                continue;
-            }
-
-            // 2. Verificar que no haya sido vinculada previamente por error
-            const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
-            if (yaVinculada) {
-                await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
-                fallidas++;
-                msjFallidas.push(`- ${email} (Ya estaba asignada a alguien más)`);
-                continue;
-            }
-
-            // 3. Procesar asignación
-            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
-            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
-            await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
-            asignadasOK++;
+        const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE id = ? AND estado = 'Disponible'", [cuenta_id]);
+        if (!cuenta) {
+            return res.send("<script>alert('⛔ La cuenta seleccionada no existe o ya no está disponible en el stock.'); window.location='/dash';</script>");
         }
 
-        let alertMsg = `✅ Asignación masiva completada.\\n\\nCuentas asignadas exitosamente: ${asignadasOK}\\nCuentas no procesadas: ${fallidas}`;
-        if (fallidas > 0) {
-            let erroresStr = msjFallidas.slice(0, 8).join('\\n');
-            if (msjFallidas.length > 8) erroresStr += '\\n... y otras más.';
-            alertMsg += `\\n\\nMotivos:\\n${erroresStr}`;
+        const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
+        if (yaVinculada) {
+            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
+            return res.send("<script>alert('⛔ Esta cuenta ya se encontraba asignada a un usuario previamente.'); window.location='/dash';</script>");
         }
 
-        res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
+        await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
+        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
+        await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
+
+        res.send(`<script>alert('✅ Asignación manual completada exitosamente.\\n\\nCuenta: ${cuenta.email}\\nEliminada del stock disponible y agregada a las cuentas del usuario.'); window.location='/dash';</script>`);
 
     } catch(e) {
         console.error(e);
-        res.send(`<script>alert('Error en la asignación masiva: ${e.message}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('Error en la asignación manual: ${e.message}'); window.location='/dash';</script>`);
     }
 });
 
@@ -849,6 +800,7 @@ app.get('/dash', async (req, res) => {
                         </p>
                     </div>`;
 
+                // 🚀 AGREGAMOS EL BOTÓN "VER PAÍS" EN NETFLIX
                 if (key === 'netflix') {
                     controlesIzquierda += `
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
@@ -951,7 +903,7 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div id="action-asignacion-manual" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Asignación Directa</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Pega y asigna múltiples cuentas del stock a un usuario simultáneamente.</p>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Busca y selecciona una cuenta del stock disponible y entrégala manualmente a un usuario.</p>
                 </div>
                 <div id="action-creditos-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
@@ -1040,28 +992,38 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
-                <!-- 🚀 NUEVA TARJETA DE ASIGNACIÓN MASIVA POR TEXTAREA -->
                 <div id="main-asignacion-manual" class="main-card">
-                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual Masiva</h3>
+                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual de Cuenta</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
-                        Pega todas las cuentas que quieras asignar a la vez. El sistema verificará que estén disponibles en el stock, las asignará al cliente y las descontará automáticamente del inventario.
+                        Busca y selecciona una cuenta del stock. Se eliminará inmediatamente del inventario y se vinculará al cliente elegido.
                     </p>
                     
-                    <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
-                        <div style="margin-bottom: 20px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
-                            <select name="receptor_id" class="input-classic" required>
-                                <option value="" disabled selected>-- Selecciona al usuario --</option>
-                                ${clientesOpcionesHtml}
-                            </select>
-                        </div>
-
+                    <form id="form_asignacion_manual" action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
-                            <textarea name="correos_asignar" class="input-classic" placeholder="cuenta1@gmail.com\\ncuenta2@gmail.com\\ncuenta3@gmail.com..." rows="6" required></textarea>
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar cuenta en Stock: 🔍</label>
+                            <input type="text" id="buscar_stock_input" class="input-classic" placeholder="Escribe el correo o parte de él..." onkeyup="buscarCuentaStock()" style="margin-bottom: 0;">
                         </div>
                         
-                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas al usuario seleccionado? Las cuentas se eliminarán de tu inventario disponible.');">Asignar Cuentas al Cliente</button>
+                        <div id="resultado_busqueda_stock" style="display:none; background: rgba(0,210,255,0.1); padding: 15px; border-radius: 8px; border: 1px solid #00D2FF; margin-bottom: 20px;">
+                        </div>
+
+                        <div id="paso_2_asignacion" style="display:none;">
+                            <div style="margin-bottom: 15px; background: rgba(37,211,102,0.1); border: 1px solid #25d366; padding: 10px; border-radius: 8px;">
+                                <span style="color: #25d366; font-size: 12px; font-weight: bold;">Cuenta seleccionada:</span>
+                                <span id="cuenta_email_mostrar" style="color: #fff; font-size: 14px; margin-left: 10px; font-weight: bold;"></span>
+                            </div>
+                            <input type="hidden" name="cuenta_id" id="cuenta_id_seleccionada">
+                            
+                            <div style="margin-bottom: 20px;">
+                                <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
+                                <select name="receptor_id" id="receptor_id_select" class="input-classic" required>
+                                    <option value="" disabled selected>-- Selecciona al usuario --</option>
+                                    ${clientesOpcionesHtml}
+                                </select>
+                            </div>
+                            
+                            <button type="button" class="btn-submit" onclick="confirmarAsignacion(event)">Confirmar Asignación</button>
+                        </div>
                     </form>
 
                     <div style="margin-top: 30px;">
@@ -1364,7 +1326,26 @@ app.get('/dash', async (req, res) => {
                     <div class="contact-wrapper">
                         <span class="contact-label">⬇ Mi WhatsApp</span>
                         <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp Proveedor
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                        </a>
+                    </div>
+                    <div class="contact-wrapper">
+                        <span class="contact-label">⬇ Ref. Grupo</span>
+                        <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                            <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                        </a>
+                    </div>
+                </div>`;
+            } else if (esCliente && usuarioActual.creado_por) {
+                const creador = usuarios.find(u => u.id === usuarioActual.creado_por);
+                if (creador && creador.telefono) {
+                    let telefonoLimpio = creador.telefono.replace(/\s+/g, '').replace('+', '');
+                    botonesContactoProveedor = `
+                    <div class="provider-contact" style="grid-template-columns: 1fr;">
+                        <div class="contact-wrapper">
+                            <span class="contact-label">⬇ Contactar a mi Proveedor</span>
+                            <a href="https://wa.me/${telefonoLimpio}" target="_blank" class="contact-btn whatsapp" style="width: 100%; height: 40px; font-size: 13px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp Proveedor
                             </a>
                         </div>
                     </div>`;
@@ -1502,6 +1483,70 @@ app.get('/dash', async (req, res) => {
                         </div>` : ''}
                     </div>
                 </div>
+
+                <!-- 🚀 SCRIPT PARA BÚSQUEDA INTERACTIVA DEL STOCK -->
+                <script>
+                    const stockDisponibleJs = ${JSON.stringify(stockCuentasDisponibles || [])};
+                    
+                    function buscarCuentaStock() {
+                        let val = document.getElementById('buscar_stock_input').value.toLowerCase().trim();
+                        let resDiv = document.getElementById('resultado_busqueda_stock');
+                        let paso2 = document.getElementById('paso_2_asignacion');
+                        
+                        if (val.length < 3) {
+                            resDiv.style.display = 'none';
+                            paso2.style.display = 'none';
+                            return;
+                        }
+                        
+                        let encontradas = stockDisponibleJs.filter(c => c.email.toLowerCase().includes(val));
+                        
+                        if (encontradas.length > 0) {
+                            let html = encontradas.map(c => 
+                                '<div style="margin-bottom: 10px; padding: 15px; background: rgba(0,0,0,0.8); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">' +
+                                    '<h4 style="color:#00D2FF; margin:0 0 8px 0; display:flex; align-items:center; gap:5px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Cuenta encontrada</h4>' +
+                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Correo:</strong> ' + c.email + '</p>' +
+                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Estado:</strong> Disponible</p>' +
+                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Stock:</strong> Sí</p>' +
+                                    '<button type="button" class="btn-submit" style="margin-top: 10px; padding: 10px; font-size: 11px; width: auto;" onclick="prepararAsignacion(' + c.id + ', \\'' + c.email + '\\')">Seleccionar para asignar</button>' +
+                                '</div>'
+                            ).join('');
+                            resDiv.innerHTML = html;
+                            resDiv.style.display = 'block';
+                            paso2.style.display = 'none';
+                        } else {
+                            resDiv.innerHTML = '<p style="color: #E50914; margin:0; font-weight:600;">❌ No se encontró ninguna cuenta en el stock con ese texto.</p>';
+                            resDiv.style.display = 'block';
+                            paso2.style.display = 'none';
+                        }
+                    }
+
+                    function prepararAsignacion(id, email) {
+                        document.getElementById('cuenta_id_seleccionada').value = id;
+                        document.getElementById('cuenta_email_mostrar').innerText = email;
+                        document.getElementById('paso_2_asignacion').style.display = 'block';
+                        document.getElementById('resultado_busqueda_stock').style.display = 'none';
+                        document.getElementById('buscar_stock_input').value = email;
+                    }
+
+                    function confirmarAsignacion(event) {
+                        event.preventDefault();
+                        let receptorId = document.getElementById('receptor_id_select').value;
+                        let receptorSelect = document.getElementById('receptor_id_select');
+                        let receptorName = receptorId ? receptorSelect.options[receptorSelect.selectedIndex].text : '';
+                        let email = document.getElementById('cuenta_email_mostrar').innerText;
+
+                        if (!receptorId) {
+                            alert("Por favor, selecciona el usuario al que asignarás la cuenta.");
+                            return;
+                        }
+
+                        let conf = confirm('¿Confirmar asignación?\\n\\nCuenta: ' + email + '\\nUsuario: ' + receptorName + '\\n\\nLa cuenta será asignada y eliminada del stock.');
+                        if (conf) {
+                            document.getElementById('form_asignacion_manual').submit();
+                        }
+                    }
+                </script>
             </body>
             </html>
             `);
@@ -1680,9 +1725,11 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
+        // 🚀 NUEVA LÓGICA DE DETECCIÓN INTELIGENTE DE PAÍS
         if (accion === 'pais') {
             let paisDetectado = null;
             
+            // Diccionario global de códigos ISO 3166-1 alpha-2
             const codigosPais = {
                 'US': '🇺🇸 Estados Unidos', 'CO': '🇨🇴 Colombia', 'BR': '🇧🇷 Brasil',
                 'JP': '🇯🇵 Japón', 'MX': '🇲🇽 México', 'ES': '🇪🇸 España',
@@ -1701,12 +1748,14 @@ app.post('/buscar', async (req, res) => {
                 'IE': '🇮🇪 Irlanda', 'NZ': '🇳🇿 Nueva Zelanda', 'SG': '🇸🇬 Singapur'
             };
 
+            // 1. Intentar buscar el código oculto en el SRC de Netflix (ej: _BR_EVO, _JP_EVO, _US_EVO)
             let matchSrc = textoBruto.match(/_([A-Z]{2})_EVO/);
             if (matchSrc && matchSrc[1]) {
                 let codigo = matchSrc[1].toUpperCase();
                 paisDetectado = codigosPais[codigo] || ("🌍 Código de País: " + codigo);
             }
 
+            // 2. Si es un correo antiguo sin código SRC, buscar nombres de países como respaldo
             if (!paisDetectado) {
                 const reglasPais = [
                     { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
