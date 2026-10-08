@@ -651,46 +651,62 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🚀 RUTA ACTUALIZADA PARA ASIGNAR MÚLTIPLES CUENTAS DEL STOCK EN BATCH
+// 🚀 NUEVA LÓGICA DE ASIGNACIÓN MANUAL MASIVA (CON TEXTAREA)
 app.post('/admin/asignar-manual', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    const { cuenta_id, receptor_id } = req.body;
+    const { correos_asignar, receptor_id } = req.body;
 
-    if (!cuenta_id || !receptor_id) {
-        return res.send("<script>alert('⛔ Selecciona al menos una cuenta del stock y un usuario receptor.'); window.location='/dash';</script>");
+    if (!correos_asignar || !receptor_id) {
+        return res.send("<script>alert('⛔ Debes ingresar las cuentas y seleccionar el usuario receptor.'); window.location='/dash';</script>");
     }
 
-    const ids = cuenta_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+    const lista = correos_asignar.split(/[\s,]+/).filter(e => e.includes('@'));
     
     let asignadasOK = 0;
     let fallidas = 0;
+    let msjFallidas = [];
 
     try {
-        for (let id of ids) {
-            const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE id = ? AND estado = 'Disponible'", [id]);
+        for (let mail of lista) {
+            let email = mail.trim().toLowerCase();
+            
+            // 1. Verificar que esté en el stock disponible
+            const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE email = ? AND estado = 'Disponible'", [email]);
+            
             if (!cuenta) {
                 fallidas++;
+                msjFallidas.push(`- ${email} (No está disponible en el stock)`);
                 continue;
             }
 
+            // 2. Verificar que no haya sido vinculada previamente por error
             const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
             if (yaVinculada) {
                 await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
                 fallidas++;
+                msjFallidas.push(`- ${email} (Ya estaba asignada a alguien más)`);
                 continue;
             }
 
+            // 3. Procesar asignación
             await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
             await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
             asignadasOK++;
         }
 
-        res.send(`<script>alert('✅ Asignación masiva completada.\\n\\nCuentas asignadas exitosamente: ${asignadasOK}\\nCuentas con error (ya no estaban disponibles o estaban vinculadas): ${fallidas}'); window.location='/dash';</script>`);
+        let alertMsg = `✅ Asignación masiva completada.\\n\\nCuentas asignadas exitosamente: ${asignadasOK}\\nCuentas no procesadas: ${fallidas}`;
+        if (fallidas > 0) {
+            let erroresStr = msjFallidas.slice(0, 8).join('\\n');
+            if (msjFallidas.length > 8) erroresStr += '\\n... y otras más.';
+            alertMsg += `\\n\\nMotivos:\\n${erroresStr}`;
+        }
+
+        res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
 
     } catch(e) {
         console.error(e);
-        res.send(`<script>alert('Error en la asignación manual: ${e.message}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('Error en la asignación masiva: ${e.message}'); window.location='/dash';</script>`);
     }
 });
 
@@ -935,7 +951,7 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div id="action-asignacion-manual" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Asignación Directa</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Busca y asigna múltiples cuentas del stock a un usuario simultáneamente.</p>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Pega y asigna múltiples cuentas del stock a un usuario simultáneamente.</p>
                 </div>
                 <div id="action-creditos-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
@@ -1024,42 +1040,28 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
-                <!-- 🚀 TARJETA DE ASIGNACIÓN MASIVA RENOVADA -->
+                <!-- 🚀 NUEVA TARJETA DE ASIGNACIÓN MASIVA POR TEXTAREA -->
                 <div id="main-asignacion-manual" class="main-card">
                     <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual Masiva</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
-                        Busca y agrega varias cuentas del stock a la lista. Una vez que tengas todas las que deseas asignar, selecciona al cliente y confirma.
+                        Pega todas las cuentas que quieras asignar a la vez. El sistema verificará que estén disponibles en el stock, las asignará al cliente y las descontará automáticamente del inventario.
                     </p>
                     
-                    <form id="form_asignacion_manual" action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+                    <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+                        <div style="margin-bottom: 20px;">
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
+                            <select name="receptor_id" class="input-classic" required>
+                                <option value="" disabled selected>-- Selecciona al usuario --</option>
+                                ${clientesOpcionesHtml}
+                            </select>
+                        </div>
+
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar cuenta en Stock: 🔍</label>
-                            <input type="text" id="buscar_stock_input" class="input-classic" placeholder="Escribe el correo o parte de él..." onkeyup="buscarCuentaStock()" style="margin-bottom: 0;">
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
+                            <textarea name="correos_asignar" class="input-classic" placeholder="cuenta1@gmail.com\\ncuenta2@gmail.com\\ncuenta3@gmail.com..." rows="6" required></textarea>
                         </div>
                         
-                        <div id="resultado_busqueda_stock" style="display:none; background: rgba(0,210,255,0.1); padding: 15px; border-radius: 8px; border: 1px solid #00D2FF; margin-bottom: 20px; max-height: 200px; overflow-y: auto;">
-                        </div>
-
-                        <div style="margin-bottom: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
-                            <label style="color: #25d366; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">📋 Cuentas Seleccionadas para Asignar:</label>
-                            <div id="lista_cuentas_seleccionadas" style="min-height: 40px;">
-                                <p style="color:var(--text-muted); font-size:12px; font-style:italic;">No hay cuentas seleccionadas.</p>
-                            </div>
-                        </div>
-
-                        <div id="paso_2_asignacion" style="display:none; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 15px;">
-                            <input type="hidden" name="cuenta_id" id="cuenta_id_seleccionada">
-                            
-                            <div style="margin-bottom: 20px;">
-                                <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
-                                <select name="receptor_id" id="receptor_id_select" class="input-classic" required>
-                                    <option value="" disabled selected>-- Selecciona al usuario --</option>
-                                    ${clientesOpcionesHtml}
-                                </select>
-                            </div>
-                            
-                            <button type="button" id="btn_confirmar_asignacion" class="btn-submit" onclick="confirmarAsignacion(event)">Confirmar Asignación</button>
-                        </div>
+                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas al usuario seleccionado? Las cuentas se eliminarán de tu inventario disponible.');">Asignar Cuentas al Cliente</button>
                     </form>
 
                     <div style="margin-top: 30px;">
@@ -1362,26 +1364,7 @@ app.get('/dash', async (req, res) => {
                     <div class="contact-wrapper">
                         <span class="contact-label">⬇ Mi WhatsApp</span>
                         <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
-                        </a>
-                    </div>
-                    <div class="contact-wrapper">
-                        <span class="contact-label">⬇ Ref. Grupo</span>
-                        <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                            <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
-                        </a>
-                    </div>
-                </div>`;
-            } else if (esCliente && usuarioActual.creado_por) {
-                const creador = usuarios.find(u => u.id === usuarioActual.creado_por);
-                if (creador && creador.telefono) {
-                    let telefonoLimpio = creador.telefono.replace(/\s+/g, '').replace('+', '');
-                    botonesContactoProveedor = `
-                    <div class="provider-contact" style="grid-template-columns: 1fr;">
-                        <div class="contact-wrapper">
-                            <span class="contact-label">⬇ Contactar a mi Proveedor</span>
-                            <a href="https://wa.me/${telefonoLimpio}" target="_blank" class="contact-btn whatsapp" style="width: 100%; height: 40px; font-size: 13px;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp Proveedor
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp Proveedor
                             </a>
                         </div>
                     </div>`;
@@ -1519,97 +1502,6 @@ app.get('/dash', async (req, res) => {
                         </div>` : ''}
                     </div>
                 </div>
-
-                <!-- 🚀 SCRIPT PARA BÚSQUEDA INTERACTIVA Y ASIGNACIÓN MASIVA -->
-                <script>
-                    const stockDisponibleJs = ${JSON.stringify(stockCuentasDisponibles || [])};
-                    let cuentasParaAsignar = [];
-                    
-                    function buscarCuentaStock() {
-                        let val = document.getElementById('buscar_stock_input').value.toLowerCase().trim();
-                        let resDiv = document.getElementById('resultado_busqueda_stock');
-                        
-                        if (val.length < 3) {
-                            resDiv.style.display = 'none';
-                            return;
-                        }
-                        
-                        // Filtrar el stock disponible excluyendo las que ya se agregaron a la lista actual
-                        let encontradas = stockDisponibleJs.filter(c => 
-                            c.email.toLowerCase().includes(val) && !cuentasParaAsignar.some(sel => sel.id === c.id)
-                        );
-                        
-                        if (encontradas.length > 0) {
-                            let html = encontradas.map(c => 
-                                '<div style="margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.8); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); display: flex; justify-content: space-between; align-items: center;">' +
-                                    '<div><span style="color:#00D2FF; font-weight:bold;">' + c.email + '</span><br><small style="color:#fff;">Disponible en Stock</small></div>' +
-                                    '<button type="button" class="btn-submit" style="padding: 6px 12px; font-size: 11px; width: auto;" onclick="agregarParaAsignar(' + c.id + ', \\'' + c.email + '\\')">Agregar +</button>' +
-                                '</div>'
-                            ).join('');
-                            resDiv.innerHTML = html;
-                            resDiv.style.display = 'block';
-                        } else {
-                            resDiv.innerHTML = '<p style="color: #E50914; margin:0; font-weight:600;">❌ No se encontró la cuenta o ya está agregada a la lista.</p>';
-                            resDiv.style.display = 'block';
-                        }
-                    }
-
-                    function agregarParaAsignar(id, email) {
-                        cuentasParaAsignar.push({id: id, email: email});
-                        document.getElementById('buscar_stock_input').value = '';
-                        document.getElementById('resultado_busqueda_stock').style.display = 'none';
-                        actualizarListaAsignacion();
-                    }
-
-                    function quitarDeAsignacion(id) {
-                        cuentasParaAsignar = cuentasParaAsignar.filter(c => c.id !== id);
-                        actualizarListaAsignacion();
-                    }
-
-                    function actualizarListaAsignacion() {
-                        let listaDiv = document.getElementById('lista_cuentas_seleccionadas');
-                        let inputIds = document.getElementById('cuenta_id_seleccionada');
-                        let paso2 = document.getElementById('paso_2_asignacion');
-                        let btnSubmit = document.getElementById('btn_confirmar_asignacion');
-
-                        if(cuentasParaAsignar.length === 0) {
-                            listaDiv.innerHTML = '<p style="color:var(--text-muted); font-size:12px; font-style:italic;">No hay cuentas seleccionadas.</p>';
-                            paso2.style.display = 'none';
-                            inputIds.value = '';
-                        } else {
-                            let html = '';
-                            let ids = [];
-                            cuentasParaAsignar.forEach(c => {
-                                ids.push(c.id);
-                                html += '<div style="background: rgba(37,211,102,0.1); border: 1px solid #25d366; padding: 6px 10px; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">' +
-                                    '<span style="color: #fff; font-size: 13px; font-weight: bold;">' + c.email + '</span>' +
-                                    '<button type="button" style="background: transparent; border: none; color: #E50914; cursor: pointer; font-weight: bold;" onclick="quitarDeAsignacion(' + c.id + ')">✕</button>' +
-                                '</div>';
-                            });
-                            listaDiv.innerHTML = html;
-                            inputIds.value = ids.join(',');
-                            paso2.style.display = 'block';
-                            btnSubmit.innerText = 'Confirmar Asignación de ' + cuentasParaAsignar.length + ' Cuenta(s)';
-                        }
-                    }
-
-                    function confirmarAsignacion(event) {
-                        event.preventDefault();
-                        let receptorId = document.getElementById('receptor_id_select').value;
-                        let receptorSelect = document.getElementById('receptor_id_select');
-                        let receptorName = receptorId ? receptorSelect.options[receptorSelect.selectedIndex].text : '';
-
-                        if (!receptorId) {
-                            alert("Por favor, selecciona el usuario al que asignarás las cuentas.");
-                            return;
-                        }
-
-                        let conf = confirm('¿Confirmar asignación masiva de ' + cuentasParaAsignar.length + ' cuenta(s) a ' + receptorName + '?');
-                        if (conf) {
-                            document.getElementById('form_asignacion_manual').submit();
-                        }
-                    }
-                </script>
             </body>
             </html>
             `);
