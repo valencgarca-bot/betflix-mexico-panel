@@ -800,6 +800,7 @@ app.get('/dash', async (req, res) => {
                         </p>
                     </div>`;
 
+                // 🚀 AGREGAMOS EL BOTÓN "VER PAÍS" EN NETFLIX
                 if (key === 'netflix') {
                     controlesIzquierda += `
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
@@ -1073,7 +1074,6 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            // 🎯 TIENDA DE CUENTAS VISIBLE PARA CLIENTES Y SUBADMINISTRADORES
             if (esSubAdmin || esCliente) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
@@ -1102,7 +1102,6 @@ app.get('/dash', async (req, res) => {
                     });
                 }
 
-                // Generar dinámicamente las 6 tarjetas de compra (1 a 10 cuentas)
                 const paquetesNetflix = [
                     { cant: 1, costo: 185 },
                     { cant: 2, costo: 370 },
@@ -1726,14 +1725,61 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
+        // 🚀 NUEVA LÓGICA DE DETECCIÓN INTELIGENTE DE PAÍS
         if (accion === 'pais') {
             let paisDetectado = null;
-            const reglasPais = [
-                { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
-                { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] }
-            ];
-            for (let regla of reglasPais) { if (regla.keys.some(k => textoCorreo.includes(k))) { paisDetectado = regla.id; break; } }
-            let htmlRes = paisDetectado ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#00D2FF; text-shadow: 0 0 15px rgba(0, 210, 255, 0.8);">${paisDetectado}</div>` : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
+            
+            // Diccionario global de códigos ISO 3166-1 alpha-2
+            const codigosPais = {
+                'US': '🇺🇸 Estados Unidos', 'CO': '🇨🇴 Colombia', 'BR': '🇧🇷 Brasil',
+                'JP': '🇯🇵 Japón', 'MX': '🇲🇽 México', 'ES': '🇪🇸 España',
+                'AR': '🇦🇷 Argentina', 'CL': '🇨🇱 Chile', 'PE': '🇵🇪 Perú',
+                'EC': '🇪🇨 Ecuador', 'VE': '🇻🇪 Venezuela', 'UY': '🇺🇾 Uruguay',
+                'PY': '🇵🇾 Paraguay', 'BO': '🇧🇴 Bolivia', 'CR': '🇨🇷 Costa Rica',
+                'PA': '🇵🇦 Panamá', 'DO': '🇩🇴 República Dominicana', 'GT': '🇬🇹 Guatemala',
+                'HN': '🇭🇳 Honduras', 'SV': '🇸🇻 El Salvador', 'NI': '🇳🇮 Nicaragua',
+                'PR': '🇵🇷 Puerto Rico', 'CA': '🇨🇦 Canadá', 'GB': '🇬🇧 Reino Unido',
+                'FR': '🇫🇷 Francia', 'DE': '🇩🇪 Alemania', 'IT': '🇮🇹 Italia',
+                'PT': '🇵🇹 Portugal', 'TR': '🇹🇷 Turquía', 'IN': '🇮🇳 India',
+                'ZA': '🇿🇦 Sudáfrica', 'KR': '🇰🇷 Corea del Sur', 'AU': '🇦🇺 Australia',
+                'NL': '🇳🇱 Países Bajos', 'SE': '🇸🇪 Suecia', 'NO': '🇳🇴 Noruega',
+                'DK': '🇩🇰 Dinamarca', 'FI': '🇫🇮 Finlandia', 'PL': '🇵🇱 Polonia',
+                'CH': '🇨🇭 Suiza', 'AT': '🇦🇹 Austria', 'BE': '🇧🇪 Bélgica',
+                'IE': '🇮🇪 Irlanda', 'NZ': '🇳🇿 Nueva Zelanda', 'SG': '🇸🇬 Singapur'
+            };
+
+            // 1. Intentar buscar el código oculto en el SRC de Netflix (ej: _BR_EVO, _JP_EVO, _US_EVO)
+            let matchSrc = textoBruto.match(/_([A-Z]{2})_EVO/);
+            if (matchSrc && matchSrc[1]) {
+                let codigo = matchSrc[1].toUpperCase();
+                paisDetectado = codigosPais[codigo] || ("🌍 Código de País: " + codigo);
+            }
+
+            // 2. Si es un correo antiguo sin código SRC, buscar nombres de países como respaldo
+            if (!paisDetectado) {
+                const reglasPais = [
+                    { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
+                    { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] },
+                    { id: "🇧🇷 Brasil", keys: ['brasil', 'brazil', 'são paulo', '0800-'] },
+                    { id: "🇯🇵 Japón", keys: ['japan', 'japón', 'tokyo', '合同会社'] },
+                    { id: "🇲🇽 México", keys: ['méxico', 'mexico', 'cdmx', '01 800'] },
+                    { id: "🇪🇸 España", keys: ['españa', 'spain', 'madrid', '900 '] },
+                    { id: "🇦🇷 Argentina", keys: ['argentina', 'buenos aires'] },
+                    { id: "🇨🇱 Chile", keys: ['chile', 'santiago'] },
+                    { id: "🇵🇪 Perú", keys: ['perú', 'peru', 'lima'] },
+                    { id: "🇪🇨 Ecuador", keys: ['ecuador', 'quito', 'guayaquil'] }
+                ];
+                for (let regla of reglasPais) { 
+                    if (regla.keys.some(k => textoCorreo.includes(k))) { 
+                        paisDetectado = regla.id; 
+                        break; 
+                    } 
+                }
+            }
+
+            let htmlRes = paisDetectado 
+                ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#00D2FF; text-shadow: 0 0 15px rgba(0, 210, 255, 0.8);">${paisDetectado}</div>` 
+                : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
             return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
         }
 
