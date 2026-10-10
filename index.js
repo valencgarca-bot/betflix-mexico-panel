@@ -31,6 +31,16 @@ const PLATAFORMAS = {
     'disney': { nombre: 'Disney+', color: '#ffffff', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
 };
 
+// 📌 PRECIOS BASE DEL ADMINISTRADOR PRINCIPAL
+const PRECIOS_BASE = {
+    1: 185,
+    2: 370,
+    3: 555,
+    4: 740,
+    5: 832,
+    10: 1560
+};
+
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
     secret: 'betflix_mexico_ultra_secure_2026_MX_PRO',
@@ -71,6 +81,11 @@ db.serialize(() => {
 
     // 🚀 ACTUALIZAR TELÉFONOS ANTIGUOS AGREGANDO +52 SI NO TIENEN EL +
     db.run("UPDATE usuarios SET telefono = '+52' || telefono WHERE telefono IS NOT NULL AND telefono != '' AND telefono NOT LIKE '+%'", (err) => {});
+
+    // ✅ NUEVAS TABLAS PARA EL SISTEMA MULTINIVEL
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN propietario_id INTEGER DEFAULT 1", (err) => {});
+    db.run("CREATE TABLE IF NOT EXISTS precios_subadmin (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, paquete INTEGER, precio REAL, UNIQUE(subadmin_id, paquete))");
+    db.run("CREATE TABLE IF NOT EXISTS historial_creditos (id INTEGER PRIMARY KEY AUTOINCREMENT, emisor_id INTEGER, receptor_id INTEGER, monto REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
 });
 
 // 🧹 FUNCIÓN DE PURGA INMEDIATA
@@ -612,11 +627,10 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     }
 });
 
-// 🚀 LÓGICA DE CARGA DE STOCK ACTUALIZADA (SOPORTA CORREO + CONTRASEÑA)
-app.post('/admin/cargar-stock', async (req, res) => {
-    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+// 🚀 CARGA DE STOCK DINÁMICA (ADMIN Y SUBADMIN)
+app.post('/stock/cargar', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
-    
     const lineas = correos_stock.split(/[\n\r]+/).filter(l => l.trim() !== '');
     
     let duplicadas = 0;
@@ -632,24 +646,17 @@ app.post('/admin/cargar-stock', async (req, res) => {
                 let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
                 let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
                 
-                if(existsStock || existsCorreos) {
-                    duplicadas++;
-                } else {
-                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password) VALUES (?, ?, ?)", [plataforma, e, p]);
+                if(existsStock || existsCorreos) { duplicadas++; } 
+                else {
+                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password, propietario_id) VALUES (?, ?, ?, ?)", [plataforma, e, p, req.session.uid]);
                     agregadas++;
                 }
             }
         }
-        if(duplicadas > 0) {
-            let msg = "✅ Se agregaron " + agregadas + " cuentas.\\n\\n⚠️ Se ignoraron " + duplicadas + " cuentas porque YA ESTÁN REGISTRADAS.";
-            res.send("<script>alert('" + msg + "'); window.location='/dash';</script>");
-        } else {
-            res.redirect('/dash');
-        }
+        res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas a tu stock.\\n⚠️ Duplicadas ignoradas: ${duplicadas}'); window.location='/dash';</script>`);
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🚀 NUEVAS RUTAS PARA VACIAR STOCK (SOLO ADMIN)
 app.post('/admin/vaciar-stock-disponible', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     try {
@@ -709,7 +716,6 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🚀 RUTA FINAL ASIGNACIÓN MASIVA POR TEXTAREA (SEGURO CONTRA ERRORES)
 app.post('/admin/asignar-manual', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_asignar, receptor_id } = req.body;
@@ -764,33 +770,85 @@ app.post('/admin/asignar-manual', async (req, res) => {
     }
 });
 
-// 🚀 LÓGICA DE COMPRA ACTUALIZADA PARA ENTREGAR CONTRASEÑA
-app.post('/subadmin/comprar', async (req, res) => {
-    if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
-    const paquete = parseInt(req.body.paquete);
-    let costo = 0;
-    
-    if (paquete === 1) costo = 185;
-    else if (paquete === 2) costo = 370;
-    else if (paquete === 3) costo = 555;
-    else if (paquete === 4) costo = 740;
-    else if (paquete === 5) costo = 832;
-    else if (paquete === 10) costo = 1560;
-    else return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
+// 🚀 SUBADMIN: CONFIGURAR PRECIOS DE SU TIENDA
+app.post('/subadmin/configurar-precios', async (req, res) => {
+    if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    try {
+        const paquetes = [1, 2, 3, 4, 5, 10];
+        for (let p of paquetes) {
+            let precioNuevo = parseFloat(req.body[`precio_${p}`]);
+            if (precioNuevo && precioNuevo >= PRECIOS_BASE[p]) {
+                await dbRun("INSERT INTO precios_subadmin (subadmin_id, paquete, precio) VALUES (?, ?, ?) ON CONFLICT(subadmin_id, paquete) DO UPDATE SET precio = excluded.precio", [req.session.uid, p, precioNuevo]);
+            }
+        }
+        res.send("<script>alert('✅ Precios actualizados correctamente.'); window.location='/dash';</script>");
+    } catch(err) {
+        res.send("<script>alert('Error al guardar precios.'); window.location='/dash';</script>");
+    }
+});
+
+// 🚀 SUBADMIN: ASIGNAR CRÉDITO A SUS CLIENTES
+app.post('/subadmin/asignar-creditos', async (req, res) => {
+    if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { cliente_id, cantidad } = req.body;
+    const monto = parseFloat(cantidad);
 
     try {
-        const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
-        if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
+        const cliente = await dbGet("SELECT id, user, creditos FROM usuarios WHERE id = ? AND creado_por = ?", [cliente_id, req.session.uid]);
+        if (!cliente) return res.send("<script>alert('⛔ Cliente no válido.'); window.location='/dash';</script>");
 
-        const disponibles = await dbAll("SELECT id, email, password FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
-        if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
+        const subadmin = await dbGet("SELECT creditos FROM usuarios WHERE id = ?", [req.session.uid]);
+        
+        if (monto > 0 && subadmin.creditos < monto) {
+            return res.send("<script>alert('⛔ No tienes saldo suficiente para asignar esta cantidad.'); window.location='/dash';</script>");
+        }
 
-        const nuevoSaldo = user.creditos - costo;
-        const nuevaDeuda = (user.deuda || 0) + costo;
+        const nuevoSaldoSubadmin = subadmin.creditos - monto;
+        const nuevoSaldoCliente = cliente.creditos + monto;
 
-        await dbRun("UPDATE usuarios SET creditos = ?, deuda = ? WHERE id = ?", [nuevoSaldo, nuevaDeuda, req.session.uid]);
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoSubadmin, req.session.uid]);
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoCliente, cliente_id]);
+        await dbRun("INSERT INTO historial_creditos (emisor_id, receptor_id, monto) VALUES (?, ?, ?)", [req.session.uid, cliente_id, monto]);
 
-        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, user.creditos, nuevoSaldo]);
+        res.send(`<script>alert('✅ Transferiste ${monto} Cr al cliente ${cliente.user}. Te quedan ${nuevoSaldoSubadmin} Cr.'); window.location='/dash';</script>`);
+    } catch(err) {
+        res.send("<script>alert('Error en transferencia.'); window.location='/dash';</script>");
+    }
+});
+
+// 🚀 SISTEMA DE COMPRA MULTINIVEL
+app.post('/tienda/comprar', async (req, res) => {
+    if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
+    const paquete = parseInt(req.body.paquete);
+    
+    try {
+        const comprador = await dbGet("SELECT id, user, telefono, creditos, creado_por FROM usuarios WHERE id = ?", [req.session.uid]);
+        const esSubAdmin = req.session.rol === 'Subadministrador';
+        
+        // El proveedor es el Admin (id=1) para los Subadmins, o el Subadmin para los Clientes
+        const proveedor_id = esSubAdmin ? 1 : comprador.creado_por;
+        
+        // Calcular Costo dinámico
+        let costo = PRECIOS_BASE[paquete];
+        if (!costo) return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
+
+        if (!esSubAdmin) {
+            const precioPersonalizado = await dbGet("SELECT precio FROM precios_subadmin WHERE subadmin_id = ? AND paquete = ?", [proveedor_id, paquete]);
+            if (precioPersonalizado) costo = precioPersonalizado.precio;
+        }
+
+        if (comprador.creditos < costo) return res.send("<script>alert('Créditos insuficientes.'); window.location='/dash';</script>");
+
+        // Buscar stock específico del proveedor
+        const disponibles = await dbAll("SELECT id, email, password FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' AND propietario_id = ? LIMIT ?", [proveedor_id, paquete]);
+        
+        if (disponibles.length < paquete) return res.send("<script>alert('El proveedor no tiene stock suficiente en este momento.'); window.location='/dash';</script>");
+
+        const nuevoSaldo = comprador.creditos - costo;
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, req.session.uid]);
+
+        // Registrar compra global
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, comprador.creditos, nuevoSaldo]);
         const compraId = compraInfo.lastID;
 
         let correosEntregados = [];
@@ -798,43 +856,32 @@ app.post('/subadmin/comprar', async (req, res) => {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
             await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta, password_cuenta) VALUES (?, ?, ?, ?)", [compraId, cuenta.id, cuenta.email, cuenta.password]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
-            
-            correosEntregados.push(`${cuenta.email} : ${cuenta.password || 'Sin contraseña guardada'}`);
+            correosEntregados.push(`${cuenta.email} : ${cuenta.password || 'Sin clave'}`);
         }
 
+        // Determinar a quién notificar
+        const proveedor = await dbGet("SELECT telefono FROM usuarios WHERE id = ?", [proveedor_id]);
+        const adminPhone = proveedor.telefono ? proveedor.telefono.replace(/\s+/g, '').replace('+', '') : '573012964169';
+        
         const fechaObj = new Date();
-        const fechaStr = fechaObj.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
-        const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
-
-        const adminPhone = "573012964169";
-        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* ${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
+        const msgAdmin = `*NUEVA COMPRA EN TU TIENDA*\n\n👤 *Cliente:* ${comprador.user}\n📅 *Fecha:* ${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}\n🛒 *Paquete:* ${paquete} cuentas\n💵 *Valor:* $${costo} Cr\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n🪙 *Saldo restante del cliente:* ${nuevoSaldo} Cr`;
         const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
 
         res.send(`
         <!DOCTYPE html>
         <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Compra Exitosa</title>
-            <style>
-                body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #25d366; font-size: 24px; }
-                .btn { background: #25d366; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(37,211,102,0.4); margin-top: 20px;}
-            </style>
-        </head>
+        <head><title>Compra Exitosa</title><style>body{background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:50px;} .btn{background:#25d366;color:#000;padding:15px 20px;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;display:inline-block;}</style></head>
         <body>
-            <h2>✅ Compra de ${paquete} Cuentas Exitosa</h2>
-            <p>Las cuentas ya están en tu panel listas para usar.<br>Notifica al administrador para confirmar el comprobante de la transacción.</p>
-            <a href="${linkAdmin}" class="btn">Enviar Comprobante</a>
-            <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a>
+            <h2 style="color:#25d366;">✅ Compra Exitosa</h2>
+            <p>Se descontaron ${costo} Cr. Las cuentas están en tu panel.</p>
+            <a href="${linkAdmin}" class="btn">Notificar al Proveedor por WhatsApp</a>
+            <br><br><a href="/dash" style="color:#888;">Volver al Panel</a>
             <script>window.location.replace('${linkAdmin}');</script>
         </body>
         </html>
         `);
     } catch(e) {
-        res.send(`<script>alert('Error en el sistema'); window.location='/dash';</script>`);
+        res.send(`<script>alert('Error en la transacción'); window.location='/dash';</script>`);
     }
 });
 
@@ -858,10 +905,11 @@ app.get('/dash', async (req, res) => {
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
-            const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible'");
-            const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Vendida' OR estado = 'Asignada'");
+            // 🚀 Stock aislado por dueño (Admin ve el suyo, Subadmin el suyo, Cliente ve el de su creador)
+            const proveedor_inventario = esCliente ? usuarioActual.creado_por : (esSubAdmin ? req.session.uid : 1);
+            const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible' AND propietario_id = ?", [proveedor_inventario]);
+            const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE (estado = 'Vendida' OR estado = 'Asignada') AND propietario_id = ?", [proveedor_inventario]);
             
-            const stockCuentasDisponibles = await dbAll("SELECT id, email, plataforma FROM stock_cuentas WHERE estado = 'Disponible' ORDER BY id DESC");
             const historialAsignaciones = await dbAll("SELECT h.*, u.user as receptor, a.user as admin FROM historial_asignaciones h JOIN usuarios u ON h.receptor_id = u.id JOIN usuarios a ON h.admin_id = a.id ORDER BY h.id DESC");
 
             const historialCompras = await dbAll(`SELECT c.*, u.user as comprador FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
@@ -1069,7 +1117,6 @@ app.get('/dash', async (req, res) => {
                                 : '<span class="badge-status vendida">Vendida</span>');
                         let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra || 'N/A'}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
                         
-                        // 🚀 VISUALIZACIÓN DE CONTRASEÑA EN TABLA DE ADMIN
                         stockAdnHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="font-family:monospace; padding-left:20px;">
@@ -1086,7 +1133,7 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-stock-admin" class="main-card">
                     <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">📦 Cargar Stock y Ver Historial</h3>
-                    <form action="/admin/cargar-stock" method="POST">
+                    <form action="/stock/cargar" method="POST">
                         <select name="plataforma" class="input-classic" required>
                             <option value="netflix">Netflix</option>
                         </select>
@@ -1111,7 +1158,6 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
-                <!-- 🚀 NUEVA TARJETA DE ASIGNACIÓN MASIVA POR TEXTAREA -->
                 <div id="main-asignacion-manual" class="main-card">
                     <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual Masiva</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
@@ -1201,7 +1247,6 @@ app.get('/dash', async (req, res) => {
                     misComprasHtml = "<tr><td colspan='4' style='text-align:center;'>Aún no has realizado compras.</td></tr>";
                 } else {
                     misComprasLog.forEach(c => {
-                        // 🚀 AQUÍ IMPRIMIMOS LA CONTRASEÑA EN "MIS COMPRAS"
                         let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta} <span style="color:#00D2FF; margin-left: 5px;">${d.password_cuenta ? '🔑 '+d.password_cuenta : ''}</span></div>`).join('');
                         misComprasHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
@@ -1213,22 +1258,21 @@ app.get('/dash', async (req, res) => {
                     });
                 }
 
-                // Generar dinámicamente las 6 tarjetas de compra (1 a 10 cuentas)
-                const paquetesNetflix = [
-                    { cant: 1, costo: 185 },
-                    { cant: 2, costo: 370 },
-                    { cant: 3, costo: 555 },
-                    { cant: 4, costo: 740 },
-                    { cant: 5, costo: 832 },
-                    { cant: 10, costo: 1560 }
-                ];
+                // Extraer precios personalizados del proveedor para esta tienda
+                const miProveedorId = esSubAdmin ? 1 : usuarioActual.creado_por;
+                const misPreciosDB = await dbAll("SELECT paquete, precio FROM precios_subadmin WHERE subadmin_id = ?", [miProveedorId]);
+                
+                const paquetesNetflix = [1, 2, 3, 4, 5, 10].map(cant => {
+                    let pCustom = misPreciosDB.find(p => p.paquete === cant);
+                    return { cant, costo: pCustom ? pCustom.precio : PRECIOS_BASE[cant] };
+                });
 
                 let tarjetasTienda = paquetesNetflix.map(p => `
                     <div style="background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: 0.3s;" onmouseover="this.style.borderColor='var(--accent)';" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';">
                         <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
                         <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 22px;">${p.cant} Cuenta${p.cant > 1 ? 's' : ''}</h2>
                         <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">${p.costo.toLocaleString()} Cr</p>
-                        <form action="/subadmin/comprar" method="POST">
+                        <form action="/tienda/comprar" method="POST">
                             <input type="hidden" name="paquete" value="${p.cant}">
                             <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta${p.cant > 1 ? 's' : ''} por ${p.costo.toLocaleString()} créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
                         </form>
@@ -1260,6 +1304,63 @@ app.get('/dash', async (req, res) => {
                         </table>
                     </div>
                 </div>
+                `;
+            }
+
+            // 🚀 PANELES EXCLUSIVOS PARA SUBADMINISTRADORES
+            if (esSubAdmin) {
+                const misPrecios = await dbAll("SELECT paquete, precio FROM precios_subadmin WHERE subadmin_id = ?", [req.session.uid]);
+                let inputsPrecios = [1, 2, 3, 4, 5, 10].map(cant => {
+                    let actual = misPrecios.find(p => p.paquete === cant)?.precio || PRECIOS_BASE[cant];
+                    return `<div style="margin-bottom:10px;">
+                        <label style="color:#00D2FF; font-size:12px;">Paquete ${cant} Cuentas (Min: $${PRECIOS_BASE[cant]})</label>
+                        <input type="number" name="precio_${cant}" min="${PRECIOS_BASE[cant]}" value="${actual}" class="input-classic" required>
+                    </div>`;
+                }).join('');
+
+                let misClientesOptions = usuarios.filter(u => u.creado_por === req.session.uid && u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (Cr: ${u.creditos || 0})</option>`).join('');
+
+                panelesCentroHtml += `
+                <div id="main-mi-tienda" class="main-card">
+                    <h3 style="color:#00D2FF;">⚙️ Configurar Precios de Mi Tienda</h3>
+                    <p style="font-size:12px; color:var(--text-muted);">Establece los precios a los que le venderás a tus clientes. El sistema impide colocar precios menores a lo que te cobra el Administrador.</p>
+                    <form action="/subadmin/configurar-precios" method="POST">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">${inputsPrecios}</div>
+                        <button type="submit" class="btn-submit" style="margin-top:15px;">Guardar Precios de Venta</button>
+                    </form>
+                </div>
+                
+                <div id="main-mi-stock" class="main-card">
+                    <h3 style="color:#00D2FF;">📦 Cargar Mi Inventario Propio</h3>
+                    <div style="display: flex; gap:20px; margin-bottom:15px;">
+                        <div style="background: rgba(0, 210, 255, 0.1); padding: 15px; border-radius: 8px; flex:1; text-align:center;">
+                            <strong style="color: #00D2FF; font-size:24px;">${stockDisp.count}</strong><br><small>Disponibles en mi Tienda</small>
+                        </div>
+                    </div>
+                    <form action="/stock/cargar" method="POST">
+                        <input type="hidden" name="plataforma" value="netflix">
+                        <textarea name="correos_stock" class="input-classic" placeholder="correo@gmail.com:clave123..." rows="5" required></textarea>
+                        <button type="submit" class="btn-submit">Subir Cuentas a mi Inventario</button>
+                    </form>
+                </div>
+
+                <div id="main-creditos-clientes" class="main-card">
+                    <h3 style="color:#00D2FF;">💸 Asignar Saldo a Mis Clientes</h3>
+                    <p style="font-size:12px; color:var(--text-muted);">Transfiere de tu saldo disponible (${usuarioActual.creditos || 0} Cr) a las cuentas de tus clientes.</p>
+                    <form action="/subadmin/asignar-creditos" method="POST">
+                        <select name="cliente_id" class="input-classic" required>
+                            <option value="" disabled selected>Selecciona a tu cliente...</option>
+                            ${misClientesOptions}
+                        </select>
+                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Monto a transferir (Ej: 100)" required>
+                        <button type="submit" class="btn-submit">Transferir Saldo</button>
+                    </form>
+                </div>`;
+                
+                panelesIzquierdosHtml += `
+                <div id="action-mi-tienda" class="action-panel"><h4 style="color:var(--text-muted);">Administración Tienda</h4><p style="font-size:12px; color:#fff;">Controla tus márgenes de ganancia.</p></div>
+                <div id="action-mi-stock" class="action-panel"><h4 style="color:var(--text-muted);">Inventario Privado</h4><p style="font-size:12px; color:#fff;">Gestiona las cuentas que vendes a tus clientes.</p></div>
+                <div id="action-creditos-clientes" class="action-panel"><h4 style="color:var(--text-muted);">Billetera</h4><p style="font-size:12px; color:#fff;">Reparte tu crédito entre tus clientes.</p></div>
                 `;
             }
 
@@ -1561,6 +1662,11 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" onclick="openTab('asignacion-manual')" style="color: #00D2FF; font-weight: 600;">🎯 Asignación Manual</button>
                                 <button class="menu-btn-item" onclick="openTab('creditos-admin')">💰 Asignar Créditos</button>
                                 <button class="menu-btn-item" onclick="openTab('historial-compras')">🧾 Historial Global</button>
+                                ` : ''}
+                                ${(esSubAdmin) ? `
+                                <button class="menu-btn-item" onclick="openTab('mi-tienda')">⚙️ Precios de Venta</button>
+                                <button class="menu-btn-item" onclick="openTab('mi-stock')">📦 Mi Inventario</button>
+                                <button class="menu-btn-item" onclick="openTab('creditos-clientes')">💸 Billetera Clientes</button>
                                 ` : ''}
                                 ${(esSubAdmin || esCliente) ? `
                                 <button class="menu-btn-item" onclick="openTab('comprar-stock')" style="color: #00D2FF; font-weight: 600;">🛒 Tienda de Cuentas</button>
