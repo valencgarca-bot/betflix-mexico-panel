@@ -57,9 +57,12 @@ db.serialize(() => {
     db.run("ALTER TABLE stock_cuentas ADD COLUMN comprador_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN compra_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN fecha_compra DATETIME", (err) => {});
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN password TEXT", (err) => {});
 
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
+    db.run("ALTER TABLE detalles_compras ADD COLUMN password_cuenta TEXT", (err) => {});
 
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
@@ -115,10 +118,16 @@ const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     :root {
-        --text-main: #f8fafc; --text-muted: #94a3b8; --card-bg: rgba(0, 0, 0, 0.92);
-        --card-border: rgba(255, 255, 255, 0.15); --accent: #00D2FF; --accent-hover: #0099CC;
-        --btn-bg: rgba(0, 210, 255, 0.12); --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
-        --blur-effect: blur(8px); --radius: 16px;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --card-bg: rgba(0, 0, 0, 0.92);
+        --card-border: rgba(255, 255, 255, 0.15);
+        --accent: #00D2FF;
+        --accent-hover: #0099CC;
+        --btn-bg: rgba(0, 210, 255, 0.12);
+        --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
+        --blur-effect: blur(8px);
+        --radius: 16px;
     }
     @keyframes pureSeriesSlideshow {
         0% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
@@ -126,9 +135,18 @@ const CSS_MODERNO = `
         66% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
         100% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
     }
-    body { background-size: cover; background-position: center; background-attachment: fixed; animation: pureSeriesSlideshow 16s ease infinite; background-color: #000000; color: var(--text-main); font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; }
+    body { 
+        background-size: cover; background-position: center; background-attachment: fixed; 
+        animation: pureSeriesSlideshow 16s ease infinite; background-color: #000000; 
+        color: var(--text-main); font-family: 'Inter', sans-serif; 
+        margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; 
+    }
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
-    .user-pill { display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s; }
+    .user-pill { 
+        display: flex; align-items: center; gap: 12px; background: var(--card-bg); 
+        padding: 8px 16px; border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); 
+        border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s; 
+    }
     .user-pill:hover { border-color: rgba(255, 255, 255, 0.4); transform: translateY(-2px); }
     .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
@@ -136,19 +154,40 @@ const CSS_MODERNO = `
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
     .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
     .brand-logo strong { font-weight: 700; color: var(--accent); }
-    .search-top input { background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px; border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s; }
+    .search-top input { 
+        background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; 
+        width: 280px; border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); 
+        font-size: 13px; outline: none; transition: 0.3s; 
+    }
     .search-top input:focus { border-color: var(--accent); width: 320px; background: #000; }
     .dashboard-grid { display: grid; grid-template-columns: 320px 1fr 280px; gap: 25px; padding: 10px 40px 40px 40px; align-items: start; }
     .left-sidebar { display: flex; flex-direction: column; gap: 20px; height: 100%; min-height: 600px; }
     .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
-    .action-panel { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px; min-height: 380px; }
+    .action-panel { 
+        background: var(--card-bg); border-radius: var(--radius); padding: 25px; 
+        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
+        backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px; min-height: 380px; 
+    }
     .action-panel.active { display: flex; }
-    .main-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; }
-    .main-card.active { display: block; }
-    .action-btn-pill { width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+    .main-card { 
+        background: var(--card-bg); border-radius: var(--radius); padding: 18px 25px; 
+        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
+        backdrop-filter: var(--blur-effect); display: none; flex-direction: column;
+    }
+    .main-card.active { display: flex; }
+    .action-btn-pill { 
+        width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border); 
+        padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600; 
+        color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; 
+        letter-spacing: 0.5px; text-align: center; 
+    }
     .action-btn-pill:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.5);}
-    .search-input-large { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px; color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s; }
+    .search-input-large { 
+        width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); 
+        padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px; 
+        color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s; 
+    }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
     .iframe-container { display: none; background: transparent; border: none; height: 600px; width: 100%; overflow: hidden; }
     .side-card { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); }
@@ -268,7 +307,7 @@ app.use(async (req, res, next) => {
             next();
         } catch (err) { 
             console.error(err);
-            return res.send(`<script>alert('Error Interno de Sesión: ${err.message}'); window.location='/';</script>`);
+            return res.send("<script>alert('Error Interno de Sesión'); window.location='/';</script>");
         }
     } else { return res.redirect('/'); }
 });
@@ -299,7 +338,7 @@ app.get('/', (req, res) => {
             ${mensajeBienvenida}
             <form action="/registrar-cliente" method="POST">
                 <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
-                <div class="input-group"><input type="tel" name="telefono" placeholder="Número de WhatsApp (Ej: +57...)" pattern="^\\+[1-9]\\d{1,14}$" title="Debe incluir el símbolo + seguido del código de país (ej. +521234567890)" required></div>
+                <div class="input-group"><input type="tel" name="telefono" placeholder="Número de WhatsApp (Ej: +57...)" required></div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
                 <button type="submit" class="btn-submit">Completar Registro</button>
             </form>
@@ -324,15 +363,13 @@ app.get('/', (req, res) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Acceso - SyncBox</title>
+        ${CSS_MODERNO}
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-            body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
+            body { display: flex; justify-content: center; align-items: center; }
             .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; margin: 15px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
             .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
-            .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
-            .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
             .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
@@ -413,8 +450,7 @@ app.post('/login', async (req, res) => {
             res.send("<script>alert('⛔ Datos incorrectos.'); window.location='/';</script>"); 
         }
     } catch (err) { 
-        console.error(err);
-        res.send(`<script>alert('Error de base de datos en Login: ${err.message}'); window.location='/';</script>`); 
+        res.send("<script>alert('Error de base de datos en Login'); window.location='/';</script>"); 
     }
 });
 
@@ -486,12 +522,10 @@ app.post('/admin/asignar-correo', async (req, res) => {
     try {
         for (let mail of lista) {
             let e = mail.trim().toLowerCase();
-            
             let dueñosActuales = await dbAll("SELECT u.id, u.user, u.rol FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [e]);
             
             if (req.session.rol === 'Administrador') {
                 let dueñoDiferente = dueñosActuales.find(d => d.id !== parseInt(user_id));
-                
                 if (dueñoDiferente) {
                     denegados++;
                     msjDenegados.push(`- ${e} (Ya lo tiene asignado: ${dueñoDiferente.user})`);
@@ -532,13 +566,12 @@ app.post('/admin/asignar-correo', async (req, res) => {
         if (denegados > 0) {
             let erroresStr = msjDenegados.slice(0, 5).join('\\n');
             if (msjDenegados.length > 5) erroresStr += '\\n... y otros más.';
-            let alertMsg = `✅ Asignados: ${asignados}\\n⛔ Denegados o duplicados: ${denegados}\\n\\nMotivo:\\n${erroresStr}`;
-            res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
+            let alertMsg = "✅ Asignados: " + asignados + "\\n⛔ Denegados o duplicados: " + denegados + "\\n\\nMotivo:\\n" + erroresStr;
+            res.send("<script>alert('" + alertMsg + "'); window.location='/dash';</script>");
         } else {
-            res.send(`<script>alert('✅ Se asignaron exitosamente ${asignados} correos a este usuario.'); window.location='/dash';</script>`);
+            res.send("<script>alert('✅ Se asignaron exitosamente los correos a este usuario.'); window.location='/dash';</script>");
         }
     } catch(err) {
-        console.error(err);
         res.redirect('/dash');
     }
 });
@@ -579,32 +612,57 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     }
 });
 
+// 🚀 LÓGICA DE CARGA DE STOCK ACTUALIZADA (SOPORTA CORREO + CONTRASEÑA)
 app.post('/admin/cargar-stock', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
-    const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
+    
+    const lineas = correos_stock.split(/[\n\r]+/).filter(l => l.trim() !== '');
     
     let duplicadas = 0;
     let agregadas = 0;
 
     try {
-        for (let email of lista) {
-            let e = email.trim().toLowerCase();
-            let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
-            let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
-            
-            if(existsStock || existsCorreos) {
-                duplicadas++;
-            } else {
-                await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]);
-                agregadas++;
+        for (let linea of lineas) {
+            let match = linea.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)[\s:;|/,]*(.*)/);
+            if (match) {
+                let e = match[1].toLowerCase().trim();
+                let p = match[2].trim() || null;
+                
+                let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
+                let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
+                
+                if(existsStock || existsCorreos) {
+                    duplicadas++;
+                } else {
+                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password) VALUES (?, ?, ?)", [plataforma, e, p]);
+                    agregadas++;
+                }
             }
         }
         if(duplicadas > 0) {
-            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
+            let msg = "✅ Se agregaron " + agregadas + " cuentas.\\n\\n⚠️ Se ignoraron " + duplicadas + " cuentas porque YA ESTÁN REGISTRADAS.";
+            res.send("<script>alert('" + msg + "'); window.location='/dash';</script>");
         } else {
             res.redirect('/dash');
         }
+    } catch(e) { res.redirect('/dash'); }
+});
+
+// 🚀 NUEVAS RUTAS PARA VACIAR STOCK (SOLO ADMIN)
+app.post('/admin/vaciar-stock-disponible', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    try {
+        await dbRun("DELETE FROM stock_cuentas WHERE estado = 'Disponible'");
+        res.send("<script>alert('✅ Todo el stock NO VENDIDO (Disponible) ha sido eliminado correctamente.'); window.location='/dash';</script>");
+    } catch(e) { res.redirect('/dash'); }
+});
+
+app.post('/admin/vaciar-stock-vendido', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    try {
+        await dbRun("DELETE FROM stock_cuentas WHERE estado IN ('Vendida', 'Asignada')");
+        res.send("<script>alert('✅ Todo el stock VENDIDO y ASIGNADO ha sido eliminado de la tabla principal. (Los clientes conservan sus accesos)'); window.location='/dash';</script>");
     } catch(e) { res.redirect('/dash'); }
 });
 
@@ -651,7 +709,7 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🚀 NUEVA LÓGICA DE ASIGNACIÓN MANUAL MASIVA (CON TEXTAREA)
+// 🚀 RUTA FINAL ASIGNACIÓN MASIVA POR TEXTAREA (SEGURO CONTRA ERRORES)
 app.post('/admin/asignar-manual', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_asignar, receptor_id } = req.body;
@@ -670,46 +728,43 @@ app.post('/admin/asignar-manual', async (req, res) => {
         for (let mail of lista) {
             let email = mail.trim().toLowerCase();
             
-            // 1. Verificar que esté en el stock disponible
-            const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE email = ? AND estado = 'Disponible'", [email]);
+            const cuenta = await dbGet("SELECT id, email FROM stock_cuentas WHERE email = ? AND estado = 'Disponible'", [email]);
             
             if (!cuenta) {
                 fallidas++;
-                msjFallidas.push(`- ${email} (No está disponible en el stock)`);
+                msjFallidas.push(`- ${email} (No en stock)`);
                 continue;
             }
 
-            // 2. Verificar que no haya sido vinculada previamente por error
             const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
             if (yaVinculada) {
                 await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
                 fallidas++;
-                msjFallidas.push(`- ${email} (Ya estaba asignada a alguien más)`);
+                msjFallidas.push(`- ${email} (Ya vinculada)`);
                 continue;
             }
 
-            // 3. Procesar asignación
             await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
             await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
             asignadasOK++;
         }
 
-        let alertMsg = `✅ Asignación masiva completada.\\n\\nCuentas asignadas exitosamente: ${asignadasOK}\\nCuentas no procesadas: ${fallidas}`;
+        let alertMsg = "✅ Asignación masiva completada.\\n\\nCuentas asignadas exitosamente: " + asignadasOK + "\\nCuentas no procesadas: " + fallidas;
         if (fallidas > 0) {
             let erroresStr = msjFallidas.slice(0, 8).join('\\n');
             if (msjFallidas.length > 8) erroresStr += '\\n... y otras más.';
-            alertMsg += `\\n\\nMotivos:\\n${erroresStr}`;
+            alertMsg += "\\n\\nMotivos:\\n" + erroresStr;
         }
 
-        res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
+        res.send("<script>alert('" + alertMsg + "'); window.location='/dash';</script>");
 
     } catch(e) {
-        console.error(e);
-        res.send(`<script>alert('Error en la asignación masiva: ${e.message}'); window.location='/dash';</script>`);
+        res.send("<script>alert('Error en la asignación masiva'); window.location='/dash';</script>");
     }
 });
 
+// 🚀 LÓGICA DE COMPRA ACTUALIZADA PARA ENTREGAR CONTRASEÑA
 app.post('/subadmin/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -727,7 +782,7 @@ app.post('/subadmin/comprar', async (req, res) => {
         const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
         if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
 
-        const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
+        const disponibles = await dbAll("SELECT id, email, password FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
         if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
 
         const nuevoSaldo = user.creditos - costo;
@@ -741,9 +796,10 @@ app.post('/subadmin/comprar', async (req, res) => {
         let correosEntregados = [];
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
-            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
+            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta, password_cuenta) VALUES (?, ?, ?, ?)", [compraId, cuenta.id, cuenta.email, cuenta.password]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
-            correosEntregados.push(cuenta.email);
+            
+            correosEntregados.push(`${cuenta.email} : ${cuenta.password || 'Sin contraseña guardada'}`);
         }
 
         const fechaObj = new Date();
@@ -751,7 +807,7 @@ app.post('/subadmin/comprar', async (req, res) => {
         const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
 
         const adminPhone = "573012964169";
-        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* $${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
+        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* ${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
         const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
 
         res.send(`
@@ -778,7 +834,7 @@ app.post('/subadmin/comprar', async (req, res) => {
         </html>
         `);
     } catch(e) {
-        res.send(`<script>alert('Error en el sistema: ${e.message}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('Error en el sistema'); window.location='/dash';</script>`);
     }
 });
 
@@ -1012,9 +1068,14 @@ app.get('/dash', async (req, res) => {
                                 ? '<span class="badge-status vendida" style="border-color:#00D2FF; color:#00D2FF; background:rgba(0,210,255,0.15);">Asignada</span>' 
                                 : '<span class="badge-status vendida">Vendida</span>');
                         let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra || 'N/A'}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
+                        
+                        // 🚀 VISUALIZACIÓN DE CONTRASEÑA EN TABLA DE ADMIN
                         stockAdnHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="font-family:monospace; padding-left:20px;">${s.email}</td>
+                            <td style="font-family:monospace; padding-left:20px;">
+                                ${s.email}<br>
+                                <small style="color:var(--accent); font-weight:600;">${s.password ? '🔑 '+s.password : ''}</small>
+                            </td>
                             <td>${estadoBadge}</td>
                             <td>${compradorTxt}</td>
                             <td><small style="color:var(--text-muted);">${s.fecha_carga}</small></td>
@@ -1029,9 +1090,19 @@ app.get('/dash', async (req, res) => {
                         <select name="plataforma" class="input-classic" required>
                             <option value="netflix">Netflix</option>
                         </select>
-                        <textarea name="correos_stock" class="input-classic" placeholder="Pega los correos del lote de cuentas separados por espacio o saltos de línea..." rows="5" required></textarea>
+                        <textarea name="correos_stock" class="input-classic" placeholder="correo1@gmail.com:clave123&#10;cuenta2@hotmail.com:pass456..." rows="5" required></textarea>
                         <button type="submit" class="btn-submit">Ingresar al Inventario Seguro</button>
                     </form>
+
+                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                        <form action="/admin/vaciar-stock-disponible" method="POST" style="flex: 1;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK DISPONIBLE (No Vendido)? Esta acción no se puede deshacer.');">
+                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #E50914;">🗑️ Borrar Stock NO Vendido</button>
+                        </form>
+                        <form action="/admin/vaciar-stock-vendido" method="POST" style="flex: 1;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK VENDIDO/ASIGNADO? Esto limpiará la lista visual pero los clientes conservarán sus correos.');">
+                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); border-color: #E50914; color: #E50914;">🗑️ Borrar Stock Vendido</button>
+                        </form>
+                    </div>
+
                     <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 25px;">
                         <table class="table-modern">
                             <thead><tr><th style="padding-left:20px;">Correo (ADN)</th><th>Estado</th><th>Comprador / Receptor</th><th>Fecha Carga</th></tr></thead>
@@ -1058,7 +1129,7 @@ app.get('/dash', async (req, res) => {
 
                         <div style="margin-bottom: 15px;">
                             <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
-                            <textarea name="correos_asignar" class="input-classic" placeholder="cuenta1@gmail.com\\ncuenta2@gmail.com\\ncuenta3@gmail.com..." rows="6" required></textarea>
+                            <textarea name="correos_asignar" class="input-classic" placeholder="cuenta1@gmail.com&#10;cuenta2@gmail.com&#10;cuenta3@gmail.com..." rows="6" required></textarea>
                         </div>
                         
                         <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas al usuario seleccionado? Las cuentas se eliminarán de tu inventario disponible.');">Asignar Cuentas al Cliente</button>
@@ -1112,6 +1183,7 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
+            // 🎯 TIENDA DE CUENTAS VISIBLE PARA CLIENTES Y SUBADMINISTRADORES
             if (esSubAdmin || esCliente) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
@@ -1129,17 +1201,19 @@ app.get('/dash', async (req, res) => {
                     misComprasHtml = "<tr><td colspan='4' style='text-align:center;'>Aún no has realizado compras.</td></tr>";
                 } else {
                     misComprasLog.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
+                        // 🚀 AQUÍ IMPRIMIMOS LA CONTRASEÑA EN "MIS COMPRAS"
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta} <span style="color:#00D2FF; margin-left: 5px;">${d.password_cuenta ? '🔑 '+d.password_cuenta : ''}</span></div>`).join('');
                         misComprasHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
                             <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span></td>
-                            <td><div style="max-height:80px; overflow-y:auto; font-size:11px;">${cuentasEntregadas}</div></td>
+                            <td><div style="max-height:80px; overflow-y:auto; font-size:12px;">${cuentasEntregadas}</div></td>
                         </tr>`;
                     });
                 }
 
+                // Generar dinámicamente las 6 tarjetas de compra (1 a 10 cuentas)
                 const paquetesNetflix = [
                     { cant: 1, costo: 185 },
                     { cant: 2, costo: 370 },
@@ -1364,7 +1438,26 @@ app.get('/dash', async (req, res) => {
                     <div class="contact-wrapper">
                         <span class="contact-label">⬇ Mi WhatsApp</span>
                         <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp Proveedor
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp
+                        </a>
+                    </div>
+                    <div class="contact-wrapper">
+                        <span class="contact-label">⬇ Ref. Grupo</span>
+                        <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp" style="width: 100%;">
+                            <svg viewBox="0 0 24 24" fill="#25d366" width="16" height="16"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Grupo
+                        </a>
+                    </div>
+                </div>`;
+            } else if (esCliente && usuarioActual.creado_por) {
+                const creador = usuarios.find(u => u.id === usuarioActual.creado_por);
+                if (creador && creador.telefono) {
+                    let telefonoLimpio = creador.telefono.replace(/\s+/g, '').replace('+', '');
+                    botonesContactoProveedor = `
+                    <div class="provider-contact" style="grid-template-columns: 1fr;">
+                        <div class="contact-wrapper">
+                            <span class="contact-label">⬇ Contactar a mi Proveedor</span>
+                            <a href="https://wa.me/${telefonoLimpio}" target="_blank" class="contact-btn whatsapp" style="width: 100%; height: 40px; font-size: 13px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WhatsApp Proveedor
                             </a>
                         </div>
                     </div>`;
@@ -1680,6 +1773,7 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
+        // 🚀 LÓGICA DE DETECCIÓN INTELIGENTE DE PAÍS
         if (accion === 'pais') {
             let paisDetectado = null;
             
