@@ -57,9 +57,12 @@ db.serialize(() => {
     db.run("ALTER TABLE stock_cuentas ADD COLUMN comprador_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN compra_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN fecha_compra DATETIME", (err) => {});
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN password TEXT", (err) => {});
 
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
+    db.run("ALTER TABLE detalles_compras ADD COLUMN password_cuenta TEXT", (err) => {});
 
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
@@ -115,10 +118,16 @@ const CSS_MODERNO = `
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     :root {
-        --text-main: #f8fafc; --text-muted: #94a3b8; --card-bg: rgba(0, 0, 0, 0.92);
-        --card-border: rgba(255, 255, 255, 0.15); --accent: #00D2FF; --accent-hover: #0099CC;
-        --btn-bg: rgba(0, 210, 255, 0.12); --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
-        --blur-effect: blur(8px); --radius: 16px;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --card-bg: rgba(0, 0, 0, 0.92);
+        --card-border: rgba(255, 255, 255, 0.15);
+        --accent: #00D2FF;
+        --accent-hover: #0099CC;
+        --btn-bg: rgba(0, 210, 255, 0.12);
+        --shadow-elegant: 0 20px 50px rgba(0, 0, 0, 0.98);
+        --blur-effect: blur(8px);
+        --radius: 16px;
     }
     @keyframes pureSeriesSlideshow {
         0% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
@@ -126,9 +135,18 @@ const CSS_MODERNO = `
         66% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
         100% { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
     }
-    body { background-size: cover; background-position: center; background-attachment: fixed; animation: pureSeriesSlideshow 16s ease infinite; background-color: #000000; color: var(--text-main); font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; }
+    body { 
+        background-size: cover; background-position: center; background-attachment: fixed; 
+        animation: pureSeriesSlideshow 16s ease infinite; background-color: #000000; 
+        color: var(--text-main); font-family: 'Inter', sans-serif; 
+        margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; 
+    }
     .top-header { background: transparent; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; }
-    .user-pill { display: flex; align-items: center; gap: 12px; background: var(--card-bg); padding: 8px 16px; border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s; }
+    .user-pill { 
+        display: flex; align-items: center; gap: 12px; background: var(--card-bg); 
+        padding: 8px 16px; border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); 
+        border-radius: 50px; box-shadow: var(--shadow-elegant); cursor: pointer; transition: 0.3s; 
+    }
     .user-pill:hover { border-color: rgba(255, 255, 255, 0.4); transform: translateY(-2px); }
     .user-pill img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
     .user-pill .info { display: flex; flex-direction: column; }
@@ -136,19 +154,40 @@ const CSS_MODERNO = `
     .user-pill .info span { color: var(--text-muted); font-size: 11px; }
     .brand-logo { font-size: 20px; font-weight: 300; display:flex; align-items:center; gap: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fff;}
     .brand-logo strong { font-weight: 700; color: var(--accent); }
-    .search-top input { background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; width: 280px; border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); font-size: 13px; outline: none; transition: 0.3s; }
+    .search-top input { 
+        background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 25px; 
+        width: 280px; border-radius: 50px; color: #fff; backdrop-filter: var(--blur-effect); 
+        font-size: 13px; outline: none; transition: 0.3s; 
+    }
     .search-top input:focus { border-color: var(--accent); width: 320px; background: #000; }
     .dashboard-grid { display: grid; grid-template-columns: 320px 1fr 280px; gap: 25px; padding: 10px 40px 40px 40px; align-items: start; }
     .left-sidebar { display: flex; flex-direction: column; gap: 20px; height: 100%; min-height: 600px; }
     .right-sidebar { display: flex; flex-direction: column; gap: 20px; }
     .center-panel { display: flex; flex-direction: column; gap: 20px; }
-    .action-panel { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px; min-height: 380px; }
+    .action-panel { 
+        background: var(--card-bg); border-radius: var(--radius); padding: 25px; 
+        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
+        backdrop-filter: var(--blur-effect); display: none; flex-direction: column; gap: 12px; min-height: 380px; 
+    }
     .action-panel.active { display: flex; }
-    .main-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); display: none; }
-    .main-card.active { display: block; }
-    .action-btn-pill { width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600; color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+    .main-card { 
+        background: var(--card-bg); border-radius: var(--radius); padding: 18px 25px; 
+        box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); 
+        backdrop-filter: var(--blur-effect); display: none; flex-direction: column;
+    }
+    .main-card.active { display: flex; }
+    .action-btn-pill { 
+        width: 100%; background: var(--btn-bg); border: 1px solid var(--card-border); 
+        padding: 14px; border-radius: 12px; font-size: 11px; font-weight: 600; 
+        color: var(--text-main); cursor: pointer; transition: 0.3s; text-transform: uppercase; 
+        letter-spacing: 0.5px; text-align: center; 
+    }
     .action-btn-pill:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.5);}
-    .search-input-large { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px; color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s; }
+    .search-input-large { 
+        width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); 
+        padding: 16px 25px; border-radius: 12px; font-size: 14px; margin-top: 5px; 
+        color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s; 
+    }
     .search-input-large:focus { border-color: var(--accent); background: #000; box-shadow: 0 0 20px rgba(0,210,255,0.3); }
     .iframe-container { display: none; background: transparent; border: none; height: 600px; width: 100%; overflow: hidden; }
     .side-card { background: var(--card-bg); border-radius: var(--radius); padding: 25px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); }
@@ -324,15 +363,13 @@ app.get('/', (req, res) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Acceso - SyncBox</title>
+        ${CSS_MODERNO}
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-            body { margin: 0; font-family: 'Inter', sans-serif; background: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2000&auto=format&fit=crop') center/cover fixed; background-color: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
+            body { display: flex; justify-content: center; align-items: center; }
             .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; margin: 15px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 55px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
             .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
-            .btn-submit { width: 100%; background: #00D2FF; color: #000; font-size: 13px; font-weight: 700; padding: 18px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
-            .btn-submit:hover { background: #0099CC; color: #fff; box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
             .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 20px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
@@ -481,42 +518,64 @@ app.post('/admin/asignar-correo', async (req, res) => {
     
     let asignados = 0;
     let denegados = 0;
+    let msjDenegados = [];
 
     try {
         for (let mail of lista) {
             let e = mail.trim().toLowerCase();
             
+            let dueñosActuales = await dbAll("SELECT u.id, u.user, u.rol FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [e]);
+            
             if (req.session.rol === 'Administrador') {
-                let existForUser = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
-                if (!existForUser) {
-                    await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
-                    asignados++;
+                let dueñoDiferente = dueñosActuales.find(d => d.id !== parseInt(user_id));
+                
+                if (dueñoDiferente) {
+                    denegados++;
+                    msjDenegados.push(`- ${e} (Ya lo tiene asignado: ${dueñoDiferente.user})`);
+                } else {
+                    let yaLoTiene = dueñosActuales.find(d => d.id === parseInt(user_id));
+                    if (!yaLoTiene) {
+                        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                        asignados++;
+                    }
                 }
             } else if (req.session.rol === 'Subadministrador') {
                 let esMiCliente = await dbGet("SELECT id FROM usuarios WHERE id = ? AND creado_por = ?", [user_id, req.session.uid]);
                 if (esMiCliente) {
-                    let tengoElCorreo = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, req.session.uid]);
-                    if (tengoElCorreo) {
-                        let existForClient = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [e, user_id]);
-                        if (!existForClient) {
-                            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
-                            asignados++;
+                    let yoLoTengo = dueñosActuales.find(d => d.id === req.session.uid);
+                    if (yoLoTengo) {
+                        let otroCliente = dueñosActuales.find(d => d.id !== req.session.uid && d.id !== parseInt(user_id));
+                        if (otroCliente) {
+                            denegados++;
+                            msjDenegados.push(`- ${e} (Ya lo tiene tu cliente: ${otroCliente.user})`);
+                        } else {
+                            let yaLoTieneElClienteDestino = dueñosActuales.find(d => d.id === parseInt(user_id));
+                            if (!yaLoTieneElClienteDestino) {
+                                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                                asignados++;
+                            }
                         }
                     } else {
                         denegados++;
+                        msjDenegados.push(`- ${e} (No te pertenece)`);
                     }
                 } else {
                     denegados++;
+                    msjDenegados.push(`- ${e} (No es tu cliente)`);
                 }
             }
         }
         
-        if (denegados > 0 && req.session.rol === 'Subadministrador') {
-            res.send(`<script>alert('✅ Se asignaron ${asignados} correos. \\n\\n⛔ Se denegaron ${denegados} correos porque NO te pertenecen o intentaste asignarlos a un usuario que no es tu cliente.'); window.location='/dash';</script>`);
+        if (denegados > 0) {
+            let erroresStr = msjDenegados.slice(0, 5).join('\\n');
+            if (msjDenegados.length > 5) erroresStr += '\\n... y otros más.';
+            let alertMsg = `✅ Asignados: ${asignados}\\n⛔ Denegados o duplicados: ${denegados}\\n\\nMotivo:\\n${erroresStr}`;
+            res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
         } else {
-            res.redirect('/dash');
+            res.send(`<script>alert('✅ Se asignaron exitosamente ${asignados} correos a este usuario.'); window.location='/dash';</script>`);
         }
     } catch(err) {
+        console.error(err);
         res.redirect('/dash');
     }
 });
@@ -557,29 +616,38 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     }
 });
 
+// 🚀 LÓGICA DE CARGA DE STOCK ACTUALIZADA (SOPORTA CORREO + CONTRASEÑA)
 app.post('/admin/cargar-stock', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
-    const lista = correos_stock.split(/[\s,]+/).filter(e => e.includes('@'));
+    
+    // Separamos por salto de línea para procesar cuenta por cuenta
+    const lineas = correos_stock.split(/[\n\r]+/).filter(l => l.trim() !== '');
     
     let duplicadas = 0;
     let agregadas = 0;
 
     try {
-        for (let email of lista) {
-            let e = email.trim().toLowerCase();
-            let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
-            let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
-            
-            if(existsStock || existsCorreos) {
-                duplicadas++;
-            } else {
-                await dbRun("INSERT INTO stock_cuentas (plataforma, email) VALUES (?, ?)", [plataforma, e]);
-                agregadas++;
+        for (let linea of lineas) {
+            // Extrae el correo y la contraseña (separados por espacio, :, ;, |, o ,)
+            let match = linea.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)[\s:;|/,]*(.*)/);
+            if (match) {
+                let e = match[1].toLowerCase().trim();
+                let p = match[2].trim() || null;
+                
+                let existsStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ?", [e]);
+                let existsCorreos = await dbGet("SELECT id FROM correos WHERE email = ?", [e]);
+                
+                if(existsStock || existsCorreos) {
+                    duplicadas++;
+                } else {
+                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password) VALUES (?, ?, ?)", [plataforma, e, p]);
+                    agregadas++;
+                }
             }
         }
         if(duplicadas > 0) {
-            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS (en el stock o asignadas a un cliente).'); window.location='/dash';</script>`);
+            res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas.\\n\\n⚠️ Se ignoraron ${duplicadas} cuentas porque YA ESTÁN REGISTRADAS.'); window.location='/dash';</script>`);
         } else {
             res.redirect('/dash');
         }
@@ -629,38 +697,64 @@ app.post('/admin/asignar-creditos', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
+// 🚀 RUTA FINAL ASIGNACIÓN MASIVA POR TEXTAREA (SEGURO CONTRA ERRORES)
 app.post('/admin/asignar-manual', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
-    const { cuenta_id, receptor_id } = req.body;
+    const { correos_asignar, receptor_id } = req.body;
 
-    if (!cuenta_id || !receptor_id) {
-        return res.send("<script>alert('⛔ Selecciona una cuenta del stock y un usuario receptor.'); window.location='/dash';</script>");
+    if (!correos_asignar || !receptor_id) {
+        return res.send("<script>alert('⛔ Debes ingresar las cuentas y seleccionar el usuario receptor.'); window.location='/dash';</script>");
     }
 
+    const lista = correos_asignar.split(/[\s,]+/).filter(e => e.includes('@'));
+    
+    let asignadasOK = 0;
+    let fallidas = 0;
+    let msjFallidas = [];
+
     try {
-        const cuenta = await dbGet("SELECT id, email, plataforma FROM stock_cuentas WHERE id = ? AND estado = 'Disponible'", [cuenta_id]);
-        if (!cuenta) {
-            return res.send("<script>alert('⛔ La cuenta seleccionada no existe o ya no está disponible en el stock.'); window.location='/dash';</script>");
+        for (let mail of lista) {
+            let email = mail.trim().toLowerCase();
+            
+            // Ya no verificamos la contraseña acá porque la cuenta ya está en el stock
+            const cuenta = await dbGet("SELECT id, email FROM stock_cuentas WHERE email = ? AND estado = 'Disponible'", [email]);
+            
+            if (!cuenta) {
+                fallidas++;
+                msjFallidas.push(`- ${email} (No en stock)`);
+                continue;
+            }
+
+            const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
+            if (yaVinculada) {
+                await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
+                fallidas++;
+                msjFallidas.push(`- ${email} (Ya vinculada)`);
+                continue;
+            }
+
+            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
+            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
+            await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
+            asignadasOK++;
         }
 
-        const yaVinculada = await dbGet("SELECT id FROM correos WHERE email = ?", [cuenta.email]);
-        if (yaVinculada) {
-            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE id = ?", [receptor_id, cuenta.id]);
-            return res.send("<script>alert('⛔ Esta cuenta ya se encontraba asignada a un usuario previamente.'); window.location='/dash';</script>");
+        let alertMsg = `✅ Asignación masiva completada.\\n\\nCuentas asignadas exitosamente: ${asignadasOK}\\nCuentas no procesadas: ${fallidas}`;
+        if (fallidas > 0) {
+            let erroresStr = msjFallidas.slice(0, 8).join('\\n');
+            if (msjFallidas.length > 8) erroresStr += '\\n... y otras más.';
+            alertMsg += `\\n\\nMotivos:\\n${erroresStr}`;
         }
 
-        await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
-        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
-        await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
-
-        res.send(`<script>alert('✅ Asignación manual completada exitosamente.\\n\\nCuenta: ${cuenta.email}\\nEliminada del stock disponible y agregada a las cuentas del usuario.'); window.location='/dash';</script>`);
+        res.send(`<script>alert(\`${alertMsg}\`); window.location='/dash';</script>`);
 
     } catch(e) {
         console.error(e);
-        res.send(`<script>alert('Error en la asignación manual: ${e.message}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('Error en la asignación masiva: ${e.message}'); window.location='/dash';</script>`);
     }
 });
 
+// 🚀 LÓGICA DE COMPRA ACTUALIZADA PARA ENTREGAR CONTRASEÑA
 app.post('/subadmin/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -678,7 +772,8 @@ app.post('/subadmin/comprar', async (req, res) => {
         const user = await dbGet("SELECT user, telefono, creditos, deuda FROM usuarios WHERE id = ?", [req.session.uid]);
         if (user.creditos < costo) return res.send("<script>alert('Créditos insuficientes. Contacta al administrador.'); window.location='/dash';</script>");
 
-        const disponibles = await dbAll("SELECT id, email FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
+        // Ahora traemos también la contraseña del stock
+        const disponibles = await dbAll("SELECT id, email, password FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' LIMIT ?", [paquete]);
         if (disponibles.length < paquete) return res.send("<script>alert('El administrador no tiene suficiente stock disponible en este momento. Intenta más tarde.'); window.location='/dash';</script>");
 
         const nuevoSaldo = user.creditos - costo;
@@ -692,9 +787,12 @@ app.post('/subadmin/comprar', async (req, res) => {
         let correosEntregados = [];
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
-            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta) VALUES (?, ?, ?)", [compraId, cuenta.id, cuenta.email]);
+            // Guardamos la contraseña en los detalles de la compra para mostrarla luego en "Mis Compras"
+            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta, password_cuenta) VALUES (?, ?, ?, ?)", [compraId, cuenta.id, cuenta.email, cuenta.password]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
-            correosEntregados.push(cuenta.email);
+            
+            // Agregamos la contraseña al array del mensaje de WhatsApp
+            correosEntregados.push(`${cuenta.email} : ${cuenta.password || 'Sin contraseña guardada'}`);
         }
 
         const fechaObj = new Date();
@@ -702,7 +800,7 @@ app.post('/subadmin/comprar', async (req, res) => {
         const horaStr = fechaObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
 
         const adminPhone = "573012964169";
-        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* $${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
+        const msgAdmin = `*NUEVA COMPRA REALIZADA*\n\n👤 *Usuario:* ${user.user}\n📱 *Teléfono:* ${user.telefono}\n📅 *Fecha:* ${fechaStr}\n⏰ *Hora:* ${horaStr}\n\n🛒 *Compró:* ${paquete} cuentas\n💵 *Valor:* $${costo} MXN\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n➖ *Crédito utilizado:* $${costo} MXN\n🪙 *Crédito restante:* ${nuevoSaldo} MXN\n🔴 *Deuda Total:* $${nuevaDeuda} MXN`;
         const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
 
         res.send(`
@@ -800,7 +898,6 @@ app.get('/dash', async (req, res) => {
                         </p>
                     </div>`;
 
-                // 🚀 AGREGAMOS EL BOTÓN "VER PAÍS" EN NETFLIX
                 if (key === 'netflix') {
                     controlesIzquierda += `
                         <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: #000000; color: #fff; border: 1px solid #E50914; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px;">
@@ -903,7 +1000,7 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div id="action-asignacion-manual" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Asignación Directa</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Busca y selecciona una cuenta del stock disponible y entrégala manualmente a un usuario.</p>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Pega y asigna múltiples cuentas del stock a un usuario simultáneamente.</p>
                 </div>
                 <div id="action-creditos-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
@@ -964,9 +1061,14 @@ app.get('/dash', async (req, res) => {
                                 ? '<span class="badge-status vendida" style="border-color:#00D2FF; color:#00D2FF; background:rgba(0,210,255,0.15);">Asignada</span>' 
                                 : '<span class="badge-status vendida">Vendida</span>');
                         let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra || 'N/A'}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
+                        
+                        // 🚀 VISUALIZACIÓN DE CONTRASEÑA EN TABLA DE ADMIN
                         stockAdnHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="font-family:monospace; padding-left:20px;">${s.email}</td>
+                            <td style="font-family:monospace; padding-left:20px;">
+                                ${s.email}<br>
+                                <small style="color:var(--accent); font-weight:600;">${s.password ? '🔑 '+s.password : ''}</small>
+                            </td>
                             <td>${estadoBadge}</td>
                             <td>${compradorTxt}</td>
                             <td><small style="color:var(--text-muted);">${s.fecha_carga}</small></td>
@@ -981,7 +1083,7 @@ app.get('/dash', async (req, res) => {
                         <select name="plataforma" class="input-classic" required>
                             <option value="netflix">Netflix</option>
                         </select>
-                        <textarea name="correos_stock" class="input-classic" placeholder="Pega los correos del lote de cuentas separados por espacio o saltos de línea..." rows="5" required></textarea>
+                        <textarea name="correos_stock" class="input-classic" placeholder="correo1@gmail.com:clave123&#10;cuenta2@hotmail.com:pass456..." rows="5" required></textarea>
                         <button type="submit" class="btn-submit">Ingresar al Inventario Seguro</button>
                     </form>
                     <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 25px;">
@@ -992,38 +1094,28 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
+                <!-- 🚀 NUEVA TARJETA DE ASIGNACIÓN MASIVA POR TEXTAREA -->
                 <div id="main-asignacion-manual" class="main-card">
-                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual de Cuenta</h3>
+                    <h3 style="margin:0 0 10px 0; font-size:20px; font-weight:500; color: #00D2FF;">🎯 Asignación Manual Masiva</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:20px;">
-                        Busca y selecciona una cuenta del stock. Se eliminará inmediatamente del inventario y se vinculará al cliente elegido.
+                        Pega todas las cuentas que quieras asignar a la vez. El sistema verificará que estén disponibles en el stock, las asignará al cliente y las descontará automáticamente del inventario.
                     </p>
                     
-                    <form id="form_asignacion_manual" action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
-                        <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar cuenta en Stock: 🔍</label>
-                            <input type="text" id="buscar_stock_input" class="input-classic" placeholder="Escribe el correo o parte de él..." onkeyup="buscarCuentaStock()" style="margin-bottom: 0;">
-                        </div>
-                        
-                        <div id="resultado_busqueda_stock" style="display:none; background: rgba(0,210,255,0.1); padding: 15px; border-radius: 8px; border: 1px solid #00D2FF; margin-bottom: 20px;">
+                    <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);">
+                        <div style="margin-bottom: 20px;">
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
+                            <select name="receptor_id" class="input-classic" required>
+                                <option value="" disabled selected>-- Selecciona al usuario --</option>
+                                ${clientesOpcionesHtml}
+                            </select>
                         </div>
 
-                        <div id="paso_2_asignacion" style="display:none;">
-                            <div style="margin-bottom: 15px; background: rgba(37,211,102,0.1); border: 1px solid #25d366; padding: 10px; border-radius: 8px;">
-                                <span style="color: #25d366; font-size: 12px; font-weight: bold;">Cuenta seleccionada:</span>
-                                <span id="cuenta_email_mostrar" style="color: #fff; font-size: 14px; margin-left: 10px; font-weight: bold;"></span>
-                            </div>
-                            <input type="hidden" name="cuenta_id" id="cuenta_id_seleccionada">
-                            
-                            <div style="margin-bottom: 20px;">
-                                <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
-                                <select name="receptor_id" id="receptor_id_select" class="input-classic" required>
-                                    <option value="" disabled selected>-- Selecciona al usuario --</option>
-                                    ${clientesOpcionesHtml}
-                                </select>
-                            </div>
-                            
-                            <button type="button" class="btn-submit" onclick="confirmarAsignacion(event)">Confirmar Asignación</button>
+                        <div style="margin-bottom: 15px;">
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
+                            <textarea name="correos_asignar" class="input-classic" placeholder="cuenta1@gmail.com&#10;cuenta2@gmail.com&#10;cuenta3@gmail.com..." rows="6" required></textarea>
                         </div>
+                        
+                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas al usuario seleccionado? Las cuentas se eliminarán de tu inventario disponible.');">Asignar Cuentas al Cliente</button>
                     </form>
 
                     <div style="margin-top: 30px;">
@@ -1074,6 +1166,7 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
+            // 🎯 TIENDA DE CUENTAS VISIBLE PARA CLIENTES Y SUBADMINISTRADORES
             if (esSubAdmin || esCliente) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
@@ -1091,17 +1184,19 @@ app.get('/dash', async (req, res) => {
                     misComprasHtml = "<tr><td colspan='4' style='text-align:center;'>Aún no has realizado compras.</td></tr>";
                 } else {
                     misComprasLog.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
+                        // 🚀 AQUÍ IMPRIMIMOS LA CONTRASEÑA EN "MIS COMPRAS"
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta} <span style="color:#00D2FF; margin-left: 5px;">${d.password_cuenta ? '🔑 '+d.password_cuenta : ''}</span></div>`).join('');
                         misComprasHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
                             <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span></td>
-                            <td><div style="max-height:80px; overflow-y:auto; font-size:11px;">${cuentasEntregadas}</div></td>
+                            <td><div style="max-height:80px; overflow-y:auto; font-size:12px;">${cuentasEntregadas}</div></td>
                         </tr>`;
                     });
                 }
 
+                // Generar dinámicamente las 6 tarjetas de compra (1 a 10 cuentas)
                 const paquetesNetflix = [
                     { cant: 1, costo: 185 },
                     { cant: 2, costo: 370 },
@@ -1483,70 +1578,6 @@ app.get('/dash', async (req, res) => {
                         </div>` : ''}
                     </div>
                 </div>
-
-                <!-- 🚀 SCRIPT PARA BÚSQUEDA INTERACTIVA DEL STOCK -->
-                <script>
-                    const stockDisponibleJs = ${JSON.stringify(stockCuentasDisponibles || [])};
-                    
-                    function buscarCuentaStock() {
-                        let val = document.getElementById('buscar_stock_input').value.toLowerCase().trim();
-                        let resDiv = document.getElementById('resultado_busqueda_stock');
-                        let paso2 = document.getElementById('paso_2_asignacion');
-                        
-                        if (val.length < 3) {
-                            resDiv.style.display = 'none';
-                            paso2.style.display = 'none';
-                            return;
-                        }
-                        
-                        let encontradas = stockDisponibleJs.filter(c => c.email.toLowerCase().includes(val));
-                        
-                        if (encontradas.length > 0) {
-                            let html = encontradas.map(c => 
-                                '<div style="margin-bottom: 10px; padding: 15px; background: rgba(0,0,0,0.8); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">' +
-                                    '<h4 style="color:#00D2FF; margin:0 0 8px 0; display:flex; align-items:center; gap:5px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Cuenta encontrada</h4>' +
-                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Correo:</strong> ' + c.email + '</p>' +
-                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Estado:</strong> Disponible</p>' +
-                                    '<p style="margin:4px 0; color:#fff; font-size:13px;"><strong>Stock:</strong> Sí</p>' +
-                                    '<button type="button" class="btn-submit" style="margin-top: 10px; padding: 10px; font-size: 11px; width: auto;" onclick="prepararAsignacion(' + c.id + ', \\'' + c.email + '\\')">Seleccionar para asignar</button>' +
-                                '</div>'
-                            ).join('');
-                            resDiv.innerHTML = html;
-                            resDiv.style.display = 'block';
-                            paso2.style.display = 'none';
-                        } else {
-                            resDiv.innerHTML = '<p style="color: #E50914; margin:0; font-weight:600;">❌ No se encontró ninguna cuenta en el stock con ese texto.</p>';
-                            resDiv.style.display = 'block';
-                            paso2.style.display = 'none';
-                        }
-                    }
-
-                    function prepararAsignacion(id, email) {
-                        document.getElementById('cuenta_id_seleccionada').value = id;
-                        document.getElementById('cuenta_email_mostrar').innerText = email;
-                        document.getElementById('paso_2_asignacion').style.display = 'block';
-                        document.getElementById('resultado_busqueda_stock').style.display = 'none';
-                        document.getElementById('buscar_stock_input').value = email;
-                    }
-
-                    function confirmarAsignacion(event) {
-                        event.preventDefault();
-                        let receptorId = document.getElementById('receptor_id_select').value;
-                        let receptorSelect = document.getElementById('receptor_id_select');
-                        let receptorName = receptorId ? receptorSelect.options[receptorSelect.selectedIndex].text : '';
-                        let email = document.getElementById('cuenta_email_mostrar').innerText;
-
-                        if (!receptorId) {
-                            alert("Por favor, selecciona el usuario al que asignarás la cuenta.");
-                            return;
-                        }
-
-                        let conf = confirm('¿Confirmar asignación?\\n\\nCuenta: ' + email + '\\nUsuario: ' + receptorName + '\\n\\nLa cuenta será asignada y eliminada del stock.');
-                        if (conf) {
-                            document.getElementById('form_asignacion_manual').submit();
-                        }
-                    }
-                </script>
             </body>
             </html>
             `);
@@ -1725,11 +1756,10 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        // 🚀 NUEVA LÓGICA DE DETECCIÓN INTELIGENTE DE PAÍS
+        // 🚀 LÓGICA DE DETECCIÓN INTELIGENTE DE PAÍS
         if (accion === 'pais') {
             let paisDetectado = null;
             
-            // Diccionario global de códigos ISO 3166-1 alpha-2
             const codigosPais = {
                 'US': '🇺🇸 Estados Unidos', 'CO': '🇨🇴 Colombia', 'BR': '🇧🇷 Brasil',
                 'JP': '🇯🇵 Japón', 'MX': '🇲🇽 México', 'ES': '🇪🇸 España',
@@ -1748,14 +1778,12 @@ app.post('/buscar', async (req, res) => {
                 'IE': '🇮🇪 Irlanda', 'NZ': '🇳🇿 Nueva Zelanda', 'SG': '🇸🇬 Singapur'
             };
 
-            // 1. Intentar buscar el código oculto en el SRC de Netflix (ej: _BR_EVO, _JP_EVO, _US_EVO)
             let matchSrc = textoBruto.match(/_([A-Z]{2})_EVO/);
             if (matchSrc && matchSrc[1]) {
                 let codigo = matchSrc[1].toUpperCase();
                 paisDetectado = codigosPais[codigo] || ("🌍 Código de País: " + codigo);
             }
 
-            // 2. Si es un correo antiguo sin código SRC, buscar nombres de países como respaldo
             if (!paisDetectado) {
                 const reglasPais = [
                     { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
