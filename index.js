@@ -31,7 +31,7 @@ const PLATAFORMAS = {
     'disney': { nombre: 'Disney+', color: '#ffffff', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
 };
 
-// 📌 PRECIOS BASE DEL ADMINISTRADOR PRINCIPAL
+// 📌 PRECIOS BASE DEL ADMINISTRADOR PRINCIPAL (ALMACENADOS ESTRICTAMENTE EN MXN)
 const PRECIOS_BASE = {
     1: 185,
     2: 370,
@@ -40,6 +40,41 @@ const PRECIOS_BASE = {
     5: 832,
     10: 1560
 };
+
+// 📌 TASA DE CAMBIO CONFIGURABLE (Ej. 1 MXN = 176 COP)
+const TASAS_CAMBIO = {
+    'MXN': 1,
+    'COP': 176
+};
+
+// Funciones Auxiliares para el manejo de Monedas
+function obtenerMonedaPorTelefono(telefono) {
+    if (!telefono) return 'MXN';
+    let tel = telefono.replace(/\s+/g, '');
+    if (tel.startsWith('+57')) return 'COP';
+    if (tel.startsWith('+52')) return 'MXN';
+    return 'MXN'; // Moneda por defecto
+}
+
+function convertirLocal(montoMXN, monedaLocal) {
+    if (monedaLocal === 'COP') {
+        // Redondeo comercial a la centena más cercana (ej. 32560 -> 32600)
+        return Math.round((montoMXN * TASAS_CAMBIO.COP) / 100) * 100;
+    }
+    // Para MXN redondeamos a 2 decimales si es necesario
+    return Math.round(montoMXN * 100) / 100;
+}
+
+function convertirAMXN(montoLocal, monedaLocal) {
+    if (monedaLocal === 'COP') return montoLocal / TASAS_CAMBIO.COP;
+    return montoLocal;
+}
+
+function formatearDinero(montoMXN, monedaLocal) {
+    if (!montoMXN) montoMXN = 0;
+    const convertido = convertirLocal(montoMXN, monedaLocal);
+    return `$${convertido.toLocaleString('es-CO')} ${monedaLocal}`;
+}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
@@ -55,6 +90,15 @@ db.serialize(() => {
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN deuda REAL DEFAULT 0", (err) => {});
+    
+    // Nueva columna para identificar el país/moneda del usuario
+    db.run("ALTER TABLE usuarios ADD COLUMN moneda TEXT DEFAULT 'MXN'", (err) => {
+        if (!err) {
+            // Actualización automática para usuarios antiguos basada en su prefijo telefónico
+            db.run("UPDATE usuarios SET moneda = 'COP' WHERE telefono LIKE '+57%'", (err) => {});
+            db.run("UPDATE usuarios SET moneda = 'MXN' WHERE telefono LIKE '+52%'", (err) => {});
+        }
+    });
     
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
@@ -76,7 +120,7 @@ db.serialize(() => {
 
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
-    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('admin', '14032021', 'Administrador', NULL)", (err) => {});
+    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por, moneda) VALUES ('admin', '14032021', 'Administrador', NULL, 'MXN')", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 
     // 🚀 ACTUALIZAR TELÉFONOS ANTIGUOS AGREGANDO +52 SI NO TIENEN EL +
@@ -85,7 +129,7 @@ db.serialize(() => {
     // ✅ NUEVAS TABLAS PARA EL SISTEMA MULTINIVEL
     db.run("ALTER TABLE stock_cuentas ADD COLUMN propietario_id INTEGER DEFAULT 1", (err) => {});
     db.run("CREATE TABLE IF NOT EXISTS precios_subadmin (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, paquete INTEGER, precio REAL, UNIQUE(subadmin_id, paquete))");
-    db.run("CREATE TABLE IF NOT EXISTS historial_creditos (id INTEGER PRIMARY KEY AUTOINCREMENT, emisor_id INTEGER, receptor_id INTEGER, monto REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("CREATE TABLE IF NOT EXISTS historial_dinero (id INTEGER PRIMARY KEY AUTOINCREMENT, emisor_id INTEGER, receptor_id INTEGER, monto REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
 });
 
 // 🧹 FUNCIÓN DE PURGA INMEDIATA
@@ -408,12 +452,15 @@ app.get('/', (req, res) => {
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     try {
-        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, 'Cliente', NULL, ?)", [user.trim(), pass, telefono.trim()]);
+        const telSeguro = telefono.trim();
+        const monedaDetectada = obtenerMonedaPorTelefono(telSeguro); // 🚀 Detectar moneda por país
+
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, 'Cliente', NULL, ?, ?)", [user.trim(), pass, telSeguro, monedaDetectada]);
         
         const fechaObj = new Date();
         const fechaHoraLocal = fechaObj.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
 
-        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telefono.trim()}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
+        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telSeguro}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
         const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
         res.send(`
@@ -518,7 +565,10 @@ app.post('/admin/crear', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { n, c, r, telefono } = req.body;
     try {
-        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono) VALUES (?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, telefono ? telefono.trim() : null]);
+        const telSeguro = telefono ? telefono.trim() : null;
+        const monedaDetectada = obtenerMonedaPorTelefono(telSeguro);
+
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, telSeguro, monedaDetectada]);
         res.redirect('/dash');
     } catch(err) {
         res.send("<script>alert('Error al crear usuario o ya existe.'); window.location='/dash';</script>");
@@ -673,21 +723,30 @@ app.post('/admin/vaciar-stock-vendido', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-app.post('/admin/asignar-creditos', async (req, res) => {
+// 🚀 ASIGNACIÓN DE DINERO POR PARTE DEL ADMIN (CONVIERTE A MXN)
+app.post('/admin/asignar-dinero', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { subadmin_id, cantidad } = req.body;
     
     try {
-        const user = await dbGet("SELECT user, telefono, creditos FROM usuarios WHERE id = ?", [subadmin_id]);
+        const user = await dbGet("SELECT user, telefono, creditos, moneda FROM usuarios WHERE id = ?", [subadmin_id]);
         if(!user) return res.redirect('/dash');
 
-        const monto = parseFloat(cantidad);
-        const nuevoSaldo = user.creditos + monto;
+        const admin = await dbGet("SELECT moneda FROM usuarios WHERE id = ?", [req.session.uid]);
+        const monedaOrigen = admin ? admin.moneda : 'MXN';
 
-        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, subadmin_id]);
+        const montoIngresado = parseFloat(cantidad);
+        const montoEnMXN = convertirAMXN(montoIngresado, monedaOrigen);
+
+        const nuevoSaldoMXN = user.creditos + montoEnMXN;
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoMXN, subadmin_id]);
+        await dbRun("INSERT INTO historial_dinero (emisor_id, receptor_id, monto) VALUES (?, ?, ?)", [req.session.uid, subadmin_id, montoEnMXN]);
 
         let telefonoLimpio = user.telefono ? user.telefono.replace('+', '').replace(/\s/g, '') : '';
-        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un crédito de *$${monto} MXN* para realizar compras de cuentas de Netflix.\n\n*Crédito disponible:* $${nuevoSaldo} MXN\n\nPuedes utilizar tu crédito en tu panel para comprar paquetes desde 1 cuenta ($185) hasta 10 cuentas ($1,560).\n\nTu crédito disponible se irá descontando automáticamente en cada compra.`;
+        const saldoMostrado = formatearDinero(nuevoSaldoMXN, user.moneda);
+        const asignadoMostrado = formatearDinero(montoEnMXN, user.moneda);
+
+        const msg = `Hola, ${user.user}.\n\nSe te ha asignado un saldo de *${asignadoMostrado}* para realizar compras de cuentas en el sistema.\n\n*Dinero disponible:* ${saldoMostrado}\n\nTu saldo se irá descontando automáticamente en cada compra.`;
         const link = `https://api.whatsapp.com/send?phone=${telefonoLimpio}&text=${encodeURIComponent(msg)}`;
 
         res.send(`
@@ -696,7 +755,7 @@ app.post('/admin/asignar-creditos', async (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Aviso de Crédito</title>
+            <title>Aviso de Dinero</title>
             <style>
                 body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
                 h2 { color: #00D2FF; font-size: 24px; }
@@ -704,7 +763,7 @@ app.post('/admin/asignar-creditos', async (req, res) => {
             </style>
         </head>
         <body>
-            <h2>✅ Crédito Asignado (${nuevoSaldo} Cr)</h2>
+            <h2>✅ Dinero Asignado: ${saldoMostrado}</h2>
             <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
             <a href="${link}" class="btn">Notificar al Cliente</a>
             <br><br>
@@ -770,49 +829,56 @@ app.post('/admin/asignar-manual', async (req, res) => {
     }
 });
 
-// 🚀 SUBADMIN: CONFIGURAR PRECIOS DE SU TIENDA
+// 🚀 SUBADMIN: CONFIGURAR PRECIOS DE SU TIENDA (RECIBE EN MONEDA LOCAL, GUARDA EN MXN)
 app.post('/subadmin/configurar-precios', async (req, res) => {
     if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
+        const subadmin = await dbGet("SELECT moneda FROM usuarios WHERE id = ?", [req.session.uid]);
         const paquetes = [1, 2, 3, 4, 5, 10];
+        
         for (let p of paquetes) {
-            let precioNuevo = parseFloat(req.body[`precio_${p}`]);
-            if (precioNuevo && precioNuevo >= PRECIOS_BASE[p]) {
-                await dbRun("INSERT INTO precios_subadmin (subadmin_id, paquete, precio) VALUES (?, ?, ?) ON CONFLICT(subadmin_id, paquete) DO UPDATE SET precio = excluded.precio", [req.session.uid, p, precioNuevo]);
+            let precioIngresadoLocal = parseFloat(req.body[`precio_${p}`]);
+            let precioNuevoMXN = convertirAMXN(precioIngresadoLocal, subadmin.moneda);
+            
+            if (precioNuevoMXN && precioNuevoMXN >= PRECIOS_BASE[p]) {
+                await dbRun("INSERT INTO precios_subadmin (subadmin_id, paquete, precio) VALUES (?, ?, ?) ON CONFLICT(subadmin_id, paquete) DO UPDATE SET precio = excluded.precio", [req.session.uid, p, precioNuevoMXN]);
             }
         }
-        res.send("<script>alert('✅ Precios actualizados correctamente.'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ Precios de venta actualizados correctamente en tu tienda.'); window.location='/dash';</script>");
     } catch(err) {
         res.send("<script>alert('Error al guardar precios.'); window.location='/dash';</script>");
     }
 });
 
-// 🚀 SUBADMIN: ASIGNAR CRÉDITO A SUS CLIENTES
-app.post('/subadmin/asignar-creditos', async (req, res) => {
+// 🚀 SUBADMIN: ASIGNAR DINERO A SUS CLIENTES
+app.post('/subadmin/asignar-dinero', async (req, res) => {
     if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { cliente_id, cantidad } = req.body;
-    const monto = parseFloat(cantidad);
 
     try {
-        const cliente = await dbGet("SELECT id, user, creditos FROM usuarios WHERE id = ? AND creado_por = ?", [cliente_id, req.session.uid]);
+        const subadmin = await dbGet("SELECT user, creditos, moneda FROM usuarios WHERE id = ?", [req.session.uid]);
+        const cliente = await dbGet("SELECT id, user, creditos, moneda FROM usuarios WHERE id = ? AND creado_por = ?", [cliente_id, req.session.uid]);
+        
         if (!cliente) return res.send("<script>alert('⛔ Cliente no válido.'); window.location='/dash';</script>");
 
-        const subadmin = await dbGet("SELECT creditos FROM usuarios WHERE id = ?", [req.session.uid]);
-        
-        if (monto > 0 && subadmin.creditos < monto) {
-            return res.send("<script>alert('⛔ No tienes saldo suficiente para asignar esta cantidad.'); window.location='/dash';</script>");
+        const montoIngresado = parseFloat(cantidad);
+        const montoMXN = convertirAMXN(montoIngresado, subadmin.moneda);
+
+        if (montoMXN > 0 && subadmin.creditos < montoMXN) {
+            return res.send("<script>alert('⛔ No tienes dinero suficiente para asignar esta cantidad.'); window.location='/dash';</script>");
         }
 
-        const nuevoSaldoSubadmin = subadmin.creditos - monto;
-        const nuevoSaldoCliente = cliente.creditos + monto;
+        const nuevoSaldoSubadminMXN = subadmin.creditos - montoMXN;
+        const nuevoSaldoClienteMXN = cliente.creditos + montoMXN;
 
-        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoSubadmin, req.session.uid]);
-        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoCliente, cliente_id]);
-        await dbRun("INSERT INTO historial_creditos (emisor_id, receptor_id, monto) VALUES (?, ?, ?)", [req.session.uid, cliente_id, monto]);
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoSubadminMXN, req.session.uid]);
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoClienteMXN, cliente_id]);
+        await dbRun("INSERT INTO historial_dinero (emisor_id, receptor_id, monto) VALUES (?, ?, ?)", [req.session.uid, cliente_id, montoMXN]);
 
-        res.send(`<script>alert('✅ Transferiste ${monto} Cr al cliente ${cliente.user}. Te quedan ${nuevoSaldoSubadmin} Cr.'); window.location='/dash';</script>`);
+        const saldoActualizadoLocal = formatearDinero(nuevoSaldoSubadminMXN, subadmin.moneda);
+        res.send(`<script>alert('✅ Operación exitosa. Dinero transferido. Te quedan ${saldoActualizadoLocal}.'); window.location='/dash';</script>`);
     } catch(err) {
-        res.send("<script>alert('Error en transferencia.'); window.location='/dash';</script>");
+        res.send("<script>alert('Error en transferencia financiera.'); window.location='/dash';</script>");
     }
 });
 
@@ -822,33 +888,33 @@ app.post('/tienda/comprar', async (req, res) => {
     const paquete = parseInt(req.body.paquete);
     
     try {
-        const comprador = await dbGet("SELECT id, user, telefono, creditos, creado_por FROM usuarios WHERE id = ?", [req.session.uid]);
+        const comprador = await dbGet("SELECT id, user, telefono, creditos, creado_por, moneda FROM usuarios WHERE id = ?", [req.session.uid]);
         const esSubAdmin = req.session.rol === 'Subadministrador';
         
         // El proveedor es el Admin (id=1) para los Subadmins, o el Subadmin para los Clientes
         const proveedor_id = esSubAdmin ? 1 : comprador.creado_por;
         
-        // Calcular Costo dinámico
-        let costo = PRECIOS_BASE[paquete];
-        if (!costo) return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
+        // Calcular Costo dinámico (Todo en MXN Base)
+        let costoMXN = PRECIOS_BASE[paquete];
+        if (!costoMXN) return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
 
         if (!esSubAdmin) {
             const precioPersonalizado = await dbGet("SELECT precio FROM precios_subadmin WHERE subadmin_id = ? AND paquete = ?", [proveedor_id, paquete]);
-            if (precioPersonalizado) costo = precioPersonalizado.precio;
+            if (precioPersonalizado) costoMXN = precioPersonalizado.precio;
         }
 
-        if (comprador.creditos < costo) return res.send("<script>alert('Créditos insuficientes.'); window.location='/dash';</script>");
+        if (comprador.creditos < costoMXN) return res.send("<script>alert('Dinero insuficiente en tu balance.'); window.location='/dash';</script>");
 
         // Buscar stock específico del proveedor
         const disponibles = await dbAll("SELECT id, email, password FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' AND propietario_id = ? LIMIT ?", [proveedor_id, paquete]);
         
         if (disponibles.length < paquete) return res.send("<script>alert('El proveedor no tiene stock suficiente en este momento.'); window.location='/dash';</script>");
 
-        const nuevoSaldo = comprador.creditos - costo;
-        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldo, req.session.uid]);
+        const nuevoSaldoMXN = comprador.creditos - costoMXN;
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoMXN, req.session.uid]);
 
-        // Registrar compra global
-        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costo, comprador.creditos, nuevoSaldo]);
+        // Registrar compra global en MXN
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costoMXN, comprador.creditos, nuevoSaldoMXN]);
         const compraId = compraInfo.lastID;
 
         let correosEntregados = [];
@@ -860,12 +926,15 @@ app.post('/tienda/comprar', async (req, res) => {
         }
 
         // Determinar a quién notificar
-        const proveedor = await dbGet("SELECT telefono FROM usuarios WHERE id = ?", [proveedor_id]);
+        const proveedor = await dbGet("SELECT telefono, moneda FROM usuarios WHERE id = ?", [proveedor_id]);
         const adminPhone = proveedor.telefono ? proveedor.telefono.replace(/\s+/g, '').replace('+', '') : '573012964169';
+        const proveedorMoneda = proveedor.moneda || 'MXN';
         
         const fechaObj = new Date();
-        const msgAdmin = `*NUEVA COMPRA EN TU TIENDA*\n\n👤 *Cliente:* ${comprador.user}\n📅 *Fecha:* ${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}\n🛒 *Paquete:* ${paquete} cuentas\n💵 *Valor:* $${costo} Cr\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n🪙 *Saldo restante del cliente:* ${nuevoSaldo} Cr`;
+        const msgAdmin = `*NUEVA COMPRA EN TU TIENDA*\n\n👤 *Cliente:* ${comprador.user}\n📅 *Fecha:* ${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}\n🛒 *Paquete:* ${paquete} cuentas\n💵 *Valor:* ${formatearDinero(costoMXN, proveedorMoneda)}\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n🪙 *Dinero restante del cliente:* ${formatearDinero(nuevoSaldoMXN, proveedorMoneda)}`;
         const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
+
+        const costoCompradorText = formatearDinero(costoMXN, comprador.moneda);
 
         res.send(`
         <!DOCTYPE html>
@@ -873,7 +942,7 @@ app.post('/tienda/comprar', async (req, res) => {
         <head><title>Compra Exitosa</title><style>body{background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:50px;} .btn{background:#25d366;color:#000;padding:15px 20px;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;display:inline-block;}</style></head>
         <body>
             <h2 style="color:#25d366;">✅ Compra Exitosa</h2>
-            <p>Se descontaron ${costo} Cr. Las cuentas están en tu panel.</p>
+            <p>Se descontaron ${costoCompradorText}. Las cuentas están en tu panel.</p>
             <a href="${linkAdmin}" class="btn">Notificar al Proveedor por WhatsApp</a>
             <br><br><a href="/dash" style="color:#888;">Volver al Panel</a>
             <script>window.location.replace('${linkAdmin}');</script>
@@ -912,7 +981,7 @@ app.get('/dash', async (req, res) => {
             
             const historialAsignaciones = await dbAll("SELECT h.*, u.user as receptor, a.user as admin FROM historial_asignaciones h JOIN usuarios u ON h.receptor_id = u.id JOIN usuarios a ON h.admin_id = a.id ORDER BY h.id DESC");
 
-            const historialCompras = await dbAll(`SELECT c.*, u.user as comprador FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
+            const historialCompras = await dbAll(`SELECT c.*, u.user as comprador, u.moneda FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
             const detallesComprasDB = await dbAll("SELECT * FROM detalles_compras");
 
             let actividadesHtml = "";
@@ -1057,9 +1126,9 @@ app.get('/dash', async (req, res) => {
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Asignación Directa</h4>
                     <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Pega y asigna múltiples cuentas del stock a un usuario simultáneamente.</p>
                 </div>
-                <div id="action-creditos-admin" class="action-panel">
+                <div id="action-dinero-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Economía Global</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Asigna saldo a tus subadministradores y controla su deuda acumulada.</p>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Asigna dinero a tus subadministradores y controla el balance general de fondos.</p>
                 </div>
                 <div id="action-historial-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Auditoría General</h4>
@@ -1086,7 +1155,7 @@ app.get('/dash', async (req, res) => {
                     });
                 }
 
-                let subadminsOpcionesHtml = usuarios.filter(u => u.rol === 'Subadministrador' || u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (Crédito: ${u.creditos} | Deuda: ${u.deuda})</option>`).join('');
+                let subadminsOpcionesHtml = usuarios.filter(u => u.rol === 'Subadministrador' || u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (${formatearDinero(u.creditos, u.moneda)})</option>`).join('');
 
                 let historialGlobalHtml = "";
                 if(historialCompras.length === 0) {
@@ -1098,7 +1167,7 @@ app.get('/dash', async (req, res) => {
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad}</td>
-                            <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span><br><small style="color:var(--text-muted);">Quedan: ${c.saldo_nuevo}</small></td>
+                            <td><span style="color:#E50914;">-${formatearDinero(c.creditos_usados, c.moneda)}</span><br><small style="color:var(--text-muted);">Quedan: ${formatearDinero(c.saldo_nuevo, c.moneda)}</small></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:10px;">${cuentasEntregadas}</div></td>
                         </tr>`;
                     });
@@ -1203,25 +1272,25 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
-                <div id="main-creditos-admin" class="main-card">
-                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">💰 Asignación de Créditos</h3>
-                    <form action="/admin/asignar-creditos" method="POST">
+                <div id="main-dinero-admin" class="main-card">
+                    <h3 style="margin:0 0 20px 0; font-size:20px; font-weight:500; color: #00D2FF;">💰 Asignación de Dinero</h3>
+                    <form action="/admin/asignar-dinero" method="POST">
                         <select name="subadmin_id" class="input-classic" required>
                             <option value="" disabled selected>Selecciona al Usuario/Subadmin...</option>
                             ${subadminsOpcionesHtml}
                         </select>
-                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Créditos a Asignar (Ej: 832)" required>
-                        <p style="font-size:11px; color:var(--text-muted); margin-top:-5px; margin-bottom:15px;">* Usa números negativos para restar saldo.</p>
+                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Dinero a Asignar (Ej: 1000)" required>
+                        <p style="font-size:11px; color:var(--text-muted); margin-top:-5px; margin-bottom:15px;">* El valor que ingreses corresponde a tu moneda local o la base (MXN).</p>
                         <button type="submit" class="btn-submit">Actualizar Saldo y Notificar por WhatsApp</button>
                     </form>
                 </div>
                 <div id="main-historial-compras" class="main-card" style="padding: 10px;">
                     <div style="padding: 20px 20px 0 20px;">
-                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Historial de Compras Global</h3>
+                        <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🧾 Historial Global de Tienda</h3>
                     </div>
                     <div style="background: #000000; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; margin-top: 20px;">
                         <table class="table-modern">
-                            <thead><tr><th style="padding-left:20px;">Subadmin</th><th style="text-align:center;">Cant.</th><th>Créditos</th><th>Cuentas Entregadas</th></tr></thead>
+                            <thead><tr><th style="padding-left:20px;">Subadmin</th><th style="text-align:center;">Cant.</th><th>Dinero Descontado</th><th>Cuentas Entregadas</th></tr></thead>
                             <tbody>${historialGlobalHtml}</tbody>
                         </table>
                     </div>
@@ -1234,7 +1303,7 @@ app.get('/dash', async (req, res) => {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Tienda de Cuentas</h4>
-                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Compra cuentas de Netflix de forma instantánea usando tu saldo de créditos.</p>
+                    <p style="font-size:12px; color:#fff; line-height:1.5; margin-top:10px;">Compra cuentas de Netflix de forma instantánea usando tu dinero disponible.</p>
                 </div>
                 <div id="action-mis-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase;">Mi Inventario</h4>
@@ -1252,7 +1321,7 @@ app.get('/dash', async (req, res) => {
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td style="padding-left:20px;"><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
-                            <td><span style="color:#E50914;">-${c.creditos_usados} Cr</span></td>
+                            <td><span style="color:#E50914;">-${formatearDinero(c.creditos_usados, usuarioActual.moneda)}</span></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:12px;">${cuentasEntregadas}</div></td>
                         </tr>`;
                     });
@@ -1271,10 +1340,10 @@ app.get('/dash', async (req, res) => {
                     <div style="background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: 0.3s;" onmouseover="this.style.borderColor='var(--accent)';" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';">
                         <img src="${PLATAFORMAS['netflix'].logo}" height="30" style="margin-bottom: 15px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.6));">
                         <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 22px;">${p.cant} Cuenta${p.cant > 1 ? 's' : ''}</h2>
-                        <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">${p.costo.toLocaleString()} Cr</p>
+                        <p style="color: #00D2FF; font-weight: 600; font-size: 18px; margin: 0 0 20px 0;">${formatearDinero(p.costo, usuarioActual.moneda)}</p>
                         <form action="/tienda/comprar" method="POST">
                             <input type="hidden" name="paquete" value="${p.cant}">
-                            <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta${p.cant > 1 ? 's' : ''} por ${p.costo.toLocaleString()} créditos? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
+                            <button type="submit" class="btn-submit" style="font-size: 12px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta${p.cant > 1 ? 's' : ''} por ${formatearDinero(p.costo, usuarioActual.moneda)}? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
                         </form>
                     </div>
                 `).join('');
@@ -1284,7 +1353,7 @@ app.get('/dash', async (req, res) => {
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
                         <h3 style="margin:0; font-size:20px; font-weight:500; color: #00D2FF;">🛒 Tienda de Cuentas</h3>
                         <div style="background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.3); padding: 8px 15px; border-radius: 50px; font-size: 13px; font-weight: 600; color: #fff;">
-                            Saldo: <span style="color:#00D2FF;">${usuarioActual.creditos || 0} Cr</span>
+                            Dinero Disponible: <span style="color:#00D2FF;">${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}</span>
                         </div>
                     </div>
                     
@@ -1311,19 +1380,22 @@ app.get('/dash', async (req, res) => {
             if (esSubAdmin) {
                 const misPrecios = await dbAll("SELECT paquete, precio FROM precios_subadmin WHERE subadmin_id = ?", [req.session.uid]);
                 let inputsPrecios = [1, 2, 3, 4, 5, 10].map(cant => {
-                    let actual = misPrecios.find(p => p.paquete === cant)?.precio || PRECIOS_BASE[cant];
+                    let actualMXN = misPrecios.find(p => p.paquete === cant)?.precio || PRECIOS_BASE[cant];
+                    let minLocal = convertirLocal(PRECIOS_BASE[cant], usuarioActual.moneda);
+                    let actualLocal = convertirLocal(actualMXN, usuarioActual.moneda);
+
                     return `<div style="margin-bottom:10px;">
-                        <label style="color:#00D2FF; font-size:12px;">Paquete ${cant} Cuentas (Min: $${PRECIOS_BASE[cant]})</label>
-                        <input type="number" name="precio_${cant}" min="${PRECIOS_BASE[cant]}" value="${actual}" class="input-classic" required>
+                        <label style="color:#00D2FF; font-size:12px;">Paquete ${cant} Cuentas (Min: $${minLocal.toLocaleString('es-CO')} ${usuarioActual.moneda})</label>
+                        <input type="number" step="0.01" name="precio_${cant}" min="${minLocal}" value="${actualLocal}" class="input-classic" required>
                     </div>`;
                 }).join('');
 
-                let misClientesOptions = usuarios.filter(u => u.creado_por === req.session.uid && u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (Cr: ${u.creditos || 0})</option>`).join('');
+                let misClientesOptions = usuarios.filter(u => u.creado_por === req.session.uid && u.rol === 'Cliente').map(u => `<option value="${u.id}">${u.user} (${formatearDinero(u.creditos, u.moneda)})</option>`).join('');
 
                 panelesCentroHtml += `
                 <div id="main-mi-tienda" class="main-card">
                     <h3 style="color:#00D2FF;">⚙️ Configurar Precios de Mi Tienda</h3>
-                    <p style="font-size:12px; color:var(--text-muted);">Establece los precios a los que le venderás a tus clientes. El sistema impide colocar precios menores a lo que te cobra el Administrador.</p>
+                    <p style="font-size:12px; color:var(--text-muted);">Establece los precios a los que le venderás a tus clientes en tu moneda (${usuarioActual.moneda}). El sistema impide colocar precios menores a lo que te cobra el Administrador.</p>
                     <form action="/subadmin/configurar-precios" method="POST">
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">${inputsPrecios}</div>
                         <button type="submit" class="btn-submit" style="margin-top:15px;">Guardar Precios de Venta</button>
@@ -1344,23 +1416,23 @@ app.get('/dash', async (req, res) => {
                     </form>
                 </div>
 
-                <div id="main-creditos-clientes" class="main-card">
-                    <h3 style="color:#00D2FF;">💸 Asignar Saldo a Mis Clientes</h3>
-                    <p style="font-size:12px; color:var(--text-muted);">Transfiere de tu saldo disponible (${usuarioActual.creditos || 0} Cr) a las cuentas de tus clientes.</p>
-                    <form action="/subadmin/asignar-creditos" method="POST">
+                <div id="main-dinero-clientes" class="main-card">
+                    <h3 style="color:#00D2FF;">💸 Asignar Dinero a Mis Clientes</h3>
+                    <p style="font-size:12px; color:var(--text-muted);">Transfiere de tu saldo (${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}) a las cuentas de tus clientes.</p>
+                    <form action="/subadmin/asignar-dinero" method="POST">
                         <select name="cliente_id" class="input-classic" required>
                             <option value="" disabled selected>Selecciona a tu cliente...</option>
                             ${misClientesOptions}
                         </select>
-                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Monto a transferir (Ej: 100)" required>
-                        <button type="submit" class="btn-submit">Transferir Saldo</button>
+                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Monto a transferir en tu moneda (${usuarioActual.moneda})" required>
+                        <button type="submit" class="btn-submit">Transferir Dinero</button>
                     </form>
                 </div>`;
                 
                 panelesIzquierdosHtml += `
                 <div id="action-mi-tienda" class="action-panel"><h4 style="color:var(--text-muted);">Administración Tienda</h4><p style="font-size:12px; color:#fff;">Controla tus márgenes de ganancia.</p></div>
                 <div id="action-mi-stock" class="action-panel"><h4 style="color:var(--text-muted);">Inventario Privado</h4><p style="font-size:12px; color:#fff;">Gestiona las cuentas que vendes a tus clientes.</p></div>
-                <div id="action-creditos-clientes" class="action-panel"><h4 style="color:var(--text-muted);">Billetera</h4><p style="font-size:12px; color:#fff;">Reparte tu crédito entre tus clientes.</p></div>
+                <div id="action-dinero-clientes" class="action-panel"><h4 style="color:var(--text-muted);">Billetera</h4><p style="font-size:12px; color:#fff;">Reparte tu dinero entre tus clientes.</p></div>
                 `;
             }
 
@@ -1485,8 +1557,8 @@ app.get('/dash', async (req, res) => {
                                     <small style="color:var(--accent); font-weight:600; font-size:10px; display:block;">🔑 Pass: ${u.pass}</small>
                                     <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📱 Tel: ${u.telefono || 'N/A'}</small>
                                     <small style="color:var(--text-muted); font-weight:300; font-size:10px; margin-top:2px; display:block;">📅 Reg: ${dateFormated}</small>
-                                    ${esAdminPrincipal ? `<small style="color:#25d366; font-weight:600; font-size:10px; margin-top:2px; display:block;">🪙 Cr: ${u.creditos || 0}</small>
-                                    <small style="color:#E50914; font-weight:600; font-size:10px; margin-top:2px; display:block;">🔴 Deuda: ${u.deuda || 0}</small>` : ''}
+                                    ${esAdminPrincipal ? `<small style="color:#25d366; font-weight:600; font-size:10px; margin-top:2px; display:block;">🪙 Dinero: ${formatearDinero(u.creditos, u.moneda)}</small>
+                                    <small style="color:#E50914; font-weight:600; font-size:10px; margin-top:2px; display:block;">🔴 Deuda: ${formatearDinero(u.deuda, u.moneda)}</small>` : ''}
                                 </div>
                             </td>
                             <td style="vertical-align: top; width: 100px;">${selectorRol}</td>
@@ -1598,7 +1670,7 @@ app.get('/dash', async (req, res) => {
                                 <img src="https://i.pravatar.cc/150?u=${req.session.user}" alt="Avatar">
                                 <div class="info">
                                     <strong>${req.session.user}</strong>
-                                    <span>${req.session.rol} ${(esSubAdmin || esCliente) ? `| 🪙 ${usuarioActual.creditos || 0} Cr.` : ''}</span>
+                                    <span>${req.session.rol} ${(esSubAdmin || esCliente) ? `| 🪙 ${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}` : ''}</span>
                                 </div>
                             </div>
                         </div>
@@ -1660,13 +1732,13 @@ app.get('/dash', async (req, res) => {
                                 ${(esAdminPrincipal) ? `
                                 <button class="menu-btn-item" onclick="openTab('stock-admin')">📦 Gestión de Stock</button>
                                 <button class="menu-btn-item" onclick="openTab('asignacion-manual')" style="color: #00D2FF; font-weight: 600;">🎯 Asignación Manual</button>
-                                <button class="menu-btn-item" onclick="openTab('creditos-admin')">💰 Asignar Créditos</button>
-                                <button class="menu-btn-item" onclick="openTab('historial-compras')">🧾 Historial Global</button>
+                                <button class="menu-btn-item" onclick="openTab('dinero-admin')">💰 Asignar Dinero</button>
+                                <button class="menu-btn-item" onclick="openTab('historial-compras')">🧾 Movimientos de Dinero</button>
                                 ` : ''}
                                 ${(esSubAdmin) ? `
                                 <button class="menu-btn-item" onclick="openTab('mi-tienda')">⚙️ Precios de Venta</button>
                                 <button class="menu-btn-item" onclick="openTab('mi-stock')">📦 Mi Inventario</button>
-                                <button class="menu-btn-item" onclick="openTab('creditos-clientes')">💸 Billetera Clientes</button>
+                                <button class="menu-btn-item" onclick="openTab('dinero-clientes')">💸 Billetera Clientes</button>
                                 ` : ''}
                                 ${(esSubAdmin || esCliente) ? `
                                 <button class="menu-btn-item" onclick="openTab('comprar-stock')" style="color: #00D2FF; font-weight: 600;">🛒 Tienda de Cuentas</button>
