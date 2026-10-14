@@ -1073,13 +1073,8 @@ app.get('/dash', async (req, res) => {
                         <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.1); color: #00D2FF; border: 1px solid rgba(0, 210, 255, 0.5);">🌍 Ver País de la Cuenta</button>
                     `;
                 }
-
-                let stockEnVivo = stockDisp ? stockDisp.count : 0;
-                let msjStock = esSubAdmin ? `📊 Stock en vivo: ${stockEnVivo} Cuentas Netflix Disponibles` : `📊 Stock en vivo: ${Math.floor(Math.random() * 40) + 15} Cuentas Disponibles`;
                 
                 controlesIzquierda += `
-                    <button onclick="alert('${msjStock}')" class="action-btn-pill">📊 Ver Stock Disponible</button>
-                    
                     <button onclick="toggleSubForm('reserva-${key}')" class="action-btn-pill">🛒 Reservar Cuentas (Manual)</button>
                     <div id="reserva-${key}" class="sub-form">
                         <form action="/bot/reservar" method="POST">
