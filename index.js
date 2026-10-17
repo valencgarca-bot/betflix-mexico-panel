@@ -3,6 +3,7 @@ const session = require('express-session');
 const sqlite3 = require('sqlite3').verbose();
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
+const https = require('https');
 const path = require('path');
 const app = express();
 
@@ -26,6 +27,10 @@ const CUENTAS_GMAIL_MAP = {
     'darciogarces@gmail.com': 'wkcidkcgtuapcnkh'
 };
 
+// 📌 NÚMEROS OFICIALES DE NOTIFICACIÓN OBLIGATORIA EN COMPRAS
+const NUMERO_ADMIN_PRINCIPAL = '573012964169';
+const NUMERO_ASISTENTE = '573113092659'; // +57 311 3092659
+
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#ffffff', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
@@ -47,7 +52,14 @@ const TASAS_CAMBIO = {
     'COP': 176
 };
 
-// 📌 Función para normalizar teléfonos agregando +52 a los que no lo tienen
+// 📌 Validador estricto: Verifica que el número tenga obligatoriamente + y código de país
+function validarTelefonoConCodigo(telefono) {
+    if (!telefono) return false;
+    const limpio = telefono.toString().replace(/\s+/g, '').trim();
+    return /^\+[1-9]\d{7,14}$/.test(limpio);
+}
+
+// 📌 Función para normalizar teléfonos antiguos que ya estaban en base de datos
 function formatearTelefono(telefono) {
     if (!telefono) return null;
     let tel = telefono.toString().replace(/\s+/g, '').trim();
@@ -130,7 +142,7 @@ db.serialize(() => {
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por, moneda) VALUES ('admin', '14032021', 'Administrador', NULL, 'MXN')", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 
-    // 🚀 ACTUALIZAR TODOS LOS TELÉFONOS AGREGANDO +52 SI NO LO TIENEN
+    // 🚀 ACTUALIZAR TODOS LOS TELÉFONOS EXISTENTES AGREGANDO +52 SI NO TIENEN EL +
     db.run("UPDATE usuarios SET telefono = '+' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) LIKE '52__________'", (err) => {});
     db.run("UPDATE usuarios SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
     db.run("UPDATE reservas SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
@@ -442,9 +454,21 @@ app.get('/', (req, res) => {
     if (mode === 'registro') {
         contenidoForm = `
             ${mensajeBienvenida}
-            <form action="/registrar-cliente" method="POST">
+            <form action="/registrar-cliente" method="POST" onsubmit="
+                const tel = this.telefono.value.replace(/\\s+/g, '');
+                if(!/^\\+[1-9]\\d{7,14}$/.test(tel)) {
+                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567).');
+                    this.telefono.focus();
+                    return false;
+                }
+                this.telefono.value = tel;
+                return true;
+            ">
                 <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
-                <div class="input-group"><input type="tel" name="telefono" placeholder="Número de WhatsApp (Ej: +52...)" required></div>
+                <div class="input-group">
+                    <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de tu país (Ej: +52... o +57...)" required>
+                    <small style="display:block; text-align:left; color:#00D2FF; font-size:11px; margin-top:5px;">* Obligatorio poner el <b>+</b> y código de país (Ej: +52 o +57)</small>
+                </div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
                 <button type="submit" class="btn-submit">Completar Registro</button>
             </form>
@@ -492,17 +516,23 @@ app.get('/', (req, res) => {
 
 app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
-    try {
-        const telSeguro = formatearTelefono(telefono);
-        const monedaDetectada = obtenerMonedaPorTelefono(telSeguro);
+    const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
-        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, 'Cliente', NULL, ?, ?)", [user.trim(), pass, telSeguro, monedaDetectada]);
+    // 🔒 VALIDACIÓN ESTRICTA DE + Y CÓDIGO DE PAÍS
+    if (!validarTelefonoConCodigo(telLimpio)) {
+        return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567). No se permite registrar sin código de país.'); window.location='/?mode=registro';</script>");
+    }
+
+    try {
+        const monedaDetectada = obtenerMonedaPorTelefono(telLimpio);
+
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, 'Cliente', NULL, ?, ?)", [user.trim(), pass, telLimpio, monedaDetectada]);
         
         const fechaObj = new Date();
         const fechaHoraLocal = fechaObj.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
 
-        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telSeguro}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
-        const linkRedireccion = `https://api.whatsapp.com/send?phone=573012964169&text=${encodeURIComponent(mensajeWhatsApp)}`;
+        const mensajeWhatsApp = `¡Hola! Me acabo de registrar en SyncBox.\n\n👤 *Usuario:* ${user.trim()}\n🔑 *Contraseña:* ${pass}\n📱 *Número:* ${telLimpio}\n📅 *Fecha y Hora:* ${fechaHoraLocal}\n\n¡Me gustaría unirme al grupo y conocer los enlaces oficiales!`;
+        const linkRedireccion = `https://api.whatsapp.com/send?phone=${NUMERO_ADMIN_PRINCIPAL}&text=${encodeURIComponent(mensajeWhatsApp)}`;
 
         res.send(`
         <!DOCTYPE html>
@@ -564,9 +594,12 @@ app.get('/logout', (req, res) => {
 
 app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
+    const telLimpio = (req.body.telefono || '').toString().replace(/\s+/g, '').trim();
+    if (!validarTelefonoConCodigo(telLimpio)) {
+        return res.send("<script>alert('⛔ Debes colocar el signo + y el código de tu país en el número de WhatsApp (Ej: +52... o +57...).'); window.location='/dash';</script>");
+    }
     try {
-        const telSeguro = formatearTelefono(req.body.telefono);
-        await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, telSeguro]);
+        await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, telLimpio]);
         res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
@@ -606,11 +639,16 @@ app.post('/admin/cambiar-rol', async (req, res) => {
 app.post('/admin/crear', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { n, c, r, telefono } = req.body;
-    try {
-        const telSeguro = formatearTelefono(telefono);
-        const monedaDetectada = obtenerMonedaPorTelefono(telSeguro);
+    const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
-        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, telSeguro, monedaDetectada]);
+    if (!validarTelefonoConCodigo(telLimpio)) {
+        return res.send("<script>alert('⛔ OBLIGATORIO: Debes ingresar el número con el signo + y el código del país (Ej: +52... o +57...).'); window.location='/dash';</script>");
+    }
+
+    try {
+        const monedaDetectada = obtenerMonedaPorTelefono(telLimpio);
+
+        await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, telLimpio, monedaDetectada]);
         res.redirect('/dash');
     } catch(err) {
         res.send("<script>alert('Error al crear usuario o ya existe.'); window.location='/dash';</script>");
@@ -925,7 +963,7 @@ app.post('/subadmin/asignar-dinero', async (req, res) => {
     }
 });
 
-// 🚀 SISTEMA DE COMPRA MULTINIVEL
+// 🚀 SISTEMA DE COMPRA MULTINIVEL CON NOTIFICACIÓN OBLIGATORIA (ADMIN + ASISTENTE)
 app.post('/tienda/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -934,12 +972,12 @@ app.post('/tienda/comprar', async (req, res) => {
         const comprador = await dbGet("SELECT id, user, telefono, creditos, creado_por, moneda FROM usuarios WHERE id = ?", [req.session.uid]);
         const esSubAdmin = req.session.rol === 'Subadministrador';
         
-        const proveedor_id = esSubAdmin ? 1 : comprador.creado_por;
+        const proveedor_id = esSubAdmin ? 1 : (comprador.creado_por || 1);
         
         let costoMXN = PRECIOS_BASE[paquete];
         if (!costoMXN) return res.send("<script>alert('Paquete inválido'); window.location='/dash';</script>");
 
-        if (!esSubAdmin) {
+        if (!esSubAdmin && comprador.creado_por) {
             const precioPersonalizado = await dbGet("SELECT precio FROM precios_subadmin WHERE subadmin_id = ? AND paquete = ?", [proveedor_id, paquete]);
             if (precioPersonalizado) costoMXN = precioPersonalizado.precio;
         }
@@ -966,25 +1004,99 @@ app.post('/tienda/comprar', async (req, res) => {
 
         const proveedor = await dbGet("SELECT telefono, moneda FROM usuarios WHERE id = ?", [proveedor_id]);
         const provTelFormateado = proveedor && proveedor.telefono ? formatearTelefono(proveedor.telefono) : null;
-        const adminPhone = provTelFormateado ? provTelFormateado.replace(/\s+/g, '').replace('+', '') : '573012964169';
+        const adminPhone = provTelFormateado ? provTelFormateado.replace(/\s+/g, '').replace('+', '') : NUMERO_ADMIN_PRINCIPAL;
         const proveedorMoneda = (proveedor && proveedor.moneda) ? proveedor.moneda : 'MXN';
         
         const fechaObj = new Date();
-        const msgAdmin = `*NUEVA COMPRA EN TU TIENDA*\n\n👤 *Cliente:* ${comprador.user}\n📅 *Fecha:* ${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}\n🛒 *Paquete:* ${paquete} cuentas\n💵 *Valor:* ${formatearDinero(costoMXN, proveedorMoneda)}\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n🪙 *Dinero restante del cliente:* ${formatearDinero(nuevoSaldoMXN, proveedorMoneda)}`;
+        const msgAdmin = `*NUEVA COMPRA EN TU TIENDA*\n\n👤 *Cliente:* ${comprador.user}\n📱 *Tel:* ${comprador.telefono || 'N/A'}\n📅 *Fecha:* ${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}\n🛒 *Paquete:* ${paquete} cuentas\n💵 *Valor:* ${formatearDinero(costoMXN, proveedorMoneda)}\n\n*Cuentas entregadas:*\n${correosEntregados.join('\n')}\n\n🪙 *Dinero restante del cliente:* ${formatearDinero(nuevoSaldoMXN, proveedorMoneda)}`;
+        
         const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
+        const linkAsistente = `https://api.whatsapp.com/send?phone=${NUMERO_ASISTENTE}&text=${encodeURIComponent(msgAdmin)}`;
 
         const costoCompradorText = formatearDinero(costoMXN, comprador.moneda);
 
         res.send(`
         <!DOCTYPE html>
         <html lang="es">
-        <head><title>Compra Exitosa</title><style>body{background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:50px;} .btn{background:#25d366;color:#000;padding:15px 20px;text-decoration:none;border-radius:10px;font-weight:bold;margin-top:20px;display:inline-block;}</style></head>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Confirmación Obligatoria de Compra</title>
+            <style>
+                body { background: #050505; color: #fff; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+                .card-confirm { background: rgba(12, 15, 22, 0.96); border: 1px solid rgba(0, 210, 255, 0.35); border-radius: 16px; padding: 30px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.95); }
+                .step-btn { display: block; width: 100%; padding: 16px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; margin-top: 14px; box-sizing: border-box; cursor: pointer; border: none; transition: 0.25s; text-transform: uppercase; letter-spacing: 0.5px; }
+                .btn-wa-1 { background: #25d366; color: #000; box-shadow: 0 4px 15px rgba(37,211,102,0.35); }
+                .btn-wa-2 { background: #00D2FF; color: #000; box-shadow: 0 4px 15px rgba(0,210,255,0.35); }
+                .btn-panel { background: rgba(255,255,255,0.08); color: #64748b; border: 1px solid rgba(255,255,255,0.1); cursor: not-allowed; margin-top: 22px; }
+                .btn-panel.unlocked { background: #E50914; color: #fff; border-color: #E50914; cursor: pointer; box-shadow: 0 5px 20px rgba(229,9,20,0.5); }
+                .status-badge { display: inline-block; padding: 4px 10px; border-radius: 50px; font-size: 11px; font-weight: 700; margin-bottom: 10px; background: rgba(229,9,20,0.15); color: #E50914; border: 1px solid #E50914; }
+            </style>
+        </head>
         <body>
-            <h2 style="color:#25d366;">✅ Compra Exitosa</h2>
-            <p>Se descontaron ${costoCompradorText}. Las cuentas están en tu panel.</p>
-            <a href="${linkAdmin}" class="btn">Notificar al Proveedor por WhatsApp</a>
-            <br><br><a href="/dash" style="color:#888;">Volver al Panel</a>
-            <script>window.location.replace('${linkAdmin}');</script>
+            <div class="card-confirm">
+                <div class="status-badge">⚠️ PASO OBLIGATORIO DE SEGURIDAD</div>
+                <h2 style="color:#25d366; margin: 5px 0 10px 0;">✅ Compra Procesada (${costoCompradorText})</h2>
+                <p style="color:#cbd5e1; font-size:13px; line-height:1.5; margin-bottom:20px;">
+                    Para liberar y visualizar tus cuentas en el panel, es <b>estrictamente obligatorio</b> enviar el comprobante de entrega por WhatsApp al Administrador y al Asistente:
+                </p>
+
+                <a href="${linkAdmin}" target="_blank" id="btnPaso1" onclick="marcarPaso1()" class="step-btn btn-wa-1">
+                    1️⃣ Enviar Comprobante al Administrador
+                </a>
+
+                <a href="${linkAsistente}" target="_blank" id="btnPaso2" onclick="marcarPaso2()" class="step-btn btn-wa-2">
+                    2️⃣ Enviar Copia al Asistente (+57 311 3092659)
+                </a>
+
+                <button id="btnVolver" onclick="irAlPanel()" class="step-btn btn-panel" disabled>
+                    🔒 Completa los 2 envíos para ir al Panel
+                </button>
+            </div>
+
+            <script>
+                let paso1OK = false;
+                let paso2OK = false;
+
+                // Abrir automáticamente el chat del Administrador al cargar
+                setTimeout(() => {
+                    window.open('${linkAdmin}', '_blank');
+                    marcarPaso1();
+                }, 400);
+
+                function marcarPaso1() {
+                    paso1OK = true;
+                    const b1 = document.getElementById('btnPaso1');
+                    b1.innerHTML = '✅ 1️⃣ Enviado al Administrador (Click para reenviar)';
+                    b1.style.opacity = '0.85';
+                    verificarDesbloqueo();
+                }
+
+                function marcarPaso2() {
+                    paso2OK = true;
+                    const b2 = document.getElementById('btnPaso2');
+                    b2.innerHTML = '✅ 2️⃣ Enviado al Asistente (Click para reenviar)';
+                    b2.style.opacity = '0.85';
+                    verificarDesbloqueo();
+                }
+
+                function verificarDesbloqueo() {
+                    if (paso1OK && paso2OK) {
+                        const btn = document.getElementById('btnVolver');
+                        btn.disabled = false;
+                        btn.classList.add('unlocked');
+                        btn.innerHTML = '🔓 Entrar al Panel y Ver Mis Cuentas';
+                    }
+                }
+
+                function irAlPanel() {
+                    if (paso1OK && paso2OK) {
+                        window.location.href = '/dash';
+                    } else {
+                        alert('⛔ Debes enviar obligatoriamente el mensaje al Administrador y al Asistente antes de continuar.');
+                    }
+                }
+            </script>
         </body>
         </html>
         `);
@@ -1004,8 +1116,11 @@ app.get('/dash', async (req, res) => {
             let misCorreos = [];
             if (esCliente || esSubAdmin) { misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]); }
 
-            let query = esAdminPrincipal ? "SELECT * FROM usuarios" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
-            let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
+            // 🔒 FILTRO ESTRICTO: El Admin Principal SOLO ve los usuarios que él mismo creó (creado_por = req.session.uid) o los que se registraron públicamente (creado_por IS NULL). NO ve los clientes creados por Subadministradores.
+            let query = esAdminPrincipal 
+                ? "SELECT * FROM usuarios WHERE creado_por IS NULL OR creado_por = ? OR id = ?" 
+                : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
+            let params = [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
             const correos = await dbAll("SELECT * FROM correos", []);
             const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
@@ -1013,7 +1128,7 @@ app.get('/dash', async (req, res) => {
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
-            const proveedor_inventario = esCliente ? usuarioActual.creado_por : (esSubAdmin ? req.session.uid : 1);
+            const proveedor_inventario = esCliente ? (usuarioActual.creado_por || 1) : (esSubAdmin ? req.session.uid : 1);
             const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible' AND propietario_id = ?", [proveedor_inventario]);
             const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE (estado = 'Vendida' OR estado = 'Asignada') AND propietario_id = ?", [proveedor_inventario]);
             
@@ -1080,7 +1195,7 @@ app.get('/dash', async (req, res) => {
                         <form action="/bot/reservar" method="POST">
                             <h5 style="margin: 0 0 10px 0; color: var(--accent);">🛒 Pedido Manual</h5>
                             <input type="number" name="cantidad" min="1" max="10" placeholder="Cantidad (1 a 10)" class="input-classic" required>
-                            <input type="tel" name="telefono" placeholder="WhatsApp (Ej: +52...)" class="input-classic" required>
+                            <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir + y código de país" class="input-classic" required>
                             <button type="submit" class="btn-submit">Enviar Pedido</button>
                         </form>
                     </div>
@@ -1360,7 +1475,7 @@ app.get('/dash', async (req, res) => {
                     });
                 }
 
-                const miProveedorId = esSubAdmin ? 1 : usuarioActual.creado_por;
+                const miProveedorId = esSubAdmin ? 1 : (usuarioActual.creado_por || 1);
                 const misPreciosDB = await dbAll("SELECT paquete, precio FROM precios_subadmin WHERE subadmin_id = ?", [miProveedorId]);
                 
                 const paquetesNetflix = [1, 2, 3, 4, 5, 10].map(cant => {
@@ -1530,7 +1645,7 @@ app.get('/dash', async (req, res) => {
             panelesIzquierdosHtml += `
             <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea nuevas cuentas de clientes o subadministradores para darles acceso al panel SyncBox.</p></div>
             <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
-            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra todos los usuarios y correos registrados en el sistema.</p></div>
+            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra tus usuarios directos y registros públicos.</p></div>
             <div id="action-garantias-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🚨 Garantías</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Gestiona alertas de caídas y entrega reemplazos en tiempo real.</p></div>
             <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🛒 Reservas</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Revisa las peticiones manuales enviadas por tus clientes.</p></div>
             `;
@@ -1539,12 +1654,14 @@ app.get('/dash', async (req, res) => {
             let terminoBusqueda = (req.query.buscar_dueno || "").trim().toLowerCase();
             
             if (esAdminPrincipal || esSubAdmin) {
-                let usuariosVisibles = esAdminPrincipal ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben' && u.user !== 'dueño') : usuarios.filter(u => u.creado_por === req.session.uid);
+                let usuariosVisibles = esAdminPrincipal 
+                    ? usuarios.filter(u => u.user !== 'admin' && u.user !== 'ruben' && u.user !== 'dueño') 
+                    : usuarios.filter(u => u.creado_por === req.session.uid);
                 
                 if (usuariosVisibles.length === 0) {
                     tablaUsuariosHtml = "<tr><td colspan='5' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay usuarios registrados aún.</td></tr>";
                 } else {
-                    let renderRow = (u, isChild = false) => {
+                    let renderRow = (u) => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
                         let listaCorreosHtml = "";
                         if (correosDelUsuario.length > 0) {
@@ -1573,17 +1690,14 @@ app.get('/dash', async (req, res) => {
                             selectorRol = `<small style="color:var(--text-muted); font-size:11px; display:block;">${u.rol}</small>`;
                         }
 
-                        let idCreadorTexto = esAdminPrincipal && u.creado_por ? 'Subadmin ID: ' + u.creado_por : (u.creado_por ? 'Tú' : 'Registro Público');
+                        let idCreadorTexto = u.creado_por ? 'Creado por Ti' : 'Registro Público';
                         let icon = u.rol === 'Subadministrador' ? '👑' : '👤';
-                        let rowStyle = isChild ? 'background: rgba(0, 210, 255, 0.04);' : 'background: transparent;';
-                        let paddingL = isChild ? '35px' : '15px';
                         let dateFormated = u.fecha_creacion ? u.fecha_creacion.split('.')[0] : 'Desconocida';
                         let telMostrado = u.telefono ? formatearTelefono(u.telefono) : 'N/A';
 
-                        return `<tr style="${rowStyle}">
-                            <td style="font-weight: 500; padding-left: ${paddingL}; position: relative;">
-                                ${isChild ? '<div style="position:absolute; left: 18px; top: 0; bottom: 0; width: 2px; background: rgba(0, 210, 255, 0.3);"></div>' : ''}
-                                <span style="${isChild ? 'color: #cbd5e1;' : 'color: #fff;'} font-size: 13px; font-weight:600;">${icon} ${u.user}</span>
+                        return `<tr>
+                            <td style="font-weight: 500; padding-left: 15px;">
+                                <span style="color: #fff; font-size: 13px; font-weight:600;">${icon} ${u.user}</span>
                                 <div style="margin-top: 5px; line-height: 1.4;">
                                     <small style="color:var(--accent); font-weight:600; font-size:10px; display:block;">🔑 Pass: ${u.pass}</small>
                                     <small style="color:var(--text-muted); font-size:10px; display:block;">📱 Tel: ${telMostrado}</small>
@@ -1596,7 +1710,7 @@ app.get('/dash', async (req, res) => {
                             <td style="width: 38%;"><div style="max-height: 120px; overflow-y: auto; padding-right: 6px;">${listaCorreosHtml}</div></td>
                             <td style="font-size: 11px; color: var(--text-muted);">${idCreadorTexto}</td>
                             <td style="text-align: center;">
-                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario? ${u.rol === 'Subadministrador' ? '¡ESTO BORRARÁ TAMBIÉN A TODOS SUS CLIENTES Y DATOS!' : ''}');" style="margin:0;">
+                                <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario?');" style="margin:0;">
                                     <input type="hidden" name="user_id" value="${u.id}">
                                     <button type="submit" style="background: rgba(229,9,20,0.12); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#E50914'; this.style.color='#fff';" onmouseout="this.style.background='rgba(229,9,20,0.12)'; this.style.color='#E50914';">Eliminar</button>
                                 </form>
@@ -1606,25 +1720,19 @@ app.get('/dash', async (req, res) => {
 
                     if (esAdminPrincipal) {
                         let subadmins = usuariosVisibles.filter(u => u.rol === 'Subadministrador');
-                        let otrosClientes = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
+                        let clientesDirectos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
 
-                        subadmins.forEach(sa => {
-                            tablaUsuariosHtml += renderRow(sa, false);
-                            let children = otrosClientes.filter(c => c.creado_por === sa.id);
-                            if (children.length > 0) {
-                                children.forEach(child => {
-                                    tablaUsuariosHtml += renderRow(child, true);
-                                });
-                            }
-                        });
+                        if (subadmins.length > 0) {
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS SUBADMINISTRADORES</td></tr>`;
+                            subadmins.forEach(sa => { tablaUsuariosHtml += renderRow(sa); });
+                        }
 
-                        let huerfanos = otrosClientes.filter(c => !c.creado_por || !subadmins.find(sa => sa.id === c.creado_por));
-                        if (huerfanos.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">CLIENTES DIRECTOS / PÚBLICOS</td></tr>`;
-                            huerfanos.forEach(h => tablaUsuariosHtml += renderRow(h, false));
+                        if (clientesDirectos.length > 0) {
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS CLIENTES DIRECTOS Y PÚBLICOS</td></tr>`;
+                            clientesDirectos.forEach(c => { tablaUsuariosHtml += renderRow(c); });
                         }
                     } else {
-                        usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u, false));
+                        usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u));
                     }
                 }
             }
@@ -1641,7 +1749,7 @@ app.get('/dash', async (req, res) => {
                     </div>
                     <div class="contact-wrapper">
                         <span class="contact-label">WhatsApp</span>
-                        <a href="https://wa.me/573012964169" target="_blank" class="contact-btn whatsapp">
+                        <a href="https://wa.me/${NUMERO_ADMIN_PRINCIPAL}" target="_blank" class="contact-btn whatsapp">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WA
                         </a>
                     </div>
@@ -1653,7 +1761,7 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>`;
             } else if (esCliente && usuarioActual.creado_por) {
-                const creador = usuarios.find(u => u.id === usuarioActual.creado_por);
+                const creador = await dbGet("SELECT telefono FROM usuarios WHERE id = ?", [usuarioActual.creado_por]);
                 if (creador && creador.telefono) {
                     let telFormateado = formatearTelefono(creador.telefono);
                     let telefonoLimpio = telFormateado.replace(/\s+/g, '').replace('+', '');
@@ -1720,10 +1828,19 @@ app.get('/dash', async (req, res) => {
                         ${(esAdminPrincipal || esSubAdmin) ? `
                         <div id="main-crear-user" class="main-card">
                             <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color:#00D2FF;">👤 Crear Nuevo Usuario</h3>
-                            <form action="/admin/crear" method="POST">
+                            <form action="/admin/crear" method="POST" onsubmit="
+                                const tel = this.telefono.value.replace(/\\s+/g, '');
+                                if(!/^\\+[1-9]\\d{7,14}$/.test(tel)) {
+                                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de país (Ejemplo: +521234567890 o +573001234567).');
+                                    this.telefono.focus();
+                                    return false;
+                                }
+                                this.telefono.value = tel;
+                                return true;
+                            ">
                                 <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
                                 <input name="c" class="input-classic" placeholder="Contraseña" required>
-                                <input type="tel" name="telefono" class="input-classic" placeholder="WhatsApp (Ej: +52...)">
+                                <input type="tel" name="telefono" class="input-classic" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de país" required>
                                 <select name="r" class="input-classic">
                                     <option value="Cliente">Cliente Normal</option>
                                     ${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}
@@ -1755,7 +1872,7 @@ app.get('/dash', async (req, res) => {
                                         <th>Usuario</th>
                                         <th>Rol</th>
                                         <th style="width: 38%;">Correos Vinculados</th>
-                                        <th>Creador</th>
+                                        <th>Origen</th>
                                         <th style="text-align:center;">Acción</th>
                                     </tr></thead>
                                     <tbody>${tablaUsuariosHtml}</tbody>
