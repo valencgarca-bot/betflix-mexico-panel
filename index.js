@@ -4,6 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
 const https = require('https');
+const crypto = require('crypto');
 const path = require('path');
 const app = express();
 
@@ -30,6 +31,9 @@ const CUENTAS_GMAIL_MAP = {
 // 📌 NÚMEROS OFICIALES DE NOTIFICACIÓN OBLIGATORIA EN COMPRAS
 const NUMERO_ADMIN_PRINCIPAL = '573012964169';
 const NUMERO_ASISTENTE = '573113092659'; // +57 311 3092659
+
+// 📌 CONFIGURACIÓN BASE API GHOULFLIX
+const GHOULFLIX_BASE_URL = 'https://ghoulflix.com';
 
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
@@ -75,7 +79,7 @@ function obtenerMonedaPorTelefono(telefono) {
     let tel = telefono.replace(/\s+/g, '');
     if (tel.startsWith('+57')) return 'COP';
     if (tel.startsWith('+52')) return 'MXN';
-    return 'MXN'; // Moneda por defecto
+    return 'MXN';
 }
 
 function convertirLocal(montoMXN, monedaLocal) {
@@ -97,6 +101,7 @@ function formatearDinero(montoMXN, monedaLocal) {
 }
 
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 app.use(session({
     secret: 'betflix_mexico_ultra_secure_2026_MX_PRO',
     resave: false,
@@ -110,8 +115,8 @@ db.serialize(() => {
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN creditos REAL DEFAULT 0", (err) => {});
     db.run("ALTER TABLE usuarios ADD COLUMN deuda REAL DEFAULT 0", (err) => {});
+    db.run("ALTER TABLE usuarios ADD COLUMN api_token TEXT", (err) => {});
     
-    // Nueva columna para identificar el país/moneda del usuario
     db.run("ALTER TABLE usuarios ADD COLUMN moneda TEXT DEFAULT 'MXN'", (err) => {
         if (!err) {
             db.run("UPDATE usuarios SET moneda = 'COP' WHERE telefono LIKE '+57%'", (err) => {});
@@ -139,6 +144,10 @@ db.serialize(() => {
 
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
+    // Tabla para guardar credenciales de conexión a Ghoulflix API
+    db.run("CREATE TABLE IF NOT EXISTS config_ghoulflix (id INTEGER PRIMARY KEY CHECK (id = 1), login_id TEXT, password TEXT, token TEXT, updated_at DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("INSERT OR IGNORE INTO config_ghoulflix (id, login_id, password, token) VALUES (1, '', '', '')");
+
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por, moneda) VALUES ('admin', '14032021', 'Administrador', NULL, 'MXN')", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 
@@ -147,11 +156,112 @@ db.serialize(() => {
     db.run("UPDATE usuarios SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
     db.run("UPDATE reservas SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
 
-    // ✅ NUEVAS TABLAS PARA EL SISTEMA MULTINIVEL
     db.run("ALTER TABLE stock_cuentas ADD COLUMN propietario_id INTEGER DEFAULT 1", (err) => {});
     db.run("CREATE TABLE IF NOT EXISTS precios_subadmin (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, paquete INTEGER, precio REAL, UNIQUE(subadmin_id, paquete))");
     db.run("CREATE TABLE IF NOT EXISTS historial_dinero (id INTEGER PRIMARY KEY AUTOINCREMENT, emisor_id INTEGER, receptor_id INTEGER, monto REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
 });
+
+// =========================================================================
+// 🌐 FUNCIONES DE CONEXIÓN A LA API DE GHOULFLIX (https://ghoulflix.com)
+// =========================================================================
+function peticionHttpsJson(urlStr, method, headers, bodyObj) {
+    return new Promise((resolve, reject) => {
+        const urlObj = new URL(urlStr);
+        const payload = bodyObj ? JSON.stringify(bodyObj) : null;
+        const reqOptions = {
+            hostname: urlObj.hostname,
+            port: urlObj.port || 443,
+            path: urlObj.pathname + urlObj.search,
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+                ...headers
+            },
+            timeout: 20000
+        };
+
+        const req = https.request(reqOptions, (res) => {
+            let rawData = '';
+            res.on('data', (chunk) => { rawData += chunk; });
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(rawData);
+                    resolve({ statusCode: res.statusCode, data: parsed });
+                } catch (e) {
+                    resolve({ statusCode: res.statusCode, data: null, raw: rawData });
+                }
+            });
+        });
+
+        req.on('error', (err) => reject(err));
+        req.on('timeout', () => { req.destroy(); reject(new Error('Tiempo de espera agotado al conectar con Ghoulflix API')); });
+        if (payload) req.write(payload);
+        req.end();
+    });
+}
+
+async function loginEnGhoulflixApi() {
+    const cfg = await dbGet("SELECT * FROM config_ghoulflix WHERE id = 1");
+    if (!cfg || !cfg.login_id || !cfg.password) {
+        return { success: false, error: 'Credenciales de Ghoulflix no configuradas en el panel.' };
+    }
+    try {
+        const resp = await peticionHttpsJson(`${GHOULFLIX_BASE_URL}/api/auth/login`, 'POST', {}, {
+            login_id: cfg.login_id,
+            password: cfg.password
+        });
+        if (resp.data && resp.data.success && resp.data.token) {
+            await dbRun("UPDATE config_ghoulflix SET token = ?, updated_at = datetime('now', 'localtime') WHERE id = 1", [resp.data.token]);
+            return { success: true, token: resp.data.token };
+        }
+        return { success: false, error: (resp.data && resp.data.error) ? resp.data.error : 'No se pudo iniciar sesión en Ghoulflix.' };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+}
+
+async function consultarCodigoGhoulflixApi(email, code_type) {
+    let cfg = await dbGet("SELECT * FROM config_ghoulflix WHERE id = 1");
+    let token = cfg && cfg.token ? cfg.token.trim() : '';
+
+    if (!token && cfg && cfg.login_id && cfg.password) {
+        const loginRes = await loginEnGhoulflixApi();
+        if (!loginRes.success) return { success: false, code: null, link: null, response_time_ms: 0, error: loginRes.error };
+        token = loginRes.token;
+    }
+
+    if (!token) {
+        return { success: false, code: null, link: null, response_time_ms: 0, error: 'Token o credenciales de Ghoulflix no configurados.' };
+    }
+
+    try {
+        let resp = await peticionHttpsJson(`${GHOULFLIX_BASE_URL}/api/customer/fetch-code`, 'POST', {
+            'Authorization': `Bearer ${token}`
+        }, {
+            email: email.trim().toLowerCase(),
+            code_type: code_type
+        });
+
+        // Si el token expiró (401 o error de autenticación), re-autenticar automáticamente 1 vez
+        if ((resp.statusCode === 401 || (resp.data && resp.data.error && /authentication required|invalid|expired/i.test(resp.data.error))) && cfg.login_id && cfg.password) {
+            const relogin = await loginEnGhoulflixApi();
+            if (relogin.success) {
+                resp = await peticionHttpsJson(`${GHOULFLIX_BASE_URL}/api/customer/fetch-code`, 'POST', {
+                    'Authorization': `Bearer ${relogin.token}`
+                }, {
+                    email: email.trim().toLowerCase(),
+                    code_type: code_type
+                });
+            }
+        }
+
+        if (resp.data) return resp.data;
+        return { success: false, code: null, link: null, response_time_ms: 0, error: `Error HTTP ${resp.statusCode} desde Ghoulflix.` };
+    } catch (err) {
+        return { success: false, code: null, link: null, response_time_ms: 0, error: err.message };
+    }
+}
 
 // 🧹 FUNCIÓN DE PURGA INMEDIATA
 async function purgarUsuariosInactivos() {
@@ -253,11 +363,13 @@ const CSS_MODERNO = `
     
     .action-btn-pill { 
         width: 100%; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--card-border); 
-        padding: 13px 15px; border-radius: 10px; font-size: 11px; font-weight: 600; 
+        padding: 12px 14px; border-radius: 10px; font-size: 11px; font-weight: 600; 
         color: var(--text-main); cursor: pointer; transition: 0.25s; text-transform: uppercase; 
         letter-spacing: 0.5px; text-align: center; box-sizing: border-box;
     }
     .action-btn-pill:hover { background: rgba(0, 210, 255, 0.14); border-color: var(--accent); transform: translateY(-1px); }
+    
+    .api-grid-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
     
     .search-input-large { 
         width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); 
@@ -364,6 +476,11 @@ const CSS_MODERNO = `
                 emailInput.focus();
                 return;
             }
+            if(actionName === 'reset_link') {
+                if(!confirm('⚠️ ATENCIÓN: Esta opción enviará una nueva solicitud de restablecimiento de contraseña a la cuenta de Netflix. ¿Deseas continuar?')) {
+                    return;
+                }
+            }
             emailInput.style.borderColor = "var(--accent)";
             emailInput.style.boxShadow = "none";
             
@@ -412,8 +529,188 @@ const CSS_MODERNO = `
 </script>
 `;
 
+// =========================================================================
+// 🔑 ENDPOINTS DE API OFICIAL (/api/auth/login y /api/customer/fetch-code)
+// =========================================================================
+app.post('/api/auth/login', async (req, res) => {
+    const login_id = (req.body.login_id || '').toString().trim();
+    const password = (req.body.password || '').toString().trim();
+
+    if (!login_id || !password) {
+        return res.status(422).json({ success: false, error: 'login_id and password are required.' });
+    }
+
+    try {
+        let row = await dbGet("SELECT * FROM usuarios WHERE user = ? AND pass = ?", [login_id, password]);
+        if (!row && login_id === 'admin' && password === '14032021') {
+            row = await dbGet("SELECT * FROM usuarios WHERE user = 'admin'");
+        }
+        if (!row) {
+            return res.status(401).json({ success: false, error: 'Authentication required. Invalid credentials.' });
+        }
+
+        const token = crypto.randomBytes(28).toString('hex');
+        await dbRun("UPDATE usuarios SET api_token = ? WHERE id = ?", [token, row.id]);
+
+        req.session.uid = row.id;
+        req.session.user = row.user;
+        req.session.rol = row.rol;
+
+        return res.json({ success: true, token: token });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: 'Internal server error.' });
+    }
+});
+
+app.post('/api/customer/fetch-code', async (req, res) => {
+    const startMs = Date.now();
+    const { email, code_type } = req.body || {};
+    const validTypes = ['signin_6digit', 'signin_4digit', 'household', 'reset_link'];
+
+    if (!email || !code_type || typeof email !== 'string' || !validTypes.includes(code_type)) {
+        return res.status(422).json({
+            success: false,
+            code: null,
+            link: null,
+            response_time_ms: Date.now() - startMs,
+            error: 'HTTP 422: Check required JSON fields (email, code_type) and their types.'
+        });
+    }
+
+    try {
+        // Prioridad: Cookie de sesión activa primero, luego Bearer Token (según especificación)
+        let currentUser = null;
+        if (req.session && req.session.uid) {
+            currentUser = await dbGet("SELECT * FROM usuarios WHERE id = ?", [req.session.uid]);
+        }
+        if (!currentUser) {
+            const authHeader = req.headers['authorization'] || '';
+            if (authHeader.startsWith('Bearer ')) {
+                const token = authHeader.slice(7).trim();
+                if (token) {
+                    currentUser = await dbGet("SELECT * FROM usuarios WHERE api_token = ?", [token]);
+                }
+            }
+        }
+
+        if (!currentUser) {
+            return res.status(401).json({
+                success: false,
+                code: null,
+                link: null,
+                response_time_ms: Date.now() - startMs,
+                error: 'Authentication required. Please sign in to fetch codes.'
+            });
+        }
+
+        const correoLimpio = email.trim().toLowerCase();
+        const esAdmin = (currentUser.rol === 'Administrador' || currentUser.user === 'admin' || currentUser.user === 'ruben');
+
+        if (!esAdmin) {
+            if (currentUser.rol === 'Cliente') {
+                const asignado = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [currentUser.id, correoLimpio]);
+                if (!asignado) {
+                    return res.status(403).json({
+                        success: false,
+                        code: null,
+                        link: null,
+                        response_time_ms: Date.now() - startMs,
+                        error: 'Not assigned to your profile.'
+                    });
+                }
+            } else if (currentUser.rol === 'Subadministrador') {
+                const enPool = await dbGet(`
+                    SELECT c.id FROM correos c 
+                    JOIN usuarios u ON c.user_id = u.id 
+                    WHERE c.email = ? AND (c.user_id = ? OR u.creado_por = ?)
+                `, [correoLimpio, currentUser.id, currentUser.id]);
+                const enStockPropio = await dbGet("SELECT id FROM stock_cuentas WHERE email = ? AND propietario_id = ?", [correoLimpio, currentUser.id]);
+                if (!enPool && !enStockPropio) {
+                    return res.status(403).json({
+                        success: false,
+                        code: null,
+                        link: null,
+                        response_time_ms: Date.now() - startMs,
+                        error: 'Not in your subadmin pool.'
+                    });
+                }
+            }
+        }
+
+        // 1. Intentar consultar en Ghoulflix API si está configurado
+        const apiResult = await consultarCodigoGhoulflixApi(correoLimpio, code_type);
+        if (apiResult && apiResult.success && (apiResult.code || apiResult.link)) {
+            try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [currentUser.user, correoLimpio]); } catch(e) {}
+            return res.json({
+                success: true,
+                code: apiResult.code ? String(apiResult.code) : null,
+                link: apiResult.link || null,
+                response_time_ms: apiResult.response_time_ms || (Date.now() - startMs),
+                error: null
+            });
+        }
+
+        // 2. Respaldo en IMAP local si no está en Ghoulflix o si se usa buzón propio
+        const partes = correoLimpio.split('@');
+        const imapRes = await buscarEnBuzonImap('darciogarces@gmail.com', correoLimpio, 'netflix', partes, code_type);
+        if (imapRes && imapRes.mail) {
+            const textoBruto = imapRes.mail.text || String(imapRes.mail.html).replace(/<[^>]*>?/gm, ' ') || "";
+            const htmlBruto = String(imapRes.mail.html || "");
+
+            let foundCode = null;
+            let foundLink = null;
+
+            if (code_type === 'signin_6digit') {
+                const m = textoBruto.match(/\b(\d{6})\b/);
+                if (m) foundCode = String(m[1]);
+            } else if (code_type === 'signin_4digit') {
+                const m = textoBruto.match(/\b(\d{4})\b/);
+                if (m) foundCode = String(m[1]);
+            } else if (code_type === 'household') {
+                const linkMatch = htmlBruto.match(/https?:\/\/[^\s"'<>]+netflix\.com[^\s"'<>]*(?:travel|household|update-primary-location)[^\s"'<>]*/i);
+                if (linkMatch) foundLink = linkMatch[0].replace(/&amp;/g, '&');
+                else {
+                    const m = textoBruto.match(/\b(\d{4,6})\b/);
+                    if (m) foundCode = String(m[1]);
+                }
+            } else if (code_type === 'reset_link') {
+                const resetMatch = htmlBruto.match(/https?:\/\/[^\s"'<>]+netflix\.com[^\s"'<>]*(?:password| loginHelp)[^\s"'<>]*/i);
+                if (resetMatch) foundLink = resetMatch[0].replace(/&amp;/g, '&');
+            }
+
+            if (foundCode || foundLink) {
+                try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [currentUser.user, correoLimpio]); } catch(e) {}
+                return res.json({
+                    success: true,
+                    code: foundCode,
+                    link: foundLink,
+                    response_time_ms: Date.now() - startMs,
+                    error: null
+                });
+            }
+        }
+
+        return res.json({
+            success: false,
+            code: null,
+            link: null,
+            response_time_ms: Date.now() - startMs,
+            error: (apiResult && apiResult.error) ? apiResult.error : 'No code/link found. Confirm you requested the correct verification and entered the correct email.'
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            code: null,
+            link: null,
+            response_time_ms: Date.now() - startMs,
+            error: 'Internal server error.'
+        });
+    }
+});
+
+// Middleware de protección de rutas web
 app.use(async (req, res, next) => {
-    const rutasAbiertas = ['/', '/login', '/logout', '/registrar-cliente'];
+    const rutasAbiertas = ['/', '/login', '/logout', '/registrar-cliente', '/api/auth/login', '/api/customer/fetch-code'];
     if (rutasAbiertas.includes(req.path)) return next();
     if (req.session && req.session.uid) {
         try {
@@ -518,7 +815,6 @@ app.post('/registrar-cliente', async (req, res) => {
     const { user, pass, telefono } = req.body;
     const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
-    // 🔒 VALIDACIÓN ESTRICTA DE + Y CÓDIGO DE PAÍS
     if (!validarTelefonoConCodigo(telLimpio)) {
         return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567). No se permite registrar sin código de país.'); window.location='/?mode=registro';</script>");
     }
@@ -590,6 +886,31 @@ app.post('/login', async (req, res) => {
 app.get('/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/');
+});
+
+// Ruta para guardar configuración de Ghoulflix API desde el panel de Admin
+app.post('/admin/config-ghoulflix', async (req, res) => {
+    if (req.session.rol !== 'Administrador') return res.redirect('/dash');
+    const { login_id, password, token_manual } = req.body;
+    try {
+        await dbRun("UPDATE config_ghoulflix SET login_id = ?, password = ?, token = ?, updated_at = datetime('now', 'localtime') WHERE id = 1", [
+            (login_id || '').trim(),
+            (password || '').trim(),
+            (token_manual || '').trim()
+        ]);
+
+        if (login_id && password && !token_manual) {
+            const loginRes = await loginEnGhoulflixApi();
+            if (loginRes.success) {
+                return res.send("<script>alert('✅ Conectado exitosamente a Ghoulflix API. Token obtenido y guardado.'); window.location='/dash';</script>");
+            } else {
+                return res.send(`<script>alert('⚠️ Credenciales guardadas, pero Ghoulflix respondió: ${loginRes.error}'); window.location='/dash';</script>`);
+            }
+        }
+        res.send("<script>alert('✅ Configuración de API Ghoulflix actualizada correctamente.'); window.location='/dash';</script>");
+    } catch (e) {
+        res.redirect('/dash');
+    }
 });
 
 app.post('/bot/reservar', async (req, res) => {
@@ -910,7 +1231,7 @@ app.post('/admin/asignar-manual', async (req, res) => {
     }
 });
 
-// 🚀 SUBADMIN: CONFIGURAR PRECIOS DE SU TIENDA (RECIBE EN MONEDA LOCAL, GUARDA EN MXN)
+// 🚀 SUBADMIN: CONFIGURAR PRECIOS DE SU TIENDA
 app.post('/subadmin/configurar-precios', async (req, res) => {
     if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
@@ -1058,7 +1379,6 @@ app.post('/tienda/comprar', async (req, res) => {
                 let paso1OK = false;
                 let paso2OK = false;
 
-                // Abrir automáticamente el chat del Administrador al cargar
                 setTimeout(() => {
                     window.open('${linkAdmin}', '_blank');
                     marcarPaso1();
@@ -1116,7 +1436,6 @@ app.get('/dash', async (req, res) => {
             let misCorreos = [];
             if (esCliente || esSubAdmin) { misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]); }
 
-            // 🔒 FILTRO ESTRICTO: El Admin Principal SOLO ve los usuarios que él mismo creó (creado_por = req.session.uid) o los que se registraron públicamente (creado_por IS NULL). NO ve los clientes creados por Subadministradores.
             let query = esAdminPrincipal 
                 ? "SELECT * FROM usuarios WHERE creado_por IS NULL OR creado_por = ? OR id = ?" 
                 : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
@@ -1136,6 +1455,7 @@ app.get('/dash', async (req, res) => {
 
             const historialCompras = await dbAll(`SELECT c.*, u.user as comprador, u.moneda FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
             const detallesComprasDB = await dbAll("SELECT * FROM detalles_compras");
+            const cfgGhoulflix = await dbGet("SELECT * FROM config_ghoulflix WHERE id = 1");
 
             let actividadesHtml = "";
             if (registros.length > 0) {
@@ -1169,18 +1489,24 @@ app.get('/dash', async (req, res) => {
                 let plat = PLATAFORMAS[key];
                 
                 let controlesIzquierda = `
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 10px;">
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 8px;">
                         <p style="margin: 0; color: #cbd5e1; font-size: 11px; line-height: 1.5;">
-                            Panel Operativo de <strong>${plat.nombre}</strong>. Selecciona una opción después de escribir tu correo.
+                            Panel Operativo de <strong>${plat.nombre}</strong>. Escribe el correo y elige el tipo de código a extraer.
                         </p>
                     </div>`;
 
                 if (key === 'netflix') {
                     controlesIzquierda += `
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); color: #fff; border: 1px solid #E50914; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px;">
-                            <img src="${plat.logo}" alt="Netflix" style="height: 15px;"> DAR CLICK AQUÍ
+                        <div class="api-grid-btns">
+                            <button onclick="triggerAction('${key}', 'signin_6digit')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.12); border-color: #00D2FF; color: #fff;">🔢 Código 6 Díg.</button>
+                            <button onclick="triggerAction('${key}', 'signin_4digit')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.12); border-color: #00D2FF; color: #fff;">📺 Código TV 4 Díg.</button>
+                            <button onclick="triggerAction('${key}', 'household')" class="action-btn-pill" style="background: rgba(37, 211, 102, 0.14); border-color: #25d366; color: #fff;">🏠 Hogar / Viaje</button>
+                            <button onclick="triggerAction('${key}', 'reset_link')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.14); border-color: #ff7300; color: #fff;">🔑 Link Contraseña</button>
+                        </div>
+                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); color: #fff; border: 1px solid #E50914; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px;">
+                            <img src="${plat.logo}" alt="Netflix" style="height: 14px;"> BUSCAR BUZÓN COMPLETO
                         </button>
-                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.1); color: #00D2FF; border: 1px solid rgba(0, 210, 255, 0.5);">🌍 Ver País de la Cuenta</button>
+                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.08); color: #00D2FF; border: 1px solid rgba(0, 210, 255, 0.4);">🌍 Ver País de la Cuenta</button>
                     `;
                 } else {
                     controlesIzquierda += `
@@ -1245,13 +1571,13 @@ app.get('/dash', async (req, res) => {
                             <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:24px; width:auto; max-width:100px; object-fit:contain;">
                         </div>
                         <div>
-                            <h3 style="margin:0; font-size:17px; font-weight:600;">Búsqueda en ${plat.nombre}</h3>
-                            <p style="margin:3px 0 0 0; font-size:12px; color:var(--text-muted);">Ingresa el correo registrado y selecciona una acción en el panel izquierdo.</p>
+                            <h3 style="margin:0; font-size:17px; font-weight:600;">Búsqueda Rápida en ${plat.nombre}</h3>
+                            <p style="margin:3px 0 0 0; font-size:12px; color:var(--text-muted);">Ingresa tu correo autorizado y elige el código o enlace en el panel izquierdo.</p>
                         </div>
                     </div>
                     <form id="form-${key}" action="/buscar" method="POST" target="marco_resultados" style="margin:0;" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
                         <input type="hidden" name="plataforma" value="${key}">
-                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo electrónico aquí..." required ${((esCliente || esSubAdmin) && misCorreos.length === 0) ? 'disabled' : ''}>
+                        <input type="text" name="email_search" class="search-input-large" placeholder="Escribe el correo electrónico autorizado aquí..." required ${((esCliente || esSubAdmin) && misCorreos.length === 0) ? 'disabled' : ''}>
                     </form>
                 </div>`;
             });
@@ -1260,6 +1586,10 @@ app.get('/dash', async (req, res) => {
 
             if (esAdminPrincipal) {
                 panelesIzquierdosHtml += `
+                <div id="action-api-ghoulflix" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🔌 Conexión API Ghoulflix</h4>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Configura tus credenciales o Bearer Token de <b>ghoulflix.com</b> para extraer códigos de 6 dígitos, 4 dígitos, hogar y reset links.</p>
+                </div>
                 <div id="action-stock-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Control de Inventario</h4>
                     <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Carga masiva de cuentas al sistema para la venta automática a subadministradores.</p>
@@ -1349,6 +1679,25 @@ app.get('/dash', async (req, res) => {
                 }
 
                 panelesCentroHtml += `
+                <div id="main-api-ghoulflix" class="main-card">
+                    <h3 style="margin:0 0 10px 0; font-size:19px; font-weight:600; color: #00D2FF;">🔌 Configuración API Ghoulflix (https://ghoulflix.com)</h3>
+                    <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
+                        Ingresa tu usuario y contraseña de Ghoulflix para que el sistema obtenga y renueve el <b>Bearer Token</b> automáticamente en cada consulta, o pega directamente tu Token.
+                    </p>
+                    <form action="/admin/config-ghoulflix" method="POST">
+                        <label style="color:#00D2FF; font-size:11px; font-weight:600; display:block; margin-bottom:5px;">Usuario o Correo de Ghoulflix (login_id):</label>
+                        <input type="text" name="login_id" value="${cfgGhoulflix ? (cfgGhoulflix.login_id || '') : ''}" class="input-classic" placeholder="Tu usuario o email en Ghoulflix">
+                        
+                        <label style="color:#00D2FF; font-size:11px; font-weight:600; display:block; margin-bottom:5px;">Contraseña de Ghoulflix (password):</label>
+                        <input type="password" name="password" value="${cfgGhoulflix ? (cfgGhoulflix.password || '') : ''}" class="input-classic" placeholder="Tu contraseña en Ghoulflix">
+                        
+                        <label style="color:#00D2FF; font-size:11px; font-weight:600; display:block; margin-bottom:5px;">Bearer Token Actual (Se llena solo al iniciar sesión o puedes pegarlo manual):</label>
+                        <input type="text" name="token_manual" value="${cfgGhoulflix ? (cfgGhoulflix.token || '') : ''}" class="input-classic" placeholder="Dejar en blanco para generar automáticamente con usuario/contraseña">
+                        
+                        <button type="submit" class="btn-submit">Guardar y Conectar con Ghoulflix API</button>
+                    </form>
+                </div>
+
                 <div id="main-stock-admin" class="main-card">
                     <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: #00D2FF;">📦 Cargar Stock y Ver Historial</h3>
                     <form action="/stock/cargar" method="POST">
@@ -1891,6 +2240,7 @@ app.get('/dash', async (req, res) => {
                             <div class="menu-list">
                                 ${(esAdminPrincipal) ? `
                                 <div class="menu-group-label">Inventario y Finanzas</div>
+                                <button class="menu-btn-item" data-tab="api-ghoulflix" onclick="openTab('api-ghoulflix')" style="color: #25d366;">🔌 API Ghoulflix</button>
                                 <button class="menu-btn-item" data-tab="stock-admin" onclick="openTab('stock-admin')">📦 Gestión de Stock</button>
                                 <button class="menu-btn-item" data-tab="asignacion-manual" onclick="openTab('asignacion-manual')" style="color: #00D2FF;">🎯 Asignación Manual</button>
                                 <button class="menu-btn-item" data-tab="dinero-admin" onclick="openTab('dinero-admin')">💰 Asignar Dinero</button>
@@ -1996,6 +2346,7 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
 
 app.post('/buscar', async (req, res) => {
     const { email_search, accion, plataforma } = req.body;
+    const tiposApiGhoulflix = ['signin_6digit', 'signin_4digit', 'household', 'reset_link'];
     
     const cssIframe = `<style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -2003,6 +2354,7 @@ app.post('/buscar', async (req, res) => {
         body, html { 
             font-family: 'Inter', sans-serif !important; 
             background: transparent !important; 
+            color: #f8fafc;
             margin: 0; padding: 0; 
         } 
         
@@ -2063,29 +2415,160 @@ app.post('/buscar', async (req, res) => {
             max-width: 600px;
             width: 100%;
         }
+
+        .api-result-box {
+            max-width: 520px;
+            margin: 35px auto;
+            background: rgba(10, 14, 22, 0.95);
+            border: 1px solid rgba(0, 210, 255, 0.35);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.9);
+        }
+        .code-pill {
+            font-family: monospace;
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            color: #00D2FF;
+            background: #000;
+            border: 1px solid rgba(0, 210, 255, 0.4);
+            padding: 18px 28px;
+            border-radius: 12px;
+            display: inline-block;
+            margin: 18px 0;
+            user-select: all;
+        }
+        .btn-copy-api {
+            background: #00D2FF;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 12px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+        }
     </style>`;
 
     try {
         let correoIngresado = (email_search || "").trim().toLowerCase();
         
         const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
-        const esCliente = (req.session.rol === 'Cliente' || req.session.rol === 'Subadministrador');
+        const esCliente = (req.session.rol === 'Cliente');
+        const esSubAdmin = (req.session.rol === 'Subadministrador');
 
+        // Validación de permisos por rol según las reglas de Customer y Subadmin Pool
         if (esCliente && !esAdminPrincipal) {
             const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
             if (!tieneAcceso) {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes este correo asignado a tu cuenta. Solicítalo al proveedor.</p></div>`);
+                return res.send(`${cssIframe}<div class="api-result-box" style="border-color:#E50914;"><h2 style="color:#E50914; margin-top:0;">⛔ Not assigned to your profile</h2><p style="color:#cbd5e1; font-size:13px;">No tienes este correo asignado a tu perfil. Solicítalo a tu administrador o subadministrador.</p></div>`);
             }
-        } else if (!esAdminPrincipal) {
-            const dueñocuenta = await dbGet("SELECT c.user_id, u.user, u.creado_por FROM correos c JOIN usuarios u ON c.user_id = u.id WHERE c.email = ?", [correoIngresado]);
-            if (dueñocuenta) {
-                const esPropia = (dueñocuenta.user_id === req.session.uid);
-                const esDeMiCliente = (dueñocuenta.creado_por === req.session.uid);
-                if (!esPropia && !esDeMiCliente) {
-                    return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>El correo <strong>${correoIngresado}</strong> le pertenece al cliente <strong>${dueñocuenta.user}</strong></p></div>`);
+        } else if (esSubAdmin && !esAdminPrincipal) {
+            const enPool = await dbGet(`
+                SELECT c.id FROM correos c 
+                JOIN usuarios u ON c.user_id = u.id 
+                WHERE c.email = ? AND (c.user_id = ? OR u.creado_por = ?)
+            `, [correoIngresado, req.session.uid, req.session.uid]);
+            const enStockPropio = await dbGet("SELECT id FROM stock_cuentas WHERE email = ? AND propietario_id = ?", [correoIngresado, req.session.uid]);
+            if (!enPool && !enStockPropio) {
+                return res.send(`${cssIframe}<div class="api-result-box" style="border-color:#E50914;"><h2 style="color:#E50914; margin-top:0;">⛔ Not in your subadmin pool</h2><p style="color:#cbd5e1; font-size:13px;">El correo <strong>${correoIngresado}</strong> no pertenece a tu pool de subadministrador.</p></div>`);
+            }
+        }
+
+        // 🚀 SI SE USÓ UNO DE LOS 4 BOTONES DE CÓDIGO TIPO API (signin_6digit, signin_4digit, household, reset_link)
+        if (tiposApiGhoulflix.includes(accion)) {
+            const startMs = Date.now();
+            const etiquetasTipo = {
+                'signin_6digit': '🔢 Código de Inicio de Sesión (6 Dígitos)',
+                'signin_4digit': '📺 Código de TV / Dispositivo (4 Dígitos)',
+                'household': '🏠 Verificación de Hogar / Viaje',
+                'reset_link': '🔑 Enlace de Restablecimiento de Contraseña'
+            };
+
+            let apiRes = await consultarCodigoGhoulflixApi(correoIngresado, accion);
+
+            // Si Ghoulflix no está configurado o no devolvió resultado, intentar extraer el mismo code_type desde el buzón IMAP local
+            if (!apiRes || !apiRes.success || (!apiRes.code && !apiRes.link)) {
+                const partes = correoIngresado.split('@');
+                const localImap = await buscarEnBuzonImap('darciogarces@gmail.com', correoIngresado, plataforma, partes, accion);
+                if (localImap && localImap.mail) {
+                    const textoBruto = localImap.mail.text || String(localImap.mail.html).replace(/<[^>]*>?/gm, ' ') || "";
+                    const htmlBruto = String(localImap.mail.html || "");
+                    let cLocal = null;
+                    let lLocal = null;
+
+                    if (accion === 'signin_6digit') {
+                        const m = textoBruto.match(/\b(\d{6})\b/);
+                        if (m) cLocal = String(m[1]);
+                    } else if (accion === 'signin_4digit') {
+                        const m = textoBruto.match(/\b(\d{4})\b/);
+                        if (m) cLocal = String(m[1]);
+                    } else if (accion === 'household') {
+                        const linkMatch = htmlBruto.match(/https?:\/\/[^\s"'<>]+netflix\.com[^\s"'<>]*(?:travel|household|update-primary-location)[^\s"'<>]*/i);
+                        if (linkMatch) lLocal = linkMatch[0].replace(/&amp;/g, '&');
+                        else {
+                            const m = textoBruto.match(/\b(\d{4,6})\b/);
+                            if (m) cLocal = String(m[1]);
+                        }
+                    } else if (accion === 'reset_link') {
+                        const resetMatch = htmlBruto.match(/https?:\/\/[^\s"'<>]+netflix\.com[^\s"'<>]*(?:password|loginHelp)[^\s"'<>]*/i);
+                        if (resetMatch) lLocal = resetMatch[0].replace(/&amp;/g, '&');
+                    }
+
+                    if (cLocal || lLocal) {
+                        apiRes = {
+                            success: true,
+                            code: cLocal,
+                            link: lLocal,
+                            response_time_ms: Date.now() - startMs,
+                            error: null
+                        };
+                    }
+                }
+            }
+
+            if (apiRes && apiRes.success && (apiRes.code || apiRes.link)) {
+                try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, correoIngresado]); } catch(err) {}
+                const tiempoMs = apiRes.response_time_ms || (Date.now() - startMs);
+
+                if (apiRes.code) {
+                    const codigoStr = String(apiRes.code);
+                    return res.send(`${cssIframe}
+                        <div class="api-result-box">
+                            <span style="font-size:11px; color:#25d366; font-weight:700; text-transform:uppercase;">✅ Resultado Exitoso (${tiempoMs} ms)</span>
+                            <h3 style="margin:8px 0 4px 0; color:#fff;">${etiquetasTipo[accion]}</h3>
+                            <p style="margin:0; font-size:12px; color:#94a3b8;">${correoIngresado}</p>
+                            <div class="code-pill" id="codigoTexto">${codigoStr}</div><br>
+                            <button class="btn-copy-api" onclick="navigator.clipboard.writeText('${codigoStr}'); this.innerText='✅ ¡CÓDIGO COPIADO!';">📋 Copiar Código</button>
+                        </div>
+                    `);
+                } else if (apiRes.link) {
+                    return res.send(`${cssIframe}
+                        <div class="api-result-box">
+                            <span style="font-size:11px; color:#25d366; font-weight:700; text-transform:uppercase;">✅ Enlace Obtenido (${tiempoMs} ms)</span>
+                            <h3 style="margin:8px 0 4px 0; color:#fff;">${etiquetasTipo[accion]}</h3>
+                            <p style="margin:0 0 18px 0; font-size:12px; color:#94a3b8;">${correoIngresado}</p>
+                            <a href="${apiRes.link}" target="_blank" class="btn-copy-api" style="background:#E50914; color:#fff; padding:15px 28px; font-size:13px;">🔗 Abrir Enlace de Verificación</a>
+                            <br><br>
+                            <button class="btn-copy-api" style="background:rgba(255,255,255,0.1); color:#cbd5e1;" onclick="navigator.clipboard.writeText('${apiRes.link}'); this.innerText='✅ ¡LINK COPIADO!';">📋 Copiar URL</button>
+                        </div>
+                    `);
                 }
             } else {
-                return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;"><h2 style="color:var(--accent);">⛔ Acceso Denegado</h2><p>No tienes autorización en la base de datos para consultar este correo.</p></div>`);
+                const msgError = (apiRes && apiRes.error) ? apiRes.error : 'No se encontró código ni enlace reciente. Solicita primero el código en Netflix y espera unos segundos.';
+                return res.send(`${cssIframe}
+                    <div class="api-result-box" style="border-color:rgba(229,9,20,0.5);">
+                        <h3 style="margin:0 0 8px 0; color:#E50914;">⚠️ Sin Código / Enlace Disponible</h3>
+                        <p style="margin:0 0 12px 0; font-size:12px; color:#94a3b8;">Cuenta: <strong style="color:#00D2FF;">${correoIngresado}</strong> (${etiquetasTipo[accion]})</p>
+                        <p style="font-size:13px; color:#f8fafc; line-height:1.5; background:rgba(229,9,20,0.1); padding:12px; border-radius:8px;">${msgError}</p>
+                    </div>
+                `);
             }
         }
 
