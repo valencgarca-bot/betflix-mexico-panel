@@ -400,7 +400,7 @@ const CSS_MODERNO = `
     }
     .search-input-large:focus { border-color: var(--accent); box-shadow: 0 0 20px rgba(0,210,255,0.25); }
     
-    .iframe-container { display: none; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius); height: 560px; width: 100%; overflow: hidden; box-shadow: var(--shadow-elegant); }
+    .iframe-container { display: none; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; height: 560px; width: 100%; overflow: hidden; box-shadow: var(--shadow-elegant); }
     
     .side-card { background: var(--card-bg); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow-elegant); border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); }
     .side-card h4 { margin: 0 0 12px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; display: flex; align-items: center; gap: 6px; }
@@ -485,6 +485,28 @@ const CSS_MODERNO = `
         document.querySelectorAll('.sub-form').forEach(f => { if(f.id !== id) f.style.display = 'none'; });
         let el = document.getElementById(id);
         el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
+    }
+
+    function filtrarSelectorUsuarios(inputId, selectId) {
+        const input = document.getElementById(inputId);
+        const select = document.getElementById(selectId);
+        if (!input || !select) return;
+        const filtro = input.value.toLowerCase().trim();
+        let primerVisible = null;
+        for (let i = 0; i < select.options.length; i++) {
+            const opt = select.options[i];
+            if (opt.disabled) continue;
+            const texto = opt.text.toLowerCase();
+            if (texto.includes(filtro)) {
+                opt.style.display = '';
+                if (!primerVisible) primerVisible = opt;
+            } else {
+                opt.style.display = 'none';
+            }
+        }
+        if (filtro && primerVisible) {
+            select.value = primerVisible.value;
+        }
     }
 
     let lookupBusyUntil = 0;
@@ -1034,6 +1056,68 @@ app.post('/admin/asignar-correo', async (req, res) => {
     }
 });
 
+// 🗑️ NUEVA RUTA: BORRAR CORREOS MASIVAMENTE DE UN USUARIO ESPECÍFICO
+app.post('/admin/borrar-correos-masivo', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { user_id, correos_borrar } = req.body;
+
+    if (!user_id || !correos_borrar) {
+        return res.send("<script>alert('⛔ Debes seleccionar al usuario y pegar la lista de correos a borrar.'); window.location='/dash';</script>");
+    }
+
+    try {
+        const targetUserId = parseInt(user_id, 10);
+        const targetUser = await dbGet("SELECT id, user, creado_por FROM usuarios WHERE id = ?", [targetUserId]);
+
+        if (!targetUser) {
+            return res.send("<script>alert('⛔ El usuario seleccionado no existe.'); window.location='/dash';</script>");
+        }
+
+        // Si es Subadministrador, verificar que solo pueda borrar a sí mismo o a sus clientes directos
+        if (req.session.rol === 'Subadministrador') {
+            if (targetUser.id !== req.session.uid && targetUser.creado_por !== req.session.uid) {
+                return res.send("<script>alert('⛔ No tienes permiso para modificar los correos de este usuario.'); window.location='/dash';</script>");
+            }
+        }
+
+        // Extraer todos los correos pegados (soporta espacios, comas, saltos de línea o formato correo:clave)
+        const coincidencias = String(correos_borrar).match(/[a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/g) || [];
+        const correosUnicos = [...new Set(coincidencias.map(e => e.trim().toLowerCase()))];
+
+        if (correosUnicos.length === 0) {
+            return res.send("<script>alert('⛔ No se detectó ningún correo válido en el texto ingresado.'); window.location='/dash';</script>");
+        }
+
+        let eliminados = 0;
+        let noEncontrados = 0;
+
+        for (let email of correosUnicos) {
+            const asignacion = await dbGet("SELECT id FROM correos WHERE user_id = ? AND LOWER(email) = ?", [targetUserId, email]);
+            if (asignacion) {
+                await dbRun("DELETE FROM correos WHERE user_id = ? AND LOWER(email) = ?", [targetUserId, email]);
+                eliminados++;
+
+                // Si la cuenta ya no la tiene ningún otro usuario y estaba en stock como Asignada/Vendida a este usuario, liberarla a Disponible
+                const sigueAsignadoAOtro = await dbGet("SELECT id FROM correos WHERE LOWER(email) = ?", [email]);
+                if (!sigueAsignadoAOtro) {
+                    await dbRun(
+                        "UPDATE stock_cuentas SET estado = 'Disponible', comprador_id = NULL, compra_id = NULL, fecha_compra = NULL WHERE LOWER(email) = ? AND comprador_id = ?",
+                        [email, targetUserId]
+                    );
+                }
+            } else {
+                noEncontrados++;
+            }
+        }
+
+        const msg = `🗑️ Proceso completado para @${targetUser.user}:\\n\\n✅ Correos borrados de su cuenta: ${eliminados}\\n⚠️ Correos que no tenía asignados: ${noEncontrados}`;
+        res.send(`<script>alert('${msg}'); window.location='/dash';</script>`);
+    } catch (err) {
+        console.error(err);
+        res.send("<script>alert('Error al borrar los correos masivamente.'); window.location='/dash';</script>");
+    }
+});
+
 app.post('/admin/eliminar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
@@ -1574,7 +1658,10 @@ app.get('/dash', async (req, res) => {
                 </div>`;
             });
 
-            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => `<option value="${u.id}">${u.user} (${u.rol})</option>`).join('');
+            let clientesOpcionesHtml = usuarios.filter(u => u.rol === 'Cliente' || u.rol === 'Subadministrador').map(u => {
+                const totalCuentas = correos.filter(c => c.user_id === u.id).length;
+                return `<option value="${u.id}">${u.user} (${u.rol} - ${totalCuentas} correos)</option>`;
+            }).join('');
 
             if (esAdminPrincipal) {
                 panelesIzquierdosHtml += `
@@ -1972,6 +2059,7 @@ app.get('/dash', async (req, res) => {
             panelesIzquierdosHtml += `
             <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea nuevas cuentas de clientes o subadministradores para darles acceso al panel SyncBox.</p></div>
             <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
+            <div id="action-borrar-correos-masivo" class="action-panel"><h4 style="margin:0; font-size:11px; color:#E50914; text-transform:uppercase;">🗑️ Borrado Masivo</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Busca a un usuario (ej. Juan), pega sin límite los correos que no eran para él y bórralos de su perfil en un solo clic.</p></div>
             <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra tus usuarios directos y registros públicos.</p></div>
             <div id="action-garantias-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🚨 Garantías</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Gestiona alertas de caídas y entrega reemplazos en tiempo real.</p></div>
             <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🛒 Reservas</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Revisa las peticiones manuales enviadas por tus clientes.</p></div>
@@ -2185,6 +2273,28 @@ app.get('/dash', async (req, res) => {
                             </form>
                         </div>
 
+                        <div id="main-borrar-correos-masivo" class="main-card">
+                            <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color:#E50914;">🗑️ Borrar Correos Masivamente a un Usuario</h3>
+                            <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
+                                Busca al usuario (ej. Juan), selecciónalo y pega sin límite todos los correos que deseas quitarle de su cuenta (20, 50 o los que necesites).
+                            </p>
+                            <form action="/admin/borrar-correos-masivo" method="POST" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(229, 9, 20, 0.35);">
+                                <div style="margin-bottom: 14px;">
+                                    <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar y seleccionar usuario:</label>
+                                    <input type="text" id="buscador-user-borrar" class="input-classic" placeholder="🔎 Escribe aquí para filtrar el nombre (ej: juan)..." oninput="filtrarSelectorUsuarios('buscador-user-borrar', 'select-user-borrar')" style="margin-bottom: 8px; border-color: rgba(0, 210, 255, 0.4);">
+                                    <select id="select-user-borrar" name="user_id" class="input-classic" style="margin-bottom:0;" required>
+                                        <option value="" disabled selected>-- Selecciona al usuario --</option>
+                                        ${clientesOpcionesHtml}
+                                    </select>
+                                </div>
+                                <div style="margin-bottom: 15px;">
+                                    <label style="color: #E50914; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pega los correos que le vas a borrar (sin límite):</label>
+                                    <textarea name="correos_borrar" class="input-classic" style="margin-bottom:0;" placeholder="correo1@gmail.com&#10;correo2@gmail.com&#10;correo3@hotmail.com..." rows="8" required></textarea>
+                                </div>
+                                <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;" onclick="return confirm('⚠️ ¿Seguro que deseas borrarle todos estos correos al usuario seleccionado?');">🗑️ Borrarle estos correos al usuario</button>
+                            </form>
+                        </div>
+
                         <div id="main-base-datos" class="main-card">
                             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                                 <h3 style="margin:0; font-size:19px; font-weight:600; color:#00D2FF;">🗄️ Base de Datos SyncBox</h3>
@@ -2242,6 +2352,7 @@ app.get('/dash', async (req, res) => {
                                 <div class="menu-group-label">Gestión de Usuarios</div>
                                 <button class="menu-btn-item" data-tab="crear-user" onclick="openTab('crear-user')">👤 Crear Usuario</button>
                                 <button class="menu-btn-item" data-tab="usuarios" onclick="openTab('usuarios')">📧 Asignar Correos</button>
+                                <button class="menu-btn-item" data-tab="borrar-correos-masivo" onclick="openTab('borrar-correos-masivo')" style="color: #E50914;">🗑️ Borrar Correos (Masivo)</button>
                                 <button class="menu-btn-item" data-tab="base-datos" onclick="openTab('base-datos')">🗄️ Ver Base de Datos</button>
                                 
                                 <div class="menu-group-label">Soporte y Pedidos</div>
@@ -2712,7 +2823,7 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        // 🚀 LÓGICA DE DETECCIÓN INTELIGENTE DE PAÍS
+        // 🚀 LÓGICA DE DETECCIÓN INTELUGUENTE DE PAÍS
         if (accion === 'pais') {
             let paisDetectado = null;
             
