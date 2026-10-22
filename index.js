@@ -1573,54 +1573,38 @@ app.get('/dash', async (req, res) => {
 
                 if (key === 'netflix') {
                     controlesIzquierda += `
-                        <div class="api-grid-btns">
-                            <button onclick="triggerAction('${key}', 'signin_6digit')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.12); border-color: #00D2FF; color: #fff;">🔢 Código 6 Díg.</button>
-                            <button onclick="triggerAction('${key}', 'signin_4digit')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.12); border-color: #00D2FF; color: #fff;">📺 Código TV 4 Díg.</button>
-                            <button onclick="triggerAction('${key}', 'household')" class="action-btn-pill" style="background: rgba(37, 211, 102, 0.14); border-color: #25d366; color: #fff;">🏠 Hogar / Viaje</button>
-                            <button onclick="triggerAction('${key}', 'reset_link')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.14); border-color: #ff7300; color: #fff;">🔑 Link Contraseña</button>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 15px; background: rgba(229, 9, 20, 0.1); padding: 8px; border-radius: 8px; border: 1px solid rgba(229, 9, 20, 0.3);">
+                            <img src="${plat.logo}" alt="Netflix" style="height: 16px; filter: drop-shadow(0 0 5px rgba(229,9,20,0.8));">
+                            <span style="font-size: 11px; font-weight: 700; color: #E50914; text-transform: uppercase; letter-spacing: 1px;">Códigos Rápidos</span>
                         </div>
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.15); color: #fff; border: 1px solid #E50914; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px;">
-                            <img src="${plat.logo}" alt="Netflix" style="height: 14px;"> BUSCAR BUZÓN COMPLETO
-                        </button>
-                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.08); color: #00D2FF; border: 1px solid rgba(0, 210, 255, 0.4);">🌍 Ver País de la Cuenta</button>
+                        <div class="api-grid-btns" style="gap: 12px;">
+                            <button onclick="triggerAction('${key}', 'signin_6digit')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.08); border-color: rgba(0, 210, 255, 0.3); color: #fff; padding: 16px 5px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 12px;">
+                                <span style="font-size: 22px;">🔢</span>
+                                <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">CÓD. 6 DÍG.</span>
+                            </button>
+                            <button onclick="triggerAction('${key}', 'signin_4digit')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.08); border-color: rgba(0, 210, 255, 0.3); color: #fff; padding: 16px 5px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 12px;">
+                                <span style="font-size: 22px;">📺</span>
+                                <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">CÓD. 4 DÍG.</span>
+                            </button>
+                            <button onclick="triggerAction('${key}', 'household')" class="action-btn-pill" style="background: rgba(37, 211, 102, 0.1); border-color: rgba(37, 211, 102, 0.3); color: #fff; padding: 16px 5px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 12px;">
+                                <span style="font-size: 22px;">🏠</span>
+                                <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">HOGAR / VIAJE</span>
+                            </button>
+                            <button onclick="triggerAction('${key}', 'reset_link')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.1); border-color: rgba(255, 115, 0, 0.3); color: #fff; padding: 16px 5px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 12px;">
+                                <span style="font-size: 22px;">🔑</span>
+                                <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">CONTRASEÑA</span>
+                            </button>
+                        </div>
                     `;
                 } else {
                     controlesIzquierda += `
-                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none;">🔎 Extraer Código Original</button>
-                        <button onclick="triggerAction('${key}', 'pais')" class="action-btn-pill" style="background: rgba(0, 210, 255, 0.1); color: #00D2FF; border: 1px solid rgba(0, 210, 255, 0.5);">🌍 Ver País de la Cuenta</button>
-                    `;
-                }
-                
-                controlesIzquierda += `
-                    <button onclick="toggleSubForm('reserva-${key}')" class="action-btn-pill">🛒 Reservar Cuentas (Manual)</button>
-                    <div id="reserva-${key}" class="sub-form">
-                        <form action="/bot/reservar" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">🛒 Pedido Manual</h5>
-                            <input type="number" name="cantidad" min="1" max="10" placeholder="Cantidad (1 a 10)" class="input-classic" required>
-                            <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir + y código de país" class="input-classic" required>
-                            <button type="submit" class="btn-submit">Enviar Pedido</button>
-                        </form>
-                    </div>
-                `;
-
-                if (esAdminPrincipal || esSubAdmin) {
-                    controlesIzquierda += `
-                    <button onclick="toggleSubForm('garantia-${key}')" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: rgba(229, 9, 20, 0.5); color: #fff;">🛡️ Pedir Garantía</button>
-                    <div id="garantia-${key}" class="sub-form" style="border-color: #E50914;">
-                        <form action="/bot/garantia" method="POST">
-                            <h5 style="margin: 0 0 10px 0; color: #E50914;">🛡️ Reportar Caída</h5>
-                            <input type="hidden" name="plataforma" value="${key}">
-                            <input type="text" name="motivo" placeholder="Motivo (Ej. Clave Incorrecta)" class="input-classic" required>
-                            <textarea name="detalles" placeholder="Detalles de la cuenta..." class="input-classic" rows="3" required></textarea>
-                            <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;">Reportar Falla</button>
-                        </form>
-                    </div>
+                        <button onclick="triggerAction('${key}', 'mensaje')" class="action-btn-pill" style="background: var(--accent); color: #000; border: none; padding: 12px; margin-bottom: 8px;">🔎 Extraer Código Original</button>
                     `;
                 }
 
                 if (esSubAdmin) {
                     controlesIzquierda += `
-                    <button onclick="toggleSubForm('soporte-${key}')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.12); border-color: rgba(255, 115, 0, 0.5);">🛠️ Pedir Soporte (SubAdmin)</button>
+                    <button onclick="toggleSubForm('soporte-${key}')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.12); border-color: rgba(255, 115, 0, 0.5); margin-top: 10px;">🛠️ Pedir Soporte (SubAdmin)</button>
                     <div id="soporte-${key}" class="sub-form" style="border-color: #ff7300;">
                         <p style="font-size: 11px; margin-bottom: 10px;">Comunícate directo con el jefe por pagos o ayudas técnicas.</p>
                         <textarea class="input-classic" rows="2" placeholder="Describe el problema..."></textarea>
@@ -1993,76 +1977,11 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            if (esAdminPrincipal || esSubAdmin) {
-                let listadoReservas = "";
-                let reservasPendientes = reservas.filter(r => r.estado === 'Pendiente');
-                if(reservasPendientes.length === 0) {
-                    listadoReservas = "<p style='color:var(--text-muted); font-size:12px;'>No hay reservas pendientes en este momento.</p>";
-                } else {
-                    reservasPendientes.forEach(r => {
-                        listadoReservas += `
-                        <div style="background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.25); padding: 15px; border-radius: 10px; margin-bottom: 12px;">
-                            <strong style="color: var(--accent);">🛒 PEDIDO MANUAL: ${r.cantidad} Cuentas</strong>
-                            <p style="margin: 6px 0; font-size: 12px;"><strong>Cliente:</strong> ${r.cliente_nombre} | <strong>WhatsApp:</strong> ${formatearTelefono(r.telefono) || 'N/A'}</p>
-                            <p style="margin: 4px 0 12px 0; font-size: 11px; color: var(--text-muted);"><strong>Fecha:</strong> ${r.fecha}</p>
-                            <form action="/admin/completar-reserva" method="POST" style="margin:0;">
-                                <input type="hidden" name="reserva_id" value="${r.id}">
-                                <button type="submit" class="btn-submit" style="background: #25d366; width: auto; padding: 8px 16px; font-size:11px;">Marcar como Atendido</button>
-                            </form>
-                        </div>`;
-                    });
-                }
-
-                panelesCentroHtml += `
-                <div id="main-reservas-admin" class="main-card">
-                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: var(--accent);">🛒 Reservas (Proceso Manual)</h3>
-                    <div style="max-height: 420px; overflow-y: auto; padding-right: 6px;">
-                        ${listadoReservas}
-                    </div>
-                </div>`;
-            }
-
-            if (esAdminPrincipal || esSubAdmin) {
-                let listadoGarantias = "";
-                if(garantias.length === 0) listadoGarantias = "<p style='color:var(--text-muted); font-size:12px;'>No hay garantías activas.</p>";
-                garantias.forEach(g => {
-                    if(g.estado === 'Pendiente') {
-                        listadoGarantias += `
-                        <div style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; padding: 15px; border-radius: 10px; margin-bottom: 12px;">
-                            <strong style="color: #E50914;">🔴 ALERTA: Caída de ${g.plataforma.toUpperCase()}</strong>
-                            <p style="margin: 6px 0; font-size: 12px;"><strong>Cliente:</strong> ${g.cliente_nombre} | <strong>Motivo:</strong> ${g.motivo}</p>
-                            <p style="margin: 4px 0 12px 0; font-size: 12px; color: #cbd5e1;"><strong>Detalles:</strong> ${g.detalles}</p>
-                            <form action="/admin/resolver-garantia" method="POST" style="display:flex; gap:10px; margin:0;">
-                                <input type="hidden" name="garantia_id" value="${g.id}">
-                                <input type="text" name="reemplazo" class="input-classic" style="margin:0; padding:10px;" placeholder="Pega aquí la nueva cuenta..." required>
-                                <button type="submit" class="btn-submit" style="background: #25d366; width: auto; padding: 0 18px;">Solucionar</button>
-                            </form>
-                        </div>`;
-                    } else {
-                        listadoGarantias += `
-                        <div style="background: rgba(37, 211, 102, 0.08); border: 1px solid rgba(37, 211, 102, 0.4); padding: 12px; border-radius: 10px; margin-bottom: 10px;">
-                            <strong style="color: #25d366; font-size:12px;">🟢 RESUELTO (${g.plataforma.toUpperCase()})</strong>
-                            <p style="margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1;"><strong>Cliente:</strong> ${g.cliente_nombre} | <strong>Entregada:</strong> ${g.reemplazo}</p>
-                        </div>`;
-                    }
-                });
-
-                panelesCentroHtml += `
-                <div id="main-garantias-admin" class="main-card">
-                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: #E50914;">🚨 Central de Garantías</h3>
-                    <div style="max-height: 420px; overflow-y: auto; padding-right: 6px;">
-                        ${listadoGarantias}
-                    </div>
-                </div>`;
-            }
-
             panelesIzquierdosHtml += `
             <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea nuevas cuentas de clientes o subadministradores para darles acceso al panel SyncBox.</p></div>
             <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
             <div id="action-borrar-correos-masivo" class="action-panel"><h4 style="margin:0; font-size:11px; color:#E50914; text-transform:uppercase;">🗑️ Borrado Masivo</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Busca a un usuario (ej. Juan), pega sin límite los correos que no eran para él y bórralos de su perfil en un solo clic.</p></div>
             <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra tus usuarios directos y registros públicos.</p></div>
-            <div id="action-garantias-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🚨 Garantías</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Gestiona alertas de caídas y entrega reemplazos en tiempo real.</p></div>
-            <div id="action-reservas-admin" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🛒 Reservas</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Revisa las peticiones manuales enviadas por tus clientes.</p></div>
             `;
             
             let tablaUsuariosHtml = "";
@@ -2339,10 +2258,6 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" data-tab="usuarios" onclick="openTab('usuarios')">📧 Asignar Correos</button>
                                 <button class="menu-btn-item" data-tab="borrar-correos-masivo" onclick="openTab('borrar-correos-masivo')" style="color: #E50914;">🗑️ Borrado Masivo</button>
                                 <button class="menu-btn-item" data-tab="base-datos" onclick="openTab('base-datos')">🗄️ Ver Base de Datos</button>
-                                
-                                <div class="menu-group-label">Soporte y Pedidos</div>
-                                <button class="menu-btn-item" data-tab="reservas-admin" onclick="openTab('reservas-admin')" style="color: var(--accent);">🛒 Reservas Manuales</button>
-                                <button class="menu-btn-item" data-tab="garantias-admin" onclick="openTab('garantias-admin')" style="color: #E50914;">🚨 Alertas y Garantías</button>
                                 ` : ''}
                             </div>
 
