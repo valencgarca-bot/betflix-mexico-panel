@@ -1184,6 +1184,39 @@ app.post('/stock/cargar', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
+// 🗑️ NUEVO BOTÓN: ELIMINAR STOCK ESPECÍFICO MASIVAMENTE (ADMIN Y SUBADMIN)
+app.post('/stock/eliminar-masivo', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { correos_eliminar } = req.body;
+    
+    const coincidencias = String(correos_eliminar).match(/[a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/g) || [];
+    const correosUnicos = [...new Set(coincidencias.map(e => e.trim().toLowerCase()))];
+
+    if (correosUnicos.length === 0) {
+        return res.send("<script>alert('⛔ No se detectó ningún correo válido en el texto ingresado.'); window.location='/dash';</script>");
+    }
+
+    let eliminados = 0;
+    let noEncontrados = 0;
+
+    try {
+        for (let email of correosUnicos) {
+            const cuenta = await dbGet("SELECT id FROM stock_cuentas WHERE email = ? AND propietario_id = ?", [email, req.session.uid]);
+            if (cuenta) {
+                await dbRun("DELETE FROM stock_cuentas WHERE id = ?", [cuenta.id]);
+                eliminados++;
+            } else {
+                noEncontrados++;
+            }
+        }
+        res.send(`<script>alert('🗑️ Proceso de limpieza de stock completado:\\n\\n✅ Cuentas eliminadas de tu inventario: ${eliminados}\\n⚠️ Cuentas no encontradas o que ya no te pertenecen: ${noEncontrados}'); window.location='/dash';</script>`);
+    } catch (e) {
+        console.error(e);
+        res.redirect('/dash');
+    }
+});
+
+
 app.post('/admin/vaciar-stock-disponible', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     try {
@@ -1757,12 +1790,18 @@ app.get('/dash', async (req, res) => {
                         <button type="submit" class="btn-submit">Ingresar al Inventario Seguro</button>
                     </form>
 
-                    <div style="margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas del Stock</h4>
+                    <form action="/stock/eliminar-masivo" method="POST">
+                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error para borrarlos de tu inventario (correo1@gmail.com&#10;correo2@hotmail.com...)" rows="3" required></textarea>
+                        <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas específicas de tu inventario?');">Borrar Cuentas Ingresadas</button>
+                    </form>
+
+                    <div style="margin-top: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
                         <form action="/admin/vaciar-stock-disponible" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK DISPONIBLE (No Vendido)? Esta acción no se puede deshacer.');">
-                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar Stock NO Vendido</button>
+                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar TODO Stock NO Vendido</button>
                         </form>
                         <form action="/admin/vaciar-stock-vendido" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK VENDIDO/ASIGNADO? Esto limpiará la lista visual pero los clientes conservarán sus correos.');">
-                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar Stock Vendido</button>
+                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar TODO Stock Vendido</button>
                         </form>
                     </div>
 
@@ -1954,6 +1993,12 @@ app.get('/dash', async (req, res) => {
                         <input type="hidden" name="plataforma" value="netflix">
                         <textarea name="correos_stock" class="input-classic" placeholder="correo@gmail.com:clave123..." rows="5" required></textarea>
                         <button type="submit" class="btn-submit">Subir Cuentas a mi Inventario</button>
+                    </form>
+
+                    <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas de mi Stock</h4>
+                    <form action="/stock/eliminar-masivo" method="POST">
+                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error (correo1@gmail.com&#10;correo2@hotmail.com...)" rows="3" required></textarea>
+                        <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas de tu inventario?');">Borrar Cuentas Ingresadas</button>
                     </form>
                 </div>
 
