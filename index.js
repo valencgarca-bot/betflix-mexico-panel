@@ -1056,7 +1056,7 @@ app.post('/admin/asignar-correo', async (req, res) => {
     }
 });
 
-// 🗑️ NUEVA RUTA: BORRAR CORREOS MASIVAMENTE DE UN USUARIO ESPECÍFICO
+// 🗑️ BORRAR CORREOS MASIVAMENTE DE UN USUARIO ESPECÍFICO
 app.post('/admin/borrar-correos-masivo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { user_id, correos_borrar } = req.body;
@@ -1073,14 +1073,12 @@ app.post('/admin/borrar-correos-masivo', async (req, res) => {
             return res.send("<script>alert('⛔ El usuario seleccionado no existe.'); window.location='/dash';</script>");
         }
 
-        // Si es Subadministrador, verificar que solo pueda borrar a sí mismo o a sus clientes directos
         if (req.session.rol === 'Subadministrador') {
             if (targetUser.id !== req.session.uid && targetUser.creado_por !== req.session.uid) {
                 return res.send("<script>alert('⛔ No tienes permiso para modificar los correos de este usuario.'); window.location='/dash';</script>");
             }
         }
 
-        // Extraer todos los correos pegados (soporta espacios, comas, saltos de línea o formato correo:clave)
         const coincidencias = String(correos_borrar).match(/[a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/g) || [];
         const correosUnicos = [...new Set(coincidencias.map(e => e.trim().toLowerCase()))];
 
@@ -1097,7 +1095,6 @@ app.post('/admin/borrar-correos-masivo', async (req, res) => {
                 await dbRun("DELETE FROM correos WHERE user_id = ? AND LOWER(email) = ?", [targetUserId, email]);
                 eliminados++;
 
-                // Si la cuenta ya no la tiene ningún otro usuario y estaba en stock como Asignada/Vendida a este usuario, liberarla a Disponible
                 const sigueAsignadoAOtro = await dbGet("SELECT id FROM correos WHERE LOWER(email) = ?", [email]);
                 if (!sigueAsignadoAOtro) {
                     await dbRun(
@@ -1117,6 +1114,127 @@ app.post('/admin/borrar-correos-masivo', async (req, res) => {
         res.send("<script>alert('Error al borrar los correos masivamente.'); window.location='/dash';</script>");
     }
 });
+
+// 🔎 NUEVO: RUTA PARA BUSCAR Y AUDITAR CORREOS GLOBALMENTE
+app.post('/admin/auditar-cuentas', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.status(403).send('No autorizado.');
+    const { correos_auditar } = req.body;
+    
+    // Extraer correos
+    const coincidencias = String(correos_auditar).match(/[a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/g) || [];
+    const correosUnicos = [...new Set(coincidencias.map(e => e.trim().toLowerCase()))];
+
+    if (correosUnicos.length === 0) {
+        return res.send(`<style>body{color:#fff;font-family:sans-serif; background: transparent; padding: 20px;}</style><h3 style="color:#E50914;">⛔ No se detectaron correos válidos en el texto.</h3>`);
+    }
+
+    try {
+        const placeholders = correosUnicos.map(() => '?').join(',');
+        const query = `
+            SELECT c.email, u.id as user_id, u.user as dueno, u.creado_por 
+            FROM correos c 
+            JOIN usuarios u ON c.user_id = u.id 
+            WHERE LOWER(c.email) IN (${placeholders})
+        `;
+        const encontradas = await dbAll(query, correosUnicos);
+        
+        let cuentasPermitidas = [];
+        if (req.session.rol === 'Administrador') {
+            cuentasPermitidas = encontradas;
+        } else {
+            cuentasPermitidas = encontradas.filter(c => c.user_id === req.session.uid || c.creado_por === req.session.uid);
+        }
+
+        // Construir la interfaz de respuesta
+        let html = `
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+                body { font-family: 'Inter', sans-serif; background: transparent; color: #fff; margin: 0; padding: 20px; }
+                .table-modern { width: 100%; border-collapse: collapse; background: rgba(10, 14, 22, 0.95); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255, 115, 0, 0.3); }
+                .table-modern th, .table-modern td { padding: 12px 15px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px; }
+                .table-modern th { color: #ff7300; font-size: 11px; text-transform: uppercase; background: rgba(255, 255, 255, 0.03); letter-spacing: 1px; }
+                .btn-delete { background: #E50914; color: #fff; padding: 14px 20px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 20px; text-transform: uppercase; font-size: 12px; transition: 0.3s; }
+                .btn-delete:hover { box-shadow: 0 0 20px rgba(229,9,20,0.6); }
+            </style>
+            <h3 style="color:#ff7300; margin-top:0; font-size: 22px;">🔎 Resultados de Auditoría</h3>
+            <p style="font-size:13px; color:#cbd5e1; margin-bottom: 20px;">Se encontraron <strong>${cuentasPermitidas.length} cuentas asignadas</strong> de las ${correosUnicos.length} ingresadas.</p>
+        `;
+
+        if (cuentasPermitidas.length > 0) {
+            // Se envía un array de correos para que la ruta de limpieza los procese
+            const emailsAEliminar = cuentasPermitidas.map(c => c.email);
+            
+            // Re-escapar la data JSON para inyectarla segura en el HTML
+            const jsonSeguro = JSON.stringify(emailsAEliminar).replace(/"/g, '&quot;');
+
+            html += `
+            <form action="/admin/ejecutar-limpieza-global" method="POST" target="_top">
+                <input type="hidden" name="emails_json" value="${jsonSeguro}">
+                <div style="max-height: 350px; overflow-y: auto; border-radius: 10px; border: 1px solid rgba(255, 115, 0, 0.3);">
+                    <table class="table-modern">
+                        <thead><tr><th>Correo</th><th>Usuario Dueño</th></tr></thead>
+                        <tbody>
+                            ${cuentasPermitidas.map(c => `<tr><td style="color:#00D2FF; font-family:monospace; font-weight:600;">${c.email}</td><td>@${c.dueno}</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <button type="submit" class="btn-delete" onclick="return confirm('⚠️ ATENCIÓN: Se eliminarán ESTAS ${cuentasPermitidas.length} CUENTAS de sus respectivos dueños simultáneamente. ¿Confirmas la acción?');">
+                    🗑️ Eliminar todas estas cuentas de sus dueños
+                </button>
+            </form>`;
+        } else {
+            html += `<div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; text-align:center; color: #94a3b8;">Ninguna de las cuentas buscadas pertenece a tus clientes o no están asignadas.</div>`;
+        }
+
+        res.send(html);
+    } catch (e) {
+        console.error(e);
+        res.send(`<p style="color:#E50914;">Error interno al procesar la auditoría.</p>`);
+    }
+});
+
+// 🗑️ NUEVO: EJECUTAR LIMPIEZA GLOBAL DESDE LA AUDITORÍA
+app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    
+    try {
+        const emails = JSON.parse(req.body.emails_json || '[]');
+        if (!emails.length) return res.send("<script>alert('No hay correos para procesar.'); window.location='/dash';</script>");
+
+        let eliminados = 0;
+        for (let email of emails) {
+            // Validar asignación real al momento de borrar
+            const asig = await dbGet(`
+                SELECT c.id, c.user_id, u.creado_por 
+                FROM correos c JOIN usuarios u ON c.user_id = u.id 
+                WHERE c.email = ?
+            `, [email]);
+
+            if (asig) {
+                let permitido = req.session.rol === 'Administrador' || (req.session.rol === 'Subadministrador' && (asig.user_id === req.session.uid || asig.creado_por === req.session.uid));
+                
+                if (permitido) {
+                    await dbRun("DELETE FROM correos WHERE id = ?", [asig.id]);
+                    
+                    // Liberar stock para que vuelva a estar 'Disponible' si ya no tiene dueños
+                    const sigueAsignadoAOtro = await dbGet("SELECT id FROM correos WHERE LOWER(email) = ?", [email]);
+                    if (!sigueAsignadoAOtro) {
+                        await dbRun(
+                            "UPDATE stock_cuentas SET estado = 'Disponible', comprador_id = NULL, compra_id = NULL, fecha_compra = NULL WHERE LOWER(email) = ?",
+                            [email]
+                        );
+                    }
+                    eliminados++;
+                }
+            }
+        }
+        res.send(`<script>alert('✅ Limpieza Global exitosa. Se eliminaron ${eliminados} cuentas de los usuarios.'); window.location='/dash';</script>`);
+    } catch(e) {
+        console.error(e);
+        res.send("<script>alert('Error al ejecutar la limpieza global masiva.'); window.location='/dash';</script>");
+    }
+});
+
 
 app.post('/admin/eliminar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
@@ -1184,7 +1302,7 @@ app.post('/stock/cargar', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🗑️ NUEVO BOTÓN: ELIMINAR STOCK ESPECÍFICO MASIVAMENTE (ADMIN Y SUBADMIN)
+// 🗑️ ELIMINAR STOCK ESPECÍFICO MASIVAMENTE (ADMIN Y SUBADMIN)
 app.post('/stock/eliminar-masivo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { correos_eliminar } = req.body;
@@ -2026,6 +2144,7 @@ app.get('/dash', async (req, res) => {
             <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea nuevas cuentas de clientes o subadministradores para darles acceso al panel SyncBox.</p></div>
             <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
             <div id="action-borrar-correos-masivo" class="action-panel"><h4 style="margin:0; font-size:11px; color:#E50914; text-transform:uppercase;">🗑️ Borrado Masivo</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Busca a un usuario (ej. Juan), pega sin límite los correos que no eran para él y bórralos de su perfil en un solo clic.</p></div>
+            <div id="action-auditoria-global" class="action-panel"><h4 style="margin:0; font-size:11px; color:#ff7300; text-transform:uppercase;">🔎 Limpieza Global</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Pega una lista de correos mezclados. El sistema detectará quiénes son los dueños y te permitirá borrarlos todos de una vez.</p></div>
             <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra tus usuarios directos y registros públicos.</p></div>
             `;
             
@@ -2114,6 +2233,25 @@ app.get('/dash', async (req, res) => {
                         usuariosVisibles.forEach(u => tablaUsuariosHtml += renderRow(u));
                     }
                 }
+            }
+
+            // AÑADIMOS EL PANEL CENTRAL DE LA AUDITORÍA GLOBAL
+            if (esAdminPrincipal || esSubAdmin) {
+                panelesCentroHtml += `
+                <div id="main-auditoria-global" class="main-card">
+                    <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color:#ff7300;">🔎 Buscar y Limpiar Cuentas Masivamente</h3>
+                    <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
+                        Pega 20, 30 o más cuentas (incluso de clientes diferentes). El sistema te mostrará en el visor de abajo <b>a qué usuarios pertenecen</b> y te dará la opción de <b>quitárselas a todos</b> de una vez.
+                    </p>
+                    <form action="/admin/auditar-cuentas" method="POST" target="marco_resultados" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(255, 115, 0, 0.35);" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
+                        <div style="margin-bottom: 15px;">
+                            <label style="color: #ff7300; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">Pega la lista de correos a investigar / borrar:</label>
+                            <textarea name="correos_auditar" class="input-classic" style="margin-bottom:0;" placeholder="correo1@gmail.com&#10;correo2@hotmail.com..." rows="8" required></textarea>
+                        </div>
+                        <button type="submit" class="btn-submit" style="background: #ff7300; color: #fff;">🔎 Buscar Dueños de estas Cuentas</button>
+                    </form>
+                </div>
+                `;
             }
 
             let botonesContactoProveedor = "";
@@ -2302,6 +2440,7 @@ app.get('/dash', async (req, res) => {
                                 <button class="menu-btn-item" data-tab="crear-user" onclick="openTab('crear-user')">👤 Crear Usuario</button>
                                 <button class="menu-btn-item" data-tab="usuarios" onclick="openTab('usuarios')">📧 Asignar Correos</button>
                                 <button class="menu-btn-item" data-tab="borrar-correos-masivo" onclick="openTab('borrar-correos-masivo')" style="color: #E50914;">🗑️ Borrado Masivo</button>
+                                <button class="menu-btn-item" data-tab="auditoria-global" onclick="openTab('auditoria-global')" style="color: #ff7300;">🔎 Limpieza Global</button>
                                 <button class="menu-btn-item" data-tab="base-datos" onclick="openTab('base-datos')">🗄️ Ver Base de Datos</button>
                                 ` : ''}
                             </div>
