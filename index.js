@@ -43,7 +43,6 @@ const GHOULFLIX_SERVER_LOGIN = Object.freeze({
 let ghoulflixLoginPending = null;
 let ghoulflixServerToken = '';
 
-
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#ffffff', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
@@ -59,10 +58,14 @@ const PRECIOS_BASE = {
     10: 1560
 };
 
-// 📌 TASA DE CAMBIO CONFIGURABLE (Ej. 1 MXN = 176 COP)
+// 📌 PRECIO BASE UNITARIO PERFIL EXTRA (50 PESOS MEXICANOS)
+const PRECIO_BASE_PERFIL_EXTRA_MXN = 50;
+
+// 📌 TASAS DE CAMBIO CONFIGURABLES (BASE MXN = 1)
 const TASAS_CAMBIO = {
     'MXN': 1,
-    'COP': 176
+    'COP': 176,
+    'ARS': 65
 };
 
 // 📌 Validador estricto: Verifica que el número tenga obligatoriamente + y código de país
@@ -88,25 +91,32 @@ function obtenerMonedaPorTelefono(telefono) {
     let tel = telefono.replace(/\s+/g, '');
     if (tel.startsWith('+57')) return 'COP';
     if (tel.startsWith('+52')) return 'MXN';
+    if (tel.startsWith('+54')) return 'ARS';
     return 'MXN';
 }
 
 function convertirLocal(montoMXN, monedaLocal) {
     if (monedaLocal === 'COP') {
-        return Math.round((montoMXN * TASAS_CAMBIO.COP) / 100) * 100;
+        return Math.round((montoMXN * (TASAS_CAMBIO.COP || 176)) / 100) * 100;
+    }
+    if (monedaLocal === 'ARS') {
+        return Math.round((montoMXN * (TASAS_CAMBIO.ARS || 65)) / 10) * 10;
     }
     return Math.round(montoMXN * 100) / 100;
 }
 
 function convertirAMXN(montoLocal, monedaLocal) {
-    if (monedaLocal === 'COP') return montoLocal / TASAS_CAMBIO.COP;
+    if (monedaLocal === 'COP') return montoLocal / (TASAS_CAMBIO.COP || 176);
+    if (monedaLocal === 'ARS') return montoLocal / (TASAS_CAMBIO.ARS || 65);
     return montoLocal;
 }
 
 function formatearDinero(montoMXN, monedaLocal) {
     if (!montoMXN) montoMXN = 0;
     const convertido = convertirLocal(montoMXN, monedaLocal);
-    return `$${convertido.toLocaleString('es-CO')} ${monedaLocal}`;
+    const localeMap = { 'COP': 'es-CO', 'ARS': 'es-AR', 'MXN': 'es-MX' };
+    const locale = localeMap[monedaLocal] || 'es-MX';
+    return `$${convertido.toLocaleString(locale)} ${monedaLocal}`;
 }
 
 app.use(express.urlencoded({ extended: true }));
@@ -130,6 +140,7 @@ db.serialize(() => {
         if (!err) {
             db.run("UPDATE usuarios SET moneda = 'COP' WHERE telefono LIKE '+57%'", (err) => {});
             db.run("UPDATE usuarios SET moneda = 'MXN' WHERE telefono LIKE '+52%'", (err) => {});
+            db.run("UPDATE usuarios SET moneda = 'ARS' WHERE telefono LIKE '+54%'", (err) => {});
         }
     });
     
@@ -147,6 +158,7 @@ db.serialize(() => {
     db.run("ALTER TABLE stock_cuentas ADD COLUMN password TEXT", (err) => {});
 
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+    db.run("ALTER TABLE compras_stock ADD COLUMN tipo_producto TEXT DEFAULT 'cuenta_completa'", (err) => {});
     
     db.run("CREATE TABLE IF NOT EXISTS detalles_compras (id INTEGER PRIMARY KEY AUTOINCREMENT, compra_id INTEGER, cuenta_id INTEGER, email_cuenta TEXT)");
     db.run("ALTER TABLE detalles_compras ADD COLUMN password_cuenta TEXT", (err) => {});
@@ -168,6 +180,9 @@ db.serialize(() => {
     db.run("ALTER TABLE stock_cuentas ADD COLUMN propietario_id INTEGER DEFAULT 1", (err) => {});
     db.run("CREATE TABLE IF NOT EXISTS precios_subadmin (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, paquete INTEGER, precio REAL, UNIQUE(subadmin_id, paquete))");
     db.run("CREATE TABLE IF NOT EXISTS historial_dinero (id INTEGER PRIMARY KEY AUTOINCREMENT, emisor_id INTEGER, receptor_id INTEGER, monto REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+
+    // 📌 NUEVA TABLA: STOCK EXCLUSIVO PARA PERFILES EXTRA
+    db.run("CREATE TABLE IF NOT EXISTS stock_perfiles_extra (id INTEGER PRIMARY KEY AUTOINCREMENT, perfil_info TEXT, password TEXT, estado TEXT DEFAULT 'Disponible', propietario_id INTEGER DEFAULT 1, comprador_id INTEGER, compra_id INTEGER, fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')), fecha_compra DATETIME)");
 });
 
 // =========================================================================
@@ -261,7 +276,6 @@ async function consultarCodigoGhoulflixApi(email, code_type, signal) {
             code_type: code_type
         }, signal);
 
-        // Si el token expiró (401 o error de autenticación), re-autenticar automáticamente 1 vez
         if ((resp.statusCode === 401 || (resp.data && resp.data.error && /authentication required|invalid token|token expired|expired token/i.test(resp.data.error))) && cfg.login_id && cfg.password) {
             const relogin = await loginEnGhoulflixApi();
             if (relogin.success) {
@@ -626,7 +640,6 @@ app.post('/api/customer/fetch-code', async (req, res) => {
     }
 
     try {
-        // Prioridad: Cookie de sesión activa primero, luego Bearer Token (según especificación)
         let currentUser = null;
         if (req.session && req.session.uid) {
             currentUser = await dbGet("SELECT * FROM usuarios WHERE id = ?", [req.session.uid]);
@@ -768,7 +781,7 @@ app.get('/', (req, res) => {
             <form action="/registrar-cliente" method="POST" onsubmit="
                 const tel = this.telefono.value.replace(/\\s+/g, '');
                 if(!/^\\+[1-9]\\d{7,14}$/.test(tel)) {
-                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567).');
+                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567 o +54911...).');
                     this.telefono.focus();
                     return false;
                 }
@@ -777,8 +790,8 @@ app.get('/', (req, res) => {
             ">
                 <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
                 <div class="input-group">
-                    <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de tu país (Ej: +52... o +57...)" required>
-                    <small style="display:block; text-align:left; color:#00D2FF; font-size:11px; margin-top:5px;">* Obligatorio poner el <b>+</b> y código de país (Ej: +52 o +57)</small>
+                    <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52... / +57... / +54...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de tu país" required>
+                    <small style="display:block; text-align:left; color:#00D2FF; font-size:11px; margin-top:5px;">* Obligatorio poner el <b>+</b> y código de país (Ej: +52 México, +57 Colombia, +54 Argentina)</small>
                 </div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
                 <button type="submit" class="btn-submit">Completar Registro</button>
@@ -830,7 +843,7 @@ app.post('/registrar-cliente', async (req, res) => {
     const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
     if (!validarTelefonoConCodigo(telLimpio)) {
-        return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567). No se permite registrar sin código de país.'); window.location='/?mode=registro';</script>");
+        return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país (Ejemplo: +52 México, +57 Colombia, +54 Argentina). No se permite registrar sin código de país.'); window.location='/?mode=registro';</script>");
     }
 
     try {
@@ -1115,12 +1128,11 @@ app.post('/admin/borrar-correos-masivo', async (req, res) => {
     }
 });
 
-// 🔎 NUEVO: RUTA PARA BUSCAR Y AUDITAR CORREOS GLOBALMENTE
+// 🔎 RUTA PARA BUSCAR Y AUDITAR CORREOS GLOBALMENTE
 app.post('/admin/auditar-cuentas', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.status(403).send('No autorizado.');
     const { correos_auditar } = req.body;
     
-    // Extraer correos
     const coincidencias = String(correos_auditar).match(/[a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/g) || [];
     const correosUnicos = [...new Set(coincidencias.map(e => e.trim().toLowerCase()))];
 
@@ -1145,7 +1157,6 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
             cuentasPermitidas = encontradas.filter(c => c.user_id === req.session.uid || c.creado_por === req.session.uid);
         }
 
-        // Construir la interfaz de respuesta
         let html = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -1161,10 +1172,7 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
         `;
 
         if (cuentasPermitidas.length > 0) {
-            // Se envía un array de correos para que la ruta de limpieza los procese
             const emailsAEliminar = cuentasPermitidas.map(c => c.email);
-            
-            // Re-escapar la data JSON para inyectarla segura en el HTML
             const jsonSeguro = JSON.stringify(emailsAEliminar).replace(/"/g, '&quot;');
 
             html += `
@@ -1193,7 +1201,7 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
     }
 });
 
-// 🗑️ NUEVO: EJECUTAR LIMPIEZA GLOBAL DESDE LA AUDITORÍA
+// 🗑️ EJECUTAR LIMPIEZA GLOBAL DESDE LA AUDITORÍA
 app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     
@@ -1203,7 +1211,6 @@ app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
 
         let eliminados = 0;
         for (let email of emails) {
-            // Validar asignación real al momento de borrar
             const asig = await dbGet(`
                 SELECT c.id, c.user_id, u.creado_por 
                 FROM correos c JOIN usuarios u ON c.user_id = u.id 
@@ -1216,7 +1223,6 @@ app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
                 if (permitido) {
                     await dbRun("DELETE FROM correos WHERE id = ?", [asig.id]);
                     
-                    // Liberar stock para que vuelva a estar 'Disponible' si ya no tiene dueños
                     const sigueAsignadoAOtro = await dbGet("SELECT id FROM correos WHERE LOWER(email) = ?", [email]);
                     if (!sigueAsignadoAOtro) {
                         await dbRun(
@@ -1234,7 +1240,6 @@ app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
         res.send("<script>alert('Error al ejecutar la limpieza global masiva.'); window.location='/dash';</script>");
     }
 });
-
 
 app.post('/admin/eliminar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
@@ -1334,6 +1339,43 @@ app.post('/stock/eliminar-masivo', async (req, res) => {
     }
 });
 
+// 🚀 CARGAR STOCK DE PERFILES EXTRA (ADMIN Y SUBADMIN)
+app.post('/stock-perfiles-extra/cargar', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { perfiles_extra_stock } = req.body;
+    const lineas = perfiles_extra_stock.split(/[\n\r]+/).filter(l => l.trim() !== '');
+
+    let agregados = 0;
+    try {
+        for (let linea of lineas) {
+            let partes = linea.split(/[:;,|]/);
+            let perfilInfo = partes[0] ? partes[0].trim() : '';
+            let password = partes.slice(1).join(':').trim() || null;
+
+            if (perfilInfo) {
+                await dbRun("INSERT INTO stock_perfiles_extra (perfil_info, password, propietario_id) VALUES (?, ?, ?)", [perfilInfo, password, req.session.uid]);
+                agregados++;
+            }
+        }
+        res.send(`<script>alert('✅ Se agregaron ${agregados} perfiles extra al stock correctamente.'); window.location='/dash';</script>`);
+    } catch(e) {
+        console.error(e);
+        res.redirect('/dash');
+    }
+});
+
+// 🗑️ VACIAR STOCK DISPONIBLE DE PERFILES EXTRA
+app.post('/admin/vaciar-stock-perfiles-disponibles', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    try {
+        if (req.session.rol === 'Administrador') {
+            await dbRun("DELETE FROM stock_perfiles_extra WHERE estado = 'Disponible'");
+        } else {
+            await dbRun("DELETE FROM stock_perfiles_extra WHERE estado = 'Disponible' AND propietario_id = ?", [req.session.uid]);
+        }
+        res.send("<script>alert('✅ El stock disponible de Perfiles Extra ha sido vaciado correctamente.'); window.location='/dash';</script>");
+    } catch(e) { res.redirect('/dash'); }
+});
 
 app.post('/admin/vaciar-stock-disponible', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
@@ -1511,7 +1553,7 @@ app.post('/subadmin/asignar-dinero', async (req, res) => {
     }
 });
 
-// 🚀 SISTEMA DE COMPRA MULTINIVEL CON NOTIFICACIÓN OBLIGATORIA (ADMIN + ASISTENTE)
+// 🚀 COMPRA DE CUENTAS COMPLETAS
 app.post('/tienda/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -1539,7 +1581,7 @@ app.post('/tienda/comprar', async (req, res) => {
         const nuevoSaldoMXN = comprador.creditos - costoMXN;
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoMXN, req.session.uid]);
 
-        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costoMXN, comprador.creditos, nuevoSaldoMXN]);
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo, tipo_producto) VALUES (?, ?, ?, ?, ?, 'cuenta_completa')", [req.session.uid, paquete, costoMXN, comprador.creditos, nuevoSaldoMXN]);
         const compraId = compraInfo.lastID;
 
         let correosEntregados = [];
@@ -1652,6 +1694,156 @@ app.post('/tienda/comprar', async (req, res) => {
     }
 });
 
+// 🚀 NUEVA RUTA: COMPRA EN LA TIENDA DE PERFILES EXTRA (CANTIDAD DEL 1 AL 100)
+app.post('/tienda-perfiles/comprar', async (req, res) => {
+    if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
+    const cantidad = parseInt(req.body.cantidad, 10);
+    
+    if (isNaN(cantidad) || cantidad < 1 || cantidad > 100) {
+        return res.send("<script>alert('⛔ Selecciona una cantidad válida del 1 al 100.'); window.location='/dash';</script>");
+    }
+
+    try {
+        const comprador = await dbGet("SELECT id, user, telefono, creditos, creado_por, moneda FROM usuarios WHERE id = ?", [req.session.uid]);
+        const esSubAdmin = req.session.rol === 'Subadministrador';
+        const proveedor_id = esSubAdmin ? 1 : (comprador.creado_por || 1);
+
+        const costoTotalMXN = PRECIO_BASE_PERFIL_EXTRA_MXN * cantidad;
+
+        if (comprador.creditos < costoTotalMXN) {
+            const faltante = formatearDinero(costoTotalMXN - comprador.creditos, comprador.moneda);
+            return res.send(`<script>alert('⛔ Saldo insuficiente en tu cuenta. Necesitas ${formatearDinero(costoTotalMXN, comprador.moneda)} y te faltan ${faltante}.'); window.location='/dash';</script>`);
+        }
+
+        const disponibles = await dbAll("SELECT id, perfil_info, password FROM stock_perfiles_extra WHERE estado = 'Disponible' AND propietario_id = ? LIMIT ?", [proveedor_id, cantidad]);
+
+        if (disponibles.length < cantidad) {
+            return res.send(`<script>alert('⛔ El proveedor no tiene stock suficiente. Solo hay ${disponibles.length} perfiles disponibles en este momento.'); window.location='/dash';</script>`);
+        }
+
+        const nuevoSaldoMXN = comprador.creditos - costoTotalMXN;
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoMXN, req.session.uid]);
+
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo, tipo_producto) VALUES (?, ?, ?, ?, ?, 'perfil_extra')", [req.session.uid, cantidad, costoTotalMXN, comprador.creditos, nuevoSaldoMXN]);
+        const compraId = compraInfo.lastID;
+
+        let perfilesEntregados = [];
+        for (let perfil of disponibles) {
+            await dbRun("UPDATE stock_perfiles_extra SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, perfil.id]);
+            await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta, password_cuenta) VALUES (?, ?, ?, ?)", [compraId, perfil.id, perfil.perfil_info, perfil.password]);
+            
+            if (perfil.perfil_info.includes('@')) {
+                let eLimpio = perfil.perfil_info.trim().toLowerCase();
+                let yaTiene = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, eLimpio]);
+                if (!yaTiene) {
+                    await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [eLimpio, req.session.uid]);
+                }
+            }
+            perfilesEntregados.push(`${perfil.perfil_info} ${perfil.password ? ': ' + perfil.password : ''}`);
+        }
+
+        const proveedor = await dbGet("SELECT telefono, moneda FROM usuarios WHERE id = ?", [proveedor_id]);
+        const provTelFormateado = proveedor && proveedor.telefono ? formatearTelefono(proveedor.telefono) : null;
+        const adminPhone = provTelFormateado ? provTelFormateado.replace(/\s+/g, '').replace('+', '') : NUMERO_ADMIN_PRINCIPAL;
+        const proveedorMoneda = (proveedor && proveedor.moneda) ? proveedor.moneda : 'MXN';
+        
+        const fechaObj = new Date();
+        const msgAdmin = `*NUEVA COMPRA: PERFILES EXTRA*\n\n👤 *Cliente:* ${comprador.user}\n📱 *Tel:* ${comprador.telefono || 'N/A'}\n📅 *Fecha:* ${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}\n🛒 *Cantidad:* ${cantidad} Perfiles Extra\n💵 *Valor:* ${formatearDinero(costoTotalMXN, proveedorMoneda)}\n\n*Perfiles entregados:*\n${perfilesEntregados.join('\n')}\n\n🪙 *Dinero restante del cliente:* ${formatearDinero(nuevoSaldoMXN, proveedorMoneda)}`;
+        
+        const linkAdmin = `https://api.whatsapp.com/send?phone=${adminPhone}&text=${encodeURIComponent(msgAdmin)}`;
+        const linkAsistente = `https://api.whatsapp.com/send?phone=${NUMERO_ASISTENTE}&text=${encodeURIComponent(msgAdmin)}`;
+        const costoCompradorText = formatearDinero(costoTotalMXN, comprador.moneda);
+
+        res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Confirmación de Compra - Perfiles Extra</title>
+            <style>
+                body { background: #050505; color: #fff; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+                .card-confirm { background: rgba(12, 15, 22, 0.96); border: 1px solid rgba(0, 210, 255, 0.35); border-radius: 16px; padding: 30px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.95); }
+                .step-btn { display: block; width: 100%; padding: 16px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; margin-top: 14px; box-sizing: border-box; cursor: pointer; border: none; transition: 0.25s; text-transform: uppercase; letter-spacing: 0.5px; }
+                .btn-wa-1 { background: #25d366; color: #000; box-shadow: 0 4px 15px rgba(37,211,102,0.35); }
+                .btn-wa-2 { background: #00D2FF; color: #000; box-shadow: 0 4px 15px rgba(0,210,255,0.35); }
+                .btn-panel { background: rgba(255,255,255,0.08); color: #64748b; border: 1px solid rgba(255,255,255,0.1); cursor: not-allowed; margin-top: 22px; }
+                .btn-panel.unlocked { background: #E50914; color: #fff; border-color: #E50914; cursor: pointer; box-shadow: 0 5px 20px rgba(229,9,20,0.5); }
+                .status-badge { display: inline-block; padding: 4px 10px; border-radius: 50px; font-size: 11px; font-weight: 700; margin-bottom: 10px; background: rgba(0,210,255,0.15); color: #00D2FF; border: 1px solid #00D2FF; }
+            </style>
+        </head>
+        <body>
+            <div class="card-confirm">
+                <div class="status-badge">⚡ PERFILES EXTRA ENTREGADOS</div>
+                <h2 style="color:#25d366; margin: 5px 0 10px 0;">✅ ${cantidad} Perfiles (${costoCompradorText})</h2>
+                <p style="color:#cbd5e1; font-size:13px; line-height:1.5; margin-bottom:20px;">
+                    Envía el comprobante por WhatsApp al Administrador y al Asistente para notificar la compra:
+                </p>
+
+                <a href="${linkAdmin}" target="_blank" id="btnPaso1" onclick="marcarPaso1()" class="step-btn btn-wa-1">
+                    1️⃣ Enviar Comprobante al Administrador
+                </a>
+
+                <a href="${linkAsistente}" target="_blank" id="btnPaso2" onclick="marcarPaso2()" class="step-btn btn-wa-2">
+                    2️⃣ Enviar Copia al Asistente
+                </a>
+
+                <button id="btnVolver" onclick="irAlPanel()" class="step-btn btn-panel" disabled>
+                    🔒 Completa los 2 envíos para volver al Panel
+                </button>
+            </div>
+
+            <script>
+                let paso1OK = false;
+                let paso2OK = false;
+
+                setTimeout(() => {
+                    window.open('${linkAdmin}', '_blank');
+                    marcarPaso1();
+                }, 400);
+
+                function marcarPaso1() {
+                    paso1OK = true;
+                    const b1 = document.getElementById('btnPaso1');
+                    b1.innerHTML = '✅ 1️⃣ Enviado al Administrador';
+                    b1.style.opacity = '0.85';
+                    verificarDesbloqueo();
+                }
+
+                function marcarPaso2() {
+                    paso2OK = true;
+                    const b2 = document.getElementById('btnPaso2');
+                    b2.innerHTML = '✅ 2️⃣ Enviado al Asistente';
+                    b2.style.opacity = '0.85';
+                    verificarDesbloqueo();
+                }
+
+                function verificarDesbloqueo() {
+                    if (paso1OK && paso2OK) {
+                        const btn = document.getElementById('btnVolver');
+                        btn.disabled = false;
+                        btn.classList.add('unlocked');
+                        btn.innerHTML = '🔓 Entrar al Panel y Ver Mis Perfiles';
+                    }
+                }
+
+                function irAlPanel() {
+                    if (paso1OK && paso2OK) {
+                        window.location.href = '/dash';
+                    } else {
+                        alert('⛔ Debes enviar obligatoriamente el mensaje al Administrador y al Asistente.');
+                    }
+                }
+            </script>
+        </body>
+        </html>
+        `);
+    } catch(e) {
+        console.error(e);
+        res.send(`<script>alert('Error en la transacción de perfiles extra.'); window.location='/dash';</script>`);
+    }
+});
+
 app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
@@ -1678,6 +1870,10 @@ app.get('/dash', async (req, res) => {
             const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible' AND propietario_id = ?", [proveedor_inventario]);
             const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE (estado = 'Vendida' OR estado = 'Asignada') AND propietario_id = ?", [proveedor_inventario]);
             
+            // Stock de perfiles extra
+            const stockPerfilesDisp = await dbGet("SELECT COUNT(*) as count FROM stock_perfiles_extra WHERE estado = 'Disponible' AND propietario_id = ?", [proveedor_inventario]);
+            const stockPerfilesVend = await dbGet("SELECT COUNT(*) as count FROM stock_perfiles_extra WHERE estado = 'Vendida' AND propietario_id = ?", [proveedor_inventario]);
+
             const historialAsignaciones = await dbAll("SELECT h.*, u.user as receptor, a.user as admin FROM historial_asignaciones h JOIN usuarios u ON h.receptor_id = u.id JOIN usuarios a ON h.admin_id = a.id ORDER BY h.id DESC");
 
             const historialCompras = await dbAll(`SELECT c.*, u.user as comprador, u.moneda FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
@@ -1806,13 +2002,13 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div id="action-stock-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Control de Inventario</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Carga masiva de cuentas al sistema para la venta automática a subadministradores.</p>
-                    <div style="margin-top:10px; background: rgba(0, 210, 255, 0.08); padding: 16px; border-radius: 10px; border: 1px solid rgba(0, 210, 255, 0.25);">
-                        <div style="font-size: 26px; font-weight: 700; color: #00D2FF;">${stockDisp.count}</div>
-                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Disponibles</div>
-                        <hr style="border:none; border-top:1px solid rgba(255,255,255,0.1); margin: 12px 0;">
-                        <div style="font-size: 20px; font-weight: 700; color: #fff;">${stockVend.count}</div>
-                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Vendidas / Asignadas</div>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Carga masiva de cuentas completas y perfiles extra al sistema.</p>
+                    <div style="margin-top:10px; background: rgba(0, 210, 255, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(0, 210, 255, 0.25);">
+                        <div style="font-size: 22px; font-weight: 700; color: #00D2FF;">${stockDisp.count} Cuentas</div>
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Cuentas Disponibles</div>
+                        <hr style="border:none; border-top:1px solid rgba(255,255,255,0.1); margin: 8px 0;">
+                        <div style="font-size: 22px; font-weight: 700; color: #25d366;">${stockPerfilesDisp.count} Perfiles</div>
+                        <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Perfiles Extra Libres</div>
                     </div>
                 </div>
                 <div id="action-asignacion-manual" class="action-panel">
@@ -1825,7 +2021,7 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div id="action-historial-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🧾 Auditoría General</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Registro inmutable de todas las cuentas reclamadas por subadministradores.</p>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Registro inmutable de todas las compras de cuentas y perfiles extra.</p>
                 </div>`;
 
                 let historialAsigRows = "";
@@ -1852,13 +2048,15 @@ app.get('/dash', async (req, res) => {
 
                 let historialGlobalHtml = "";
                 if(historialCompras.length === 0) {
-                    historialGlobalHtml = "<tr><td colspan='4' style='text-align:center; padding:18px; color:var(--text-muted);'>No hay compras registradas.</td></tr>";
+                    historialGlobalHtml = "<tr><td colspan='5' style='text-align:center; padding:18px; color:var(--text-muted);'>No hay compras registradas.</td></tr>";
                 } else {
                     historialCompras.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#00D2FF; padding:2px 0;">${d.email_cuenta} ${d.password_cuenta ? '🔑 ' + d.password_cuenta : ''}</div>`).join('');
+                        let labelTipo = c.tipo_producto === 'perfil_extra' ? '<span style="color:#ff7300; font-weight:bold;">Perfil Extra</span>' : '<span style="color:#E50914; font-weight:bold;">Cuenta Completa</span>';
                         historialGlobalHtml += `
                         <tr>
                             <td><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
+                            <td style="text-align:center;">${labelTipo}</td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad}</td>
                             <td><span style="color:#E50914;">-${formatearDinero(c.creditos_usados, c.moneda)}</span><br><small style="color:var(--text-muted);">Quedan: ${formatearDinero(c.saldo_nuevo, c.moneda)}</small></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:11px;">${cuentasEntregadas}</div></td>
@@ -1899,13 +2097,19 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div id="main-stock-admin" class="main-card">
-                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: #00D2FF;">📦 Cargar Stock y Ver Historial</h3>
+                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: #00D2FF;">📦 Cargar Stock de Cuentas Completas</h3>
                     <form action="/stock/cargar" method="POST">
                         <select name="plataforma" class="input-classic" required>
                             <option value="netflix">Netflix</option>
                         </select>
-                        <textarea name="correos_stock" class="input-classic" placeholder="correo1@gmail.com:clave123&#10;cuenta2@hotmail.com:pass456..." rows="5" required></textarea>
-                        <button type="submit" class="btn-submit">Ingresar al Inventario Seguro</button>
+                        <textarea name="correos_stock" class="input-classic" placeholder="correo1@gmail.com:clave123&#10;cuenta2@hotmail.com:pass456..." rows="4" required></textarea>
+                        <button type="submit" class="btn-submit">Ingresar Cuentas Completas</button>
+                    </form>
+
+                    <h3 style="margin:25px 0 12px 0; font-size:18px; font-weight:600; color: #25d366;">⚡ Cargar Stock de Perfiles Extra (50 MXN c/u)</h3>
+                    <form action="/stock-perfiles-extra/cargar" method="POST">
+                        <textarea name="perfiles_extra_stock" class="input-classic" placeholder="perfilextra1@correo.com:pin123&#10;perfilextra2@correo.com:pin456..." rows="4" required></textarea>
+                        <button type="submit" class="btn-submit" style="background:#25d366; color:#000;">Ingresar Perfiles Extra al Stock</button>
                     </form>
 
                     <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas del Stock</h4>
@@ -1916,9 +2120,12 @@ app.get('/dash', async (req, res) => {
 
                     <div style="margin-top: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
                         <form action="/admin/vaciar-stock-disponible" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK DISPONIBLE (No Vendido)? Esta acción no se puede deshacer.');">
-                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar TODO Stock NO Vendido</button>
+                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar Stock Cuentas Disponibles</button>
                         </form>
-                        <form action="/admin/vaciar-stock-vendido" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK VENDIDO/ASIGNADO? Esto limpiará la lista visual pero los clientes conservarán sus correos.');">
+                        <form action="/admin/vaciar-stock-perfiles-disponibles" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas vaciar todos los perfiles extra libres?');">
+                            <button type="submit" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.12); border-color: #ff7300; color: #ff7300;">🗑️ Borrar Perfiles Extra Libres</button>
+                        </form>
+                        <form action="/admin/vaciar-stock-vendido" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK VENDIDO/ASIGNADO?');">
                             <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar TODO Stock Vendido</button>
                         </form>
                     </div>
@@ -1993,7 +2200,7 @@ app.get('/dash', async (req, res) => {
                     <h3 style="margin:0 0 10px 0; font-size:19px; font-weight:600; color: #00D2FF;">🧾 Historial Global de Tienda</h3>
                     <div class="table-wrapper">
                         <table class="table-modern">
-                            <thead><tr><th>Subadmin / Cliente</th><th style="text-align:center;">Cant.</th><th>Dinero Descontado</th><th>Cuentas Entregadas</th></tr></thead>
+                            <thead><tr><th>Subadmin / Cliente</th><th>Tipo</th><th style="text-align:center;">Cant.</th><th>Dinero Descontado</th><th>Entregados</th></tr></thead>
                             <tbody>${historialGlobalHtml}</tbody>
                         </table>
                     </div>
@@ -2001,12 +2208,20 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            // 🎯 TIENDA DE CUENTAS VISIBLE PARA CLIENTES Y SUBADMINISTRADORES
+            // 🎯 TIENDAS VISIBLES PARA CLIENTES Y SUBADMINISTRADORES
             if (esSubAdmin || esCliente) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🛒 Tienda de Cuentas</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Compra cuentas de Netflix de forma instantánea usando tu dinero disponible.</p>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Compra cuentas completas de Netflix de forma instantánea usando tu dinero disponible.</p>
+                </div>
+                <div id="action-tienda-perfiles-extra" class="action-panel">
+                    <h4 style="margin:0; font-size:11px; color:#25d366; text-transform:uppercase;">⚡ Perfiles Extra</h4>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Elige de 1 a 100 perfiles extra a 50 MXN c/u en tu moneda local.</p>
+                    <div style="margin-top:10px; background: rgba(37,211,102,0.1); padding: 12px; border-radius: 8px; border: 1px solid rgba(37,211,102,0.3); text-align:center;">
+                        <span style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">Stock disponible:</span>
+                        <div style="font-size: 20px; font-weight:700; color:#25d366;">${stockPerfilesDisp.count}</div>
+                    </div>
                 </div>
                 <div id="action-mis-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🧾 Mi Inventario</h4>
@@ -2016,14 +2231,16 @@ app.get('/dash', async (req, res) => {
                 let misComprasHtml = "";
                 let misComprasLog = historialCompras.filter(c => c.subadmin_id === req.session.uid);
                 if(misComprasLog.length === 0) {
-                    misComprasHtml = "<tr><td colspan='4' style='text-align:center; padding:18px; color:var(--text-muted);'>Aún no has realizado compras.</td></tr>";
+                    misComprasHtml = "<tr><td colspan='5' style='text-align:center; padding:18px; color:var(--text-muted);'>Aún no has realizado compras.</td></tr>";
                 } else {
                     misComprasLog.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta} <span style="color:#00D2FF; margin-left: 5px;">${d.password_cuenta ? '🔑 '+d.password_cuenta : ''}</span></div>`).join('');
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#00D2FF; padding:2px 0;">${d.email_cuenta} <span style="color:#25d366; margin-left: 5px;">${d.password_cuenta ? '🔑 '+d.password_cuenta : ''}</span></div>`).join('');
+                        let labelTipo = c.tipo_producto === 'perfil_extra' ? '<span style="color:#25d366; font-weight:600;">Perfil Extra</span>' : '<span style="color:#E50914; font-weight:600;">Cuenta Completa</span>';
                         misComprasHtml += `
                         <tr>
                             <td><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
-                            <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
+                            <td>${labelTipo}</td>
+                            <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad}</td>
                             <td><span style="color:#E50914;">-${formatearDinero(c.creditos_usados, usuarioActual.moneda)}</span></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:12px;">${cuentasEntregadas}</div></td>
                         </tr>`;
@@ -2050,10 +2267,19 @@ app.get('/dash', async (req, res) => {
                     </div>
                 `).join('');
 
+                // Opciones del selector 1 al 100 para Perfiles Extra
+                let opciones1a100 = "";
+                for (let i = 1; i <= 100; i++) {
+                    opciones1a100 += `<option value="${i}">${i} Perfil${i > 1 ? 'es' : ''} Extra</option>`;
+                }
+
+                const precioUnitarioLocal = convertirLocal(PRECIO_BASE_PERFIL_EXTRA_MXN, usuarioActual.moneda);
+                const precioUnitarioFormateado = formatearDinero(PRECIO_BASE_PERFIL_EXTRA_MXN, usuarioActual.moneda);
+
                 panelesCentroHtml += `
                 <div id="main-comprar-stock" class="main-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                        <h3 style="margin:0; font-size:19px; font-weight:600; color: #00D2FF;">🛒 Tienda de Cuentas</h3>
+                        <h3 style="margin:0; font-size:19px; font-weight:600; color: #00D2FF;">🛒 Tienda de Cuentas Completas</h3>
                         <div style="background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.3); padding: 8px 16px; border-radius: 50px; font-size: 12px; font-weight: 600; color: #fff;">
                             Dinero Disponible: <span style="color:#00D2FF;">${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}</span>
                         </div>
@@ -2064,11 +2290,80 @@ app.get('/dash', async (req, res) => {
                     </div>
                 </div>
 
+                <!-- 🛒 NUEVO PANEL: TIENDA DE PERFILES EXTRA -->
+                <div id="main-tienda-perfiles-extra" class="main-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h3 style="margin:0; font-size:20px; font-weight:700; color: #25d366;">⚡ Tienda de Perfiles Extra</h3>
+                            <p style="margin:4px 0 0 0; font-size:12px; color:var(--text-muted);">Cada perfil extra cuesta <strong>50 MXN</strong> (${precioUnitarioFormateado}). Elige la cantidad sin escribirla manualmente.</p>
+                        </div>
+                        <div style="background: rgba(37,211,102,0.12); border: 1px solid rgba(37,211,102,0.35); padding: 8px 16px; border-radius: 50px; font-size: 12px; font-weight: 600; color: #fff;">
+                            Tu Saldo: <span style="color:#25d366;">${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}</span>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.6); border: 1px solid rgba(37,211,102,0.3); border-radius: 12px; padding: 24px; max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;">
+                        <form action="/tienda-perfiles/comprar" method="POST" id="form-compra-perfiles">
+                            <label style="color:#25d366; font-size:12px; font-weight:700; text-transform:uppercase; display:block; margin-bottom:8px; letter-spacing:0.8px;">
+                                1. Selecciona la cantidad de perfiles (1 al 100):
+                            </label>
+                            <select id="select-cantidad-perfiles" name="cantidad" class="input-classic" style="font-size:14px; font-weight:600; border-color: rgba(37,211,102,0.4);" onchange="calcularTotalPerfiles(this.value)">
+                                ${opciones1a100}
+                            </select>
+
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; margin: 18px 0; display:flex; flex-direction:column; gap:8px;">
+                                <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-muted);">
+                                    <span>Precio por Perfil:</span>
+                                    <strong style="color:#fff;">${precioUnitarioFormateado}</strong>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-muted);">
+                                    <span>Stock en Sistema:</span>
+                                    <strong style="color:${stockPerfilesDisp.count > 0 ? '#25d366' : '#E50914'};">${stockPerfilesDisp.count} perfiles</strong>
+                                </div>
+                                <hr style="border:none; border-top:1px solid rgba(255,255,255,0.08); margin:4px 0;">
+                                <div style="display:flex; justify-content:space-between; font-size:16px;">
+                                    <span style="color:#fff; font-weight:600;">Total a Descontar:</span>
+                                    <strong id="label-total-calculado" style="color:#25d366; font-size:18px;">${formatearDinero(PRECIO_BASE_PERFIL_EXTRA_MXN, usuarioActual.moneda)}</strong>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-submit" style="background:#25d366; color:#000; font-weight:800; padding:15px;" onclick="return confirm('¿Confirmas la compra inmediata de los perfiles extra seleccionados?');">
+                                ⚡ Comprar Perfiles Extra Ahora
+                            </button>
+                        </form>
+                    </div>
+
+                    <script>
+                        function calcularTotalPerfiles(cant) {
+                            const cantidad = parseInt(cant, 10) || 1;
+                            const precioBaseMXN = ${PRECIO_BASE_PERFIL_EXTRA_MXN};
+                            const monedaUsuario = '${usuarioActual.moneda}';
+                            const tasaCOP = ${TASAS_CAMBIO.COP};
+                            const tasaARS = ${TASAS_CAMBIO.ARS};
+
+                            const totalMXN = precioBaseMXN * cantidad;
+                            let totalLocal = totalMXN;
+                            let locale = 'es-MX';
+
+                            if (monedaUsuario === 'COP') {
+                                totalLocal = Math.round((totalMXN * tasaCOP) / 100) * 100;
+                                locale = 'es-CO';
+                            } else if (monedaUsuario === 'ARS') {
+                                totalLocal = Math.round((totalMXN * tasaARS) / 10) * 10;
+                                locale = 'es-AR';
+                            }
+
+                            const textoFormateado = '$' + totalLocal.toLocaleString(locale) + ' ' + monedaUsuario;
+                            document.getElementById('label-total-calculado').innerText = textoFormateado;
+                        }
+                    </script>
+                </div>
+
                 <div id="main-mis-compras" class="main-card">
                     <h3 style="margin:0 0 10px 0; font-size:19px; font-weight:600; color: #00D2FF;">🧾 Mis Compras</h3>
                     <div class="table-wrapper">
                         <table class="table-modern">
-                            <thead><tr><th>ID / Fecha</th><th style="text-align:center;">Paquete</th><th>Descuento</th><th>Cuentas Entregadas</th></tr></thead>
+                            <thead><tr><th>ID / Fecha</th><th>Tipo</th><th style="text-align:center;">Cantidad</th><th>Descuento</th><th>Entregados</th></tr></thead>
                             <tbody>${misComprasHtml}</tbody>
                         </table>
                     </div>
@@ -2104,13 +2399,26 @@ app.get('/dash', async (req, res) => {
                 
                 <div id="main-mi-stock" class="main-card">
                     <h3 style="margin:0 0 15px 0; font-size:19px; color:#00D2FF;">📦 Cargar Mi Inventario Propio</h3>
-                    <div style="background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.25); padding: 15px; border-radius: 10px; text-align:center; margin-bottom:18px;">
-                        <strong style="color: #00D2FF; font-size:26px;">${stockDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:11px;">Disponibles en mi Tienda</small>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:18px;">
+                        <div style="background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.25); padding: 12px; border-radius: 10px; text-align:center;">
+                            <strong style="color: #00D2FF; font-size:24px;">${stockDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">Cuentas Disponibles</small>
+                        </div>
+                        <div style="background: rgba(37, 211, 102, 0.08); border: 1px solid rgba(37, 211, 102, 0.25); padding: 12px; border-radius: 10px; text-align:center;">
+                            <strong style="color: #25d366; font-size:24px;">${stockPerfilesDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">Perfiles Extra Libres</small>
+                        </div>
                     </div>
+
+                    <h4 style="margin:10px 0 6px 0; font-size:14px; color:#00D2FF;">1. Cargar Cuentas Completas</h4>
                     <form action="/stock/cargar" method="POST">
                         <input type="hidden" name="plataforma" value="netflix">
-                        <textarea name="correos_stock" class="input-classic" placeholder="correo@gmail.com:clave123..." rows="5" required></textarea>
+                        <textarea name="correos_stock" class="input-classic" placeholder="correo@gmail.com:clave123..." rows="4" required></textarea>
                         <button type="submit" class="btn-submit">Subir Cuentas a mi Inventario</button>
+                    </form>
+
+                    <h4 style="margin:20px 0 6px 0; font-size:14px; color:#25d366;">2. Cargar Perfiles Extra a mi Tienda</h4>
+                    <form action="/stock-perfiles-extra/cargar" method="POST">
+                        <textarea name="perfiles_extra_stock" class="input-classic" placeholder="perfilextra1@correo.com:pin123..." rows="4" required></textarea>
+                        <button type="submit" class="btn-submit" style="background:#25d366; color:#000;">Subir Perfiles Extra</button>
                     </form>
 
                     <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas de mi Stock</h4>
@@ -2135,7 +2443,7 @@ app.get('/dash', async (req, res) => {
                 
                 panelesIzquierdosHtml += `
                 <div id="action-mi-tienda" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">⚙️ Administración Tienda</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Controla tus márgenes de ganancia por paquete.</p></div>
-                <div id="action-mi-stock" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Inventario Privado</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Gestiona las cuentas que vendes directamente a tus clientes.</p></div>
+                <div id="action-mi-stock" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Inventario Privado</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Gestiona las cuentas y perfiles extra que vendes a tus clientes.</p></div>
                 <div id="action-dinero-clientes" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">💸 Billetera</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Reparte tu saldo entre tus clientes registrados.</p></div>
                 `;
             }
@@ -2235,7 +2543,6 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // AÑADIMOS EL PANEL CENTRAL DE LA AUDITORÍA GLOBAL
             if (esAdminPrincipal || esSubAdmin) {
                 panelesCentroHtml += `
                 <div id="main-auditoria-global" class="main-card">
@@ -2430,8 +2737,9 @@ app.get('/dash', async (req, res) => {
                                 ` : ''}
 
                                 ${(esSubAdmin || esCliente) ? `
-                                <div class="menu-group-label">Tienda Automática</div>
-                                <button class="menu-btn-item" data-tab="comprar-stock" onclick="openTab('comprar-stock')" style="color: #00D2FF;">🛒 Tienda de Cuentas</button>
+                                <div class="menu-group-label">Tiendas Automáticas</div>
+                                <button class="menu-btn-item" data-tab="comprar-stock" onclick="openTab('comprar-stock')" style="color: #00D2FF;">🛒 Cuentas Completas</button>
+                                <button class="menu-btn-item" data-tab="tienda-perfiles-extra" onclick="openTab('tienda-perfiles-extra')" style="color: #25d366;">⚡ Perfiles Extra (1 a 100)</button>
                                 <button class="menu-btn-item" data-tab="mis-compras" onclick="openTab('mis-compras')">🧾 Mis Compras</button>
                                 ` : ''}
 
@@ -2464,7 +2772,6 @@ app.get('/dash', async (req, res) => {
         }
     }
 });
-
 
 // BEGIN DUAL LOOKUP HELPERS
 function traducirErrorCodigo(message, status) {
@@ -2504,7 +2811,6 @@ function normalizarResultadoFuente(data, fuente, tipo) {
 }
 function extraerCodigoGmail(mail, tipo) {
     if (!mail) return { success: false };
-    // Los mensajes antiguos no se presentan como una búsqueda nueva.
     const received = new Date(mail.date).getTime();
     if (!Number.isFinite(received) || received < Date.now() - 5 * 60000 || received > Date.now() + 60000) return { success: false };
     const sender = mail.from && mail.from.value || [];
@@ -2568,7 +2874,6 @@ async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
         }
     };
     const tasks = [poll(0), poll(1)];
-    // Errors are observed even if the other provider finishes first.
     tasks.forEach(task => task.catch(() => resolveDone()));
     try { if (!controller.signal.aborted) await done; }
     finally {
@@ -2850,8 +3155,6 @@ app.post('/buscar', async (req, res) => {
         if (!req.session.uid || (!esAdminPrincipal && !esCliente && !esSubAdmin && req.session.rol !== 'Administrador')) return res.status(403).send('Perfil no autorizado.');
         if (!/^[^\s@<>"\x27]+@[^\s@<>"\x27]+\.[^\s@<>"\x27]+$/.test(correoIngresado) || correoIngresado.length > 254) return res.status(422).send('Correo no válido.');
 
-
-        // Validación de permisos por rol según las reglas de Customer y Subadmin Pool
         if (esCliente && !esAdminPrincipal) {
             const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
             if (!tieneAcceso) {
@@ -2869,7 +3172,6 @@ app.post('/buscar', async (req, res) => {
             }
         }
 
-        // 🚀 SI SE USÓ UNO DE LOS 4 BOTONES DE CÓDIGO TIPO API (signin_6digit, signin_4digit, household, reset_link)
         if (tiposApiGhoulflix.includes(accion)) {
             const startMs = Date.now();
             const etiquetasTipo = {
@@ -2907,7 +3209,6 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        // 🚀 LÓGICA DE DETECCIÓN INTELUGUENTE DE PAÍS
         if (accion === 'pais') {
             let paisDetectado = null;
             
