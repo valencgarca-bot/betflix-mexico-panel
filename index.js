@@ -1844,6 +1844,83 @@ app.post('/tienda-perfiles/comprar', async (req, res) => {
     }
 });
 
+// ADMIN CURRENT EMAIL DIRECTORY — current tables only, never historical logs.
+function reunirCorreosActuales(asignaciones, cuentas, perfiles) {
+    const emails = new Map();
+    function add(email, detail) {
+        email = String(email || '').trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+        if (!emails.has(email)) emails.set(email, { email, asignados: [], propietarios: [], tipos: [], estados: [], fechas: [], fuentes: [] });
+        const entry = emails.get(email);
+        for (const key of ['asignados', 'propietarios', 'tipos', 'estados', 'fechas', 'fuentes']) {
+            const value = detail[key];
+            if (value && !entry[key].includes(value)) entry[key].push(value);
+        }
+    }
+    for (const row of asignaciones) add(row.email, {
+        asignados: row.usuario || (row.user_id == null ? 'Sin usuario' : 'Usuario #' + row.user_id),
+        tipos: 'Correo asignado', estados: 'Asignado', fechas: row.fecha_asignacion, fuentes: 'Correos vinculados'
+    });
+    for (const row of cuentas) add(row.email, {
+        propietarios: row.propietario || (row.propietario_id == null ? 'Sin propietario' : 'Usuario #' + row.propietario_id),
+        asignados: row.comprador || (row.comprador_id == null ? '' : 'Usuario #' + row.comprador_id),
+        tipos: 'Cuenta completa' + (row.plataforma ? ' · ' + row.plataforma : ''),
+        estados: row.estado || 'Sin estado', fechas: row.fecha_compra || row.fecha_carga, fuentes: 'Stock de cuentas'
+    });
+    for (const row of perfiles) {
+        const matches = String(row.perfil_info || '').match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g) || [];
+        for (const email of matches) add(email, {
+            propietarios: row.propietario || (row.propietario_id == null ? 'Sin propietario' : 'Usuario #' + row.propietario_id),
+            asignados: row.comprador || (row.comprador_id == null ? '' : 'Usuario #' + row.comprador_id),
+            tipos: 'Perfil extra', estados: row.estado || 'Sin estado',
+            fechas: row.fecha_compra || row.fecha_carga, fuentes: 'Stock de perfiles extra'
+        });
+    }
+    return Array.from(emails.values()).sort((a, b) => a.email.localeCompare(b.email));
+}
+
+app.get('/admin/emails', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+        // Revalidate the role in the database; no directory access for customers/subadmins.
+        const admin = await dbGet('SELECT id, rol FROM usuarios WHERE id = ?', [req.session.uid]);
+        if (!admin || admin.rol !== 'Administrador') return res.status(403).send('Acceso exclusivo para administradores.');
+        const asignaciones = await dbAll(`SELECT c.email, c.user_id, c.fecha_asignacion, u.user AS usuario
+            FROM correos c LEFT JOIN usuarios u ON u.id = c.user_id`);
+        const cuentas = await dbAll(`SELECT s.email, s.plataforma, s.estado, s.propietario_id, s.comprador_id,
+            s.fecha_carga, s.fecha_compra, p.user AS propietario, b.user AS comprador
+            FROM stock_cuentas s LEFT JOIN usuarios p ON p.id = s.propietario_id LEFT JOIN usuarios b ON b.id = s.comprador_id`);
+        const perfiles = await dbAll(`SELECT s.perfil_info, s.estado, s.propietario_id, s.comprador_id,
+            s.fecha_carga, s.fecha_compra, p.user AS propietario, b.user AS comprador
+            FROM stock_perfiles_extra s LEFT JOIN usuarios p ON p.id = s.propietario_id LEFT JOIN usuarios b ON b.id = s.comprador_id`);
+        const rows = reunirCorreosActuales(asignaciones, cuentas, perfiles);
+        const json = JSON.stringify(rows).replace(/</g, '\\u003c');
+        res.type('html').send(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Todos los correos · SyncBox</title>${CSS_MODERNO}
+        <style>.directory{max-width:1400px;margin:32px auto;padding:0 20px}.directory .main-card{display:block}.directory-top{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}.directory h1{font-size:26px;margin:10px 0}.directory p{color:var(--text-muted,#94a3b8);line-height:1.6}.directory-metrics{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}.directory-metrics>div{flex:1;min-width:140px;padding:18px;background:#111d2f;border:1px solid #26364a;border-radius:14px}.directory-metrics strong{display:block;font-size:28px;color:#67e8f9}.directory-metrics span{color:#a8b7ca;font-size:12px}.directory-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}.directory-tools input{flex:2;min-width:200px}.directory-tools select{flex:1;min-width:150px}.directory .input-classic{margin:0}.directory button,.directory a{width:auto;text-decoration:none}.directory td{vertical-align:top;overflow-wrap:anywhere}.directory td:first-child{font-family:monospace;min-width:220px}.directory table{min-width:900px}.directory-footer{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:16px}.directory-footer div{display:flex;align-items:center;gap:12px}.directory button:disabled{opacity:.4;cursor:default}@media(max-width:600px){.directory{padding:0 12px;margin:18px auto}.directory h1{font-size:22px}.directory .main-card{padding:16px}.directory-tools>*{width:100%}.directory-metrics{gap:8px}.directory-metrics>div{min-width:110px;padding:12px}}</style></head><body><main class="directory"><div class="main-card"><div class="directory-top"><div><span style="color:#67e8f9;font-size:12px">SYNCBOX · ADMINISTRACIÓN</span><h1>Todos los correos</h1></div><a class="action-btn-pill" href="/dash">← Volver al panel</a></div>
+        <p>Correos presentes actualmente en cuentas completas, perfiles extra y asignaciones de todos los usuarios. Un correo se cuenta una sola vez aunque aparezca en varias tablas. No incluye registros eliminados conservados solo en el historial. Presencia en la base de datos no significa funcionamiento verificado.</p>
+        <div class="directory-metrics"><div><strong>${rows.length}</strong><span>Correos únicos actuales</span></div><div><strong>${rows.filter(r => r.asignados.length).length}</strong><span>Con usuario vinculado o comprador</span></div><div><strong>${rows.filter(r => r.estados.includes('Disponible')).length}</strong><span>Con registro disponible en stock</span></div><div><strong>${perfiles.filter(r => !/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/.test(String(r.perfil_info || ''))).length}</strong><span>Perfiles sin correo identificable</span></div></div>
+        <div class="directory-tools"><input id="email-search" class="input-classic" type="search" placeholder="Buscar correo, usuario o propietario…" aria-label="Buscar correo o usuario"><select id="email-type" class="input-classic" aria-label="Tipo"><option value="">Todos los tipos</option><option value="Cuenta completa">Cuentas completas</option><option value="Perfil extra">Perfiles extra</option><option value="Correo asignado">Correos asignados</option></select><select id="email-state" class="input-classic" aria-label="Estado"><option value="">Todos los estados</option></select><button id="email-export" class="action-btn-pill">Exportar CSV</button><button id="email-list" class="action-btn-pill">Descargar correos</button></div>
+        <div class="table-wrapper"><table class="table-modern"><thead><tr><th>Correo</th><th>Tipo</th><th>Usuario / comprador</th><th>Propietario del stock</th><th>Estado registrado</th><th>Fecha registrada</th><th>Origen</th></tr></thead><tbody id="email-rows"></tbody></table></div><div class="directory-footer"><span id="email-count" role="status"></span><div><button id="email-prev" class="action-btn-pill">Anterior</button><span id="email-page"></span><button id="email-next" class="action-btn-pill">Siguiente</button></div></div><p>Las descargas incluyen todos los resultados del filtro, no solo la página visible. Para actualizar el inventario, recarga esta página.</p></div></main>
+        <script id="email-directory-data" type="application/json">${json}</script><script>
+        (function(){
+            const all=JSON.parse(document.getElementById('email-directory-data').textContent);
+            const el=id=>document.getElementById(id); let page=1, filtered=all; const size=100;
+            const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            [...new Set(all.flatMap(r=>r.estados))].sort().forEach(state=>{const option=document.createElement('option');option.value=state;option.textContent=state;el('email-state').appendChild(option)});
+            function render(){const pages=Math.max(1,Math.ceil(filtered.length/size));page=Math.min(page,pages);el('email-rows').innerHTML=filtered.slice((page-1)*size,page*size).map(r=>'<tr>'+[r.email,r.tipos.join(' / '),r.asignados.join(' / ')||'—',r.propietarios.join(' / ')||'—',r.estados.join(' / '),r.fechas.join(' / ')||'—',r.fuentes.join(' / ')].map(v=>'<td>'+escape(v)+'</td>').join('')+'</tr>').join('')||'<tr><td colspan="7">No hay correos con estos filtros.</td></tr>';el('email-count').textContent=filtered.length+' de '+all.length+' correos únicos';el('email-page').textContent=page+' / '+pages;el('email-prev').disabled=page<=1;el('email-next').disabled=page>=pages;}
+            function filter(){const q=el('email-search').value.trim().toLowerCase().replace(/^@/,'');const type=el('email-type').value,state=el('email-state').value;filtered=all.filter(r=>(!q||[r.email,...r.asignados,...r.propietarios].join(' ').toLowerCase().includes(q))&&(!type||r.tipos.some(t=>t.startsWith(type)))&&(!state||r.estados.includes(state)));page=1;render();}
+            el('email-search').addEventListener('input',filter);['email-type','email-state'].forEach(id=>el(id).addEventListener('change',filter));el('email-prev').onclick=()=>{page--;render()};el('email-next').onclick=()=>{page++;render()};
+            function download(content,name,type){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+            function csv(value){let s=String(value);if(/^[=+@\\t\\r-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
+            el('email-export').onclick=()=>{const lines=[['Correo','Tipo','Usuario / comprador','Propietario','Estado','Fechas','Origen'],...filtered.map(r=>[r.email,r.tipos.join(' / '),r.asignados.join(' / '),r.propietarios.join(' / '),r.estados.join(' / '),r.fechas.join(' / '),r.fuentes.join(' / ')])];download('\\uFEFF'+lines.map(row=>row.map(csv).join(',')).join('\\r\\n'),'syncbox-correos-actuales.csv','text/csv;charset=utf-8');};
+            el('email-list').onclick=()=>download(filtered.map(r=>r.email).join('\\n'),'syncbox-correos-actuales.txt','text/plain;charset=utf-8');render();
+        })();</script></body></html>`);
+    } catch (err) {
+        console.error('Error al listar correos actuales:', err.message);
+        res.status(500).send('No se pudo cargar el inventario. Inténtalo de nuevo.');
+    }
+});
+
 app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
@@ -2722,6 +2799,7 @@ app.get('/dash', async (req, res) => {
                             <div class="menu-list">
                                 ${(esAdminPrincipal) ? `
                                 <div class="menu-group-label">Inventario y Finanzas</div>
+                                <a class="menu-btn-item" href="/admin/emails" style="text-decoration:none;">📧 Todos los correos</a>
                                 <button class="menu-btn-item" data-tab="api-ghoulflix" onclick="openTab('api-ghoulflix')" style="color: #25d366;">🔌 Servidor de códigos</button>
                                 <button class="menu-btn-item" data-tab="stock-admin" onclick="openTab('stock-admin')">📦 Gestión de Stock</button>
                                 <button class="menu-btn-item" data-tab="asignacion-manual" onclick="openTab('asignacion-manual')" style="color: #00D2FF;">🎯 Asignación Manual</button>
