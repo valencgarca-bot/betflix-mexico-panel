@@ -6,6 +6,7 @@ const { simpleParser } = require('mailparser');
 const https = require('https');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 const app = express();
 
 const dbDirectory = process.env.RENDER ? '/var/data' : __dirname;
@@ -30,11 +31,10 @@ const CUENTAS_GMAIL_MAP = {
 
 // 📌 NÚMEROS OFICIALES DE NOTIFICACIÓN OBLIGATORIA EN COMPRAS
 const NUMERO_ADMIN_PRINCIPAL = '573012964169';
-const NUMERO_ASISTENTE = '573113092659'; // +57 311 3092659
+const NUMERO_ASISTENTE = '573113092659';
 
 // 📌 CONFIGURACIÓN BASE API GHOULFLIX
 const GHOULFLIX_BASE_URL = 'https://ghoulflix.com';
-// Credenciales privadas del servidor. Nunca servir este archivo como recurso estático.
 const GHOULFLIX_SERVER_LOGIN = Object.freeze({
     login_id: process.env.GHOULFLIX_LOGIN_ID || 'tridentbox',
     email: 'box@ghoulflix.com',
@@ -48,7 +48,6 @@ const PLATAFORMAS = {
     'disney': { nombre: 'Disney+', color: '#ffffff', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
 };
 
-// 📌 PRECIOS BASE DEL ADMINISTRADOR PRINCIPAL (ALMACENADOS ESTRICTAMENTE EN MXN)
 const PRECIOS_BASE = {
     1: 185,
     2: 370,
@@ -58,24 +57,20 @@ const PRECIOS_BASE = {
     10: 1560
 };
 
-// 📌 PRECIO BASE UNITARIO PERFIL EXTRA (50 PESOS MEXICANOS)
 const PRECIO_BASE_PERFIL_EXTRA_MXN = 50;
 
-// 📌 TASAS DE CAMBIO CONFIGURABLES (BASE MXN = 1)
 const TASAS_CAMBIO = {
     'MXN': 1,
     'COP': 176,
     'ARS': 65
 };
 
-// 📌 Validador estricto: Verifica que el número tenga obligatoriamente + y código de país
 function validarTelefonoConCodigo(telefono) {
     if (!telefono) return false;
     const limpio = telefono.toString().replace(/\s+/g, '').trim();
     return /^\+[1-9]\d{7,14}$/.test(limpio);
 }
 
-// 📌 Función para normalizar teléfonos antiguos que ya estaban en base de datos
 function formatearTelefono(telefono) {
     if (!telefono) return null;
     let tel = telefono.toString().replace(/\s+/g, '').trim();
@@ -85,7 +80,6 @@ function formatearTelefono(telefono) {
     return '+52' + tel;
 }
 
-// Funciones Auxiliares para el manejo de Monedas
 function obtenerMonedaPorTelefono(telefono) {
     if (!telefono) return 'MXN';
     let tel = telefono.replace(/\s+/g, '');
@@ -128,7 +122,7 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS
+// ✅ ESTRUCTURA Y MIGRACIONES DE BASE DE DATOS SIN PÉRDIDA DE DATOS
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
@@ -144,7 +138,7 @@ db.serialize(() => {
         }
     });
     
-    db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (date('now', 'localtime')))");
+    db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER, fecha_asignacion DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("CREATE TABLE IF NOT EXISTS registro_codigos (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, email_buscado TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     
     db.run("CREATE TABLE IF NOT EXISTS reservas (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, cantidad INTEGER, telefono TEXT, fecha DATETIME DEFAULT (datetime('now', 'localtime')), estado TEXT DEFAULT 'Pendiente')");
@@ -165,14 +159,12 @@ db.serialize(() => {
 
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
-    // Tabla para guardar credenciales de conexión al servidor de códigos
     db.run("CREATE TABLE IF NOT EXISTS config_ghoulflix (id INTEGER PRIMARY KEY CHECK (id = 1), login_id TEXT, password TEXT, token TEXT, updated_at DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("INSERT OR IGNORE INTO config_ghoulflix (id, login_id, password, token) VALUES (1, '', '', '')");
 
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por, moneda) VALUES ('admin', '14032021', 'Administrador', NULL, 'MXN')", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 
-    // 🚀 ACTUALIZAR TODOS LOS TELÉFONOS EXISTENTES AGREGANDO +52 SI NO TIENEN EL +
     db.run("UPDATE usuarios SET telefono = '+' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) LIKE '52__________'", (err) => {});
     db.run("UPDATE usuarios SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
     db.run("UPDATE reservas SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
@@ -181,12 +173,15 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS precios_subadmin (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, paquete INTEGER, precio REAL, UNIQUE(subadmin_id, paquete))");
     db.run("CREATE TABLE IF NOT EXISTS historial_dinero (id INTEGER PRIMARY KEY AUTOINCREMENT, emisor_id INTEGER, receptor_id INTEGER, monto REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
 
-    // 📌 NUEVA TABLA: STOCK EXCLUSIVO PARA PERFILES EXTRA
     db.run("CREATE TABLE IF NOT EXISTS stock_perfiles_extra (id INTEGER PRIMARY KEY AUTOINCREMENT, perfil_info TEXT, password TEXT, estado TEXT DEFAULT 'Disponible', propietario_id INTEGER DEFAULT 1, comprador_id INTEGER, compra_id INTEGER, fecha_carga DATETIME DEFAULT (datetime('now', 'localtime')), fecha_compra DATETIME)");
+
+    // Índices de aceleración para grandes volúmenes de consultas de revendedores y fechas
+    db.run("CREATE INDEX IF NOT EXISTS idx_correos_user_email ON correos(user_id, email)", (err) => {});
+    db.run("CREATE INDEX IF NOT EXISTS idx_stock_cuentas_comp_email ON stock_cuentas(comprador_id, email)", (err) => {});
 });
 
 // =========================================================================
-// 🌐 FUNCIONES DE CONEXIÓN A LA API DE GHOULFLIX (https://ghoulflix.com)
+// 🌐 FUNCIONES DE CONEXIÓN A LA API DE GHOULFLIX
 // =========================================================================
 function peticionHttpsJson(urlStr, method, headers, bodyObj, signal) {
     return new Promise((resolve, reject) => {
@@ -236,7 +231,6 @@ async function realizarLoginGhoulflixApi() {
             login_id: cfg.login_id,
             password: cfg.password
         });
-        console.log('[Servidor de códigos] Login HTTP:', resp.statusCode, '| autenticado:', !!(resp.data && resp.data.success && resp.data.token));
         if (resp.data && resp.data.success && resp.data.token) {
             ghoulflixServerToken = resp.data.token;
             return { success: true, token: resp.data.token };
@@ -288,18 +282,16 @@ async function consultarCodigoGhoulflixApi(email, code_type, signal) {
             }
         }
 
-        console.log('[Servidor de códigos] Consulta HTTP:', resp.statusCode, '| resultado:', resp.data && resp.data.success && (resp.data.code || resp.data.link) ? 'disponible' : 'sin resultado');
         if ([401, 403, 422, 429].includes(resp.statusCode) || (resp.data && /authentication required|not assigned|not in your|access denied|suspended|disabled|account expired|too many requests|rate limit/i.test(resp.data.error || ''))) {
             return { success: false, source_error: true, terminal: true, error: traducirErrorCodigo(resp.data && resp.data.error, resp.statusCode) };
         }
         if (resp.statusCode >= 200 && resp.statusCode < 300 && resp.data) return resp.data;
-        return { success: false, code: null, link: null, response_time_ms: 0, error: `Error HTTP ${resp.statusCode} desdel servidor de códigos.` };
+        return { success: false, code: null, link: null, response_time_ms: 0, error: `Error HTTP ${resp.statusCode} desde el servidor de códigos.` };
     } catch (err) {
         return { success: false, code: null, link: null, response_time_ms: 0, error: err.message };
     }
 }
 
-// 🧹 FUNCIÓN DE PURGA INMEDIATA
 async function purgarUsuariosInactivos() {
     try {
         await dbRun(`
@@ -312,6 +304,236 @@ async function purgarUsuariosInactivos() {
 }
 purgarUsuariosInactivos();
 setInterval(purgarUsuariosInactivos, 15 * 60 * 1000);
+
+// =========================================================================
+// 📊 GENERADOR DE EXCEL SEGÚN LA PLANTILLA OFICIAL
+// =========================================================================
+async function generarExcelRevendedor(usuario, cuentasRevendedor) {
+    // Si la librería exceljs está instalada y existe la plantilla base, la usa directamente
+    try {
+        const ExcelJS = require('exceljs');
+        const rutaPlantilla = path.resolve(__dirname, 'Plantilla_Venta_dinero_corregido.xlsx');
+        const workbook = new ExcelJS.Workbook();
+
+        if (fs.existsSync(rutaPlantilla)) {
+            await workbook.xlsx.readFile(rutaPlantilla);
+            const sheet = workbook.getWorksheet('NETFLIX (C)') || workbook.worksheets[0];
+
+            // Limpiar datos previos manteniendo las primeras 9 filas intactas
+            const totalFilasPlantilla = sheet.rowCount;
+            for (let r = 10; r <= Math.max(totalFilasPlantilla, 200); r++) {
+                const row = sheet.getRow(r);
+                row.getCell(3).value = null; // C: NOMBRE
+                row.getCell(4).value = null; // D: CELULAR
+                row.getCell(5).value = null; // E: CORREO
+                row.getCell(6).value = null; // F: CLAVE
+                row.getCell(7).value = null; // G: PRECIO
+                row.getCell(8).value = null; // H: EXPIRACION
+                row.getCell(9).value = null; // I: ALERTA
+                row.getCell(10).value = null;// J: DIAS
+                row.getCell(11).value = null;// K: COBRAR
+                row.getCell(12).value = null;// L: ACTUALIZAR
+                row.getCell(13).value = null;// M: PERFILES
+            }
+
+            cuentasRevendedor.forEach((c, idx) => {
+                const fila = 10 + idx;
+                const row = sheet.getRow(fila);
+
+                const telFormateado = (usuario.telefono || '').replace('+', '').replace(/\s+/g, '');
+                const precio = 30000;
+                let fechaExpiracion = c.fecha_expiracion;
+                if (!fechaExpiracion && c.fecha_compra) {
+                    const d = new Date(c.fecha_compra);
+                    d.setDate(d.getDate() + 30);
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const yyyy = d.getFullYear();
+                    fechaExpiracion = `${mm}/${dd}/${yyyy}`;
+                }
+
+                row.getCell(3).value = usuario.user;
+                row.getCell(4).value = telFormateado || '52 1 55 0000 0000';
+                row.getCell(5).value = c.email;
+                row.getCell(6).value = c.password || 'mexico2026';
+                row.getCell(7).value = precio;
+                row.getCell(8).value = fechaExpiracion || '11/30/2026';
+                row.getCell(9).value = { formula: `IF(H${fila}="","",IF(J${fila}<0,"Vencido hace "&J${fila}*-1&" días",IF(J${fila}=0,"Vence hoy",IF(J${fila}>0,"Le quedan "&J${fila}&" días",""))))` };
+                row.getCell(10).value = { formula: `H${fila}-J$8` };
+                row.getCell(11).value = { formula: `HYPERLINK("https://api.whatsapp.com/send?phone=57"&D${fila}&"&text="&(IF(J${fila}<=0,"🚨 Hola, *"&C${fila}&".*"&"%0A%0ASu cuenta de *_NETFLIX_* venció, confirmar con la renovación de su servicio.%0A*Envíar captura de pantalla de pago realizado.*%0A*Muchas gracias*","*MENSAJE RECORDATORIO 🚨*%0A%0AHola, "&C${fila}&".%0ALe quedan "&J${fila}&" días restantes de su membresía *_NETFLIX_*")),"💰")` };
+                row.getCell(12).value = { formula: `HYPERLINK("https://api.whatsapp.com/send?phone=57"&D${fila}&"&text=*_✅ ACTUALIZACIÓN DE CONTRASEÑA | NETFLIX_*%0A%0A💻 Correo: *"&E${fila}&"*%0A🔐 Nueva Contraseña: *"&F${fila}&"*","🔐")` };
+                row.getCell(13).value = { formula: `HYPERLINK("https://api.whatsapp.com/send?phone=57"&D${fila}&"&text=*_✅ CUENTA NETFLIX_*%0A%0A*📧 Correo:* "&E${fila}&"%0A*🔑 Contraseña:* "&F${fila}&"%0A%0A*📍 Vence:*"&H${fila},"💻")` };
+                row.commit();
+            });
+
+            return await workbook.xlsx.writeBuffer();
+        } else {
+            // Generación de hoja estándar compatible en caso de que el archivo físico de plantilla no esté en disco
+            const sheet = workbook.addWorksheet('NETFLIX (C)');
+            sheet.views = [{ showGridLines: true }];
+            sheet.getRow(9).values = ['', '', 'NOMBRE', 'CELULAR', 'CORREO', 'CLAVE', 'PRECIO', 'EXPIRACIÓN', 'ALERTA', 'DIAS', 'COBRAR', 'ACTUALIZAR', 'PERFILES'];
+            sheet.getRow(9).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            sheet.getRow(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD21414' } };
+
+            cuentasRevendedor.forEach((c, idx) => {
+                const fila = 10 + idx;
+                sheet.addRow([
+                    '', '',
+                    usuario.user,
+                    (usuario.telefono || '').replace('+', ''),
+                    c.email,
+                    c.password || 'mexico2026',
+                    30000,
+                    c.fecha_expiracion || '11/30/2026',
+                    `Activa`,
+                    30,
+                    '💰',
+                    '🔐',
+                    '💻'
+                ]);
+            });
+            return await workbook.xlsx.writeBuffer();
+        }
+    } catch (e) {
+        // Fallback nativo: si no está instalado exceljs, genera un archivo XML Spreadsheet 2003 nativo que Excel abre de forma transparente con todas las columnas
+        let xmlFilas = '';
+        cuentasRevendedor.forEach(c => {
+            let exp = c.fecha_expiracion || (c.fecha_compra ? c.fecha_compra.split(' ')[0] : '2026-11-30');
+            xmlFilas += `
+            <Row>
+                <Cell><Data ss:Type="String"></Data></Cell>
+                <Cell><Data ss:Type="String"></Data></Cell>
+                <Cell><Data ss:Type="String">${escapeXml(usuario.user)}</Data></Cell>
+                <Cell><Data ss:Type="String">${escapeXml((usuario.telefono || '').replace('+', ''))}</Data></Cell>
+                <Cell><Data ss:Type="String">${escapeXml(c.email)}</Data></Cell>
+                <Cell><Data ss:Type="String">${escapeXml(c.password || 'mexico2026')}</Data></Cell>
+                <Cell><Data ss:Type="Number">30000</Data></Cell>
+                <Cell><Data ss:Type="String">${escapeXml(exp)}</Data></Cell>
+                <Cell><Data ss:Type="String">Le quedan días</Data></Cell>
+                <Cell><Data ss:Type="Number">30</Data></Cell>
+                <Cell><Data ss:Type="String">💰</Data></Cell>
+                <Cell><Data ss:Type="String">🔐</Data></Cell>
+                <Cell><Data ss:Type="String">💻</Data></Cell>
+            </Row>`;
+        });
+
+        const xmlString = `<?xml version="1.0"?>
+        <?mso-application progid="Excel.Sheet"?>
+        <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+         xmlns:o="urn:schemas-microsoft-com:office:office"
+         xmlns:x="urn:schemas-microsoft-com:office:excel"
+         xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+         <Styles>
+          <Style ss:ID="Header">
+           <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+           <Interior ss:Color="#C00000" ss:Pattern="Solid"/>
+          </Style>
+         </Styles>
+         <Worksheet ss:Name="NETFLIX (C)">
+          <Table>
+           <Row ss:StyleID="Header">
+            <Cell><Data ss:Type="String"></Data></Cell>
+            <Cell><Data ss:Type="String"></Data></Cell>
+            <Cell><Data ss:Type="String">NOMBRE</Data></Cell>
+            <Cell><Data ss:Type="String">CELULAR</Data></Cell>
+            <Cell><Data ss:Type="String">CORREO</Data></Cell>
+            <Cell><Data ss:Type="String">CLAVE</Data></Cell>
+            <Cell><Data ss:Type="String">PRECIO</Data></Cell>
+            <Cell><Data ss:Type="String">EXPIRACIÓN</Data></Cell>
+            <Cell><Data ss:Type="String">ALERTA</Data></Cell>
+            <Cell><Data ss:Type="String">DIAS</Data></Cell>
+            <Cell><Data ss:Type="String">COBRAR</Data></Cell>
+            <Cell><Data ss:Type="String">ACTUALIZAR</Data></Cell>
+            <Cell><Data ss:Type="String">PERFILES</Data></Cell>
+           </Row>
+           ${xmlFilas}
+          </Table>
+         </Worksheet>
+        </Workbook>`;
+        return Buffer.from(xmlString, 'utf-8');
+    }
+}
+
+function escapeXml(str) {
+    return String(str || '').replace(/[<>&'"]/g, (c) => {
+        switch (c) {
+            case '<': return '&lt;';
+            case '>': return '&gt;';
+            case '&': return '&amp;';
+            case '\'': return '&apos;';
+            case '"': return '&quot;';
+        }
+    });
+}
+
+// 📥 ENDPOINT: DESCARGA INDEPENDIENTE DE EXCEL POR REVENDEDOR / CLIENTE
+app.get('/admin/descargar-excel/:userId', async (req, res) => {
+    const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben' || req.session.rol === 'Administrador');
+    const esSubAdmin = (req.session.rol === 'Subadministrador');
+
+    if (!esAdminPrincipal && !esSubAdmin) {
+        return res.status(403).send("No autorizado para descargar datos.");
+    }
+
+    const targetUserId = parseInt(req.params.userId, 10);
+    try {
+        const usuario = await dbGet("SELECT id, user, telefono, rol, creado_por FROM usuarios WHERE id = ?", [targetUserId]);
+        if (!usuario) {
+            return res.status(404).send("Revendedor o usuario no encontrado.");
+        }
+
+        // Permiso: Admin puede descargar cualquiera; Subadmin solo a los creados por él o a sí mismo
+        if (esSubAdmin && !esAdminPrincipal) {
+            if (usuario.id !== req.session.uid && usuario.creado_por !== req.session.uid) {
+                return res.status(403).send("No tienes permisos para descargar las cuentas de este revendedor.");
+            }
+        }
+
+        // Obtener todas las cuentas del revendedor unificando correos asignados y compras
+        const cuentas = await dbAll(`
+            SELECT DISTINCT 
+                c.email, 
+                COALESCE(s.password, dc.password_cuenta, 'mexico2026') as password,
+                COALESCE(s.fecha_compra, c.fecha_asignacion, cs.fecha, datetime('now', 'localtime')) as fecha_compra
+            FROM correos c
+            LEFT JOIN stock_cuentas s ON LOWER(c.email) = LOWER(s.email) AND s.comprador_id = c.user_id
+            LEFT JOIN detalles_compras dc ON LOWER(c.email) = LOWER(dc.email_cuenta)
+            LEFT JOIN compras_stock cs ON dc.compra_id = cs.id AND cs.subadmin_id = c.user_id
+            WHERE c.user_id = ?
+            ORDER BY fecha_compra DESC
+        `, [targetUserId]);
+
+        const cuentasFormateadas = cuentas.map(c => {
+            let expFormatted = '';
+            if (c.fecha_compra) {
+                const fc = new Date(c.fecha_compra);
+                if (!isNaN(fc.getTime())) {
+                    fc.setDate(fc.getDate() + 30);
+                    const mm = String(fc.getMonth() + 1).padStart(2, '0');
+                    const dd = String(fc.getDate()).padStart(2, '0');
+                    const yyyy = fc.getFullYear();
+                    expFormatted = `${mm}/${dd}/${yyyy}`;
+                }
+            }
+            return {
+                email: c.email,
+                password: c.password,
+                fecha_compra: c.fecha_compra,
+                fecha_expiracion: expFormatted || '11/30/2026'
+            };
+        });
+
+        const buffer = await generarExcelRevendedor(usuario, cuentasFormateadas);
+
+        const nombreLimpio = usuario.user.replace(/[^a-zA-Z0-9_-]/g, '_');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="Cuentas_${nombreLimpio}_SyncBox.xlsx"`);
+        return res.send(buffer);
+    } catch (err) {
+        console.error("Error al exportar Excel:", err);
+        return res.status(500).send("Error generando el archivo de Excel.");
+    }
+});
 
 const CSS_MODERNO = `
 <style>
@@ -401,9 +623,29 @@ const CSS_MODERNO = `
         width: 100%; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--card-border); 
         padding: 12px 14px; border-radius: 10px; font-size: 11px; font-weight: 600; 
         color: var(--text-main); cursor: pointer; transition: 0.25s; text-transform: uppercase; 
-        letter-spacing: 0.5px; text-align: center; box-sizing: border-box;
+        letter-spacing: 0.5px; text-align: center; box-sizing: border-box; text-decoration: none; display: inline-block;
     }
     .action-btn-pill:hover { background: rgba(0, 210, 255, 0.14); border-color: var(--accent); transform: translateY(-1px); }
+    
+    .btn-excel {
+        background: rgba(37, 211, 102, 0.15);
+        border: 1px solid #25d366;
+        color: #25d366;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: 0.25s;
+    }
+    .btn-excel:hover {
+        background: #25d366;
+        color: #000;
+        box-shadow: 0 0 12px rgba(37, 211, 102, 0.5);
+    }
     
     .api-grid-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
     
@@ -592,7 +834,7 @@ const CSS_MODERNO = `
 `;
 
 // =========================================================================
-// 🔑 ENDPOINTS DE API OFICIAL (/api/auth/login y /api/customer/fetch-code)
+// 🔑 ENDPOINTS DE API OFICIAL
 // =========================================================================
 app.post('/api/auth/login', async (req, res) => {
     const login_id = (req.body.login_id || '').toString().trim();
@@ -720,7 +962,6 @@ app.post('/api/customer/fetch-code', async (req, res) => {
         if (resultado.success) {
             dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [currentUser.user, correoLimpio]).catch(() => {});
         }
-        console.log('[Busqueda] Consulta finalizada:', resultado.success ? 'resultado disponible' : 'sin resultado');
         res.setHeader('Cache-Control', 'no-store');
         return res.json({ ...resultado, response_time_ms: Date.now() - startMs });
 
@@ -735,7 +976,6 @@ app.post('/api/customer/fetch-code', async (req, res) => {
     }
 });
 
-// Middleware de protección de rutas web
 app.use(async (req, res, next) => {
     const rutasAbiertas = ['/', '/login', '/logout', '/registrar-cliente', '/api/auth/login', '/api/customer/fetch-code'];
     if (rutasAbiertas.includes(req.path)) return next();
@@ -843,12 +1083,11 @@ app.post('/registrar-cliente', async (req, res) => {
     const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
     if (!validarTelefonoConCodigo(telLimpio)) {
-        return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país (Ejemplo: +52 México, +57 Colombia, +54 Argentina). No se permite registrar sin código de país.'); window.location='/?mode=registro';</script>");
+        return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país.'); window.location='/?mode=registro';</script>");
     }
 
     try {
         const monedaDetectada = obtenerMonedaPorTelefono(telLimpio);
-
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, 'Cliente', NULL, ?, ?)", [user.trim(), pass, telLimpio, monedaDetectada]);
         
         const fechaObj = new Date();
@@ -875,9 +1114,7 @@ app.post('/registrar-cliente', async (req, res) => {
             <h2>✅ ¡Registro Exitoso!</h2>
             <p>Se ha creado tu cuenta. Haz clic abajo para enviar tus datos por WhatsApp y activar tu acceso.</p>
             <a href="${linkRedireccion}" class="btn">Confirmar por WhatsApp</a>
-            <script>
-                window.location.replace('${linkRedireccion}');
-            </script>
+            <script>window.location.replace('${linkRedireccion}');</script>
         </body>
         </html>
         `);
@@ -915,7 +1152,6 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-// Ruta para guardar configuración del servidor de códigos API desde el panel de Admin
 app.post('/admin/config-ghoulflix', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { login_id, password, token_manual } = req.body;
@@ -929,12 +1165,12 @@ app.post('/admin/config-ghoulflix', async (req, res) => {
         if (login_id && password && !token_manual) {
             const loginRes = await loginEnGhoulflixApi();
             if (loginRes.success) {
-                return res.send("<script>alert('✅ Conectado exitosamente al servidor de códigos. Token obtenido y guardado.'); window.location='/dash';</script>");
+                return res.send("<script>alert('✅ Conectado exitosamente al servidor de códigos.'); window.location='/dash';</script>");
             } else {
                 return res.send(`<script>alert('⚠️ Credenciales guardadas, pero el servidor respondió: ${loginRes.error}'); window.location='/dash';</script>`);
             }
         }
-        res.send("<script>alert('✅ Configuración de API de códigos actualizada correctamente.'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ Configuración actualizada.'); window.location='/dash';</script>");
     } catch (e) {
         res.redirect('/dash');
     }
@@ -944,11 +1180,11 @@ app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     const telLimpio = (req.body.telefono || '').toString().replace(/\s+/g, '').trim();
     if (!validarTelefonoConCodigo(telLimpio)) {
-        return res.send("<script>alert('⛔ Debes colocar el signo + y el código de tu país en el número de WhatsApp (Ej: +52... o +57...).'); window.location='/dash';</script>");
+        return res.send("<script>alert('⛔ Debes colocar el signo + y el código de tu país en el número.'); window.location='/dash';</script>");
     }
     try {
         await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, telLimpio]);
-        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+        res.send("<script>alert('🛒 Reserva enviada exitosamente.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -956,7 +1192,7 @@ app.post('/bot/garantia', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
-        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
+        res.send("<script>alert('🚨 Garantía reportada en sistema.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -990,12 +1226,11 @@ app.post('/admin/crear', async (req, res) => {
     const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
     if (!validarTelefonoConCodigo(telLimpio)) {
-        return res.send("<script>alert('⛔ OBLIGATORIO: Debes ingresar el número con el signo + y el código del país (Ej: +52... o +57...).'); window.location='/dash';</script>");
+        return res.send("<script>alert('⛔ OBLIGATORIO: Debes ingresar el número con el signo + y el código del país.'); window.location='/dash';</script>");
     }
 
     try {
         const monedaDetectada = obtenerMonedaPorTelefono(telLimpio);
-
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, telLimpio, monedaDetectada]);
         res.redirect('/dash');
     } catch(err) {
@@ -1021,11 +1256,11 @@ app.post('/admin/asignar-correo', async (req, res) => {
                 let dueñoDiferente = dueñosActuales.find(d => d.id !== parseInt(user_id));
                 if (dueñoDiferente) {
                     denegados++;
-                    msjDenegados.push(`- ${e} (Ya lo tiene asignado: ${dueñoDiferente.user})`);
+                    msjDenegados.push(`- ${e} (Ya lo tiene: ${dueñoDiferente.user})`);
                 } else {
                     let yaLoTiene = dueñosActuales.find(d => d.id === parseInt(user_id));
                     if (!yaLoTiene) {
-                        await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                        await dbRun("INSERT INTO correos (email, user_id, fecha_asignacion) VALUES (?, ?, datetime('now', 'localtime'))", [e, user_id]);
                         asignados++;
                     }
                 }
@@ -1041,7 +1276,7 @@ app.post('/admin/asignar-correo', async (req, res) => {
                         } else {
                             let yaLoTieneElClienteDestino = dueñosActuales.find(d => d.id === parseInt(user_id));
                             if (!yaLoTieneElClienteDestino) {
-                                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [e, user_id]);
+                                await dbRun("INSERT INTO correos (email, user_id, fecha_asignacion) VALUES (?, ?, datetime('now', 'localtime'))", [e, user_id]);
                                 asignados++;
                             }
                         }
@@ -1069,7 +1304,6 @@ app.post('/admin/asignar-correo', async (req, res) => {
     }
 });
 
-// 🗑️ BORRAR CORREOS MASIVAMENTE DE UN USUARIO ESPECÍFICO
 app.post('/admin/borrar-correos-masivo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { user_id, correos_borrar } = req.body;
@@ -1120,7 +1354,7 @@ app.post('/admin/borrar-correos-masivo', async (req, res) => {
             }
         }
 
-        const msg = `🗑️ Proceso completado para @${targetUser.user}:\\n\\n✅ Correos borrados de su cuenta: ${eliminados}\\n⚠️ Correos que no tenía asignados: ${noEncontrados}`;
+        const msg = `🗑️ Proceso completado para @${targetUser.user}:\\n\\n✅ Correos borrados: ${eliminados}\\n⚠️ Correos no encontrados: ${noEncontrados}`;
         res.send(`<script>alert('${msg}'); window.location='/dash';</script>`);
     } catch (err) {
         console.error(err);
@@ -1128,7 +1362,6 @@ app.post('/admin/borrar-correos-masivo', async (req, res) => {
     }
 });
 
-// 🔎 RUTA PARA BUSCAR Y AUDITAR CORREOS GLOBALMENTE
 app.post('/admin/auditar-cuentas', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.status(403).send('No autorizado.');
     const { correos_auditar } = req.body;
@@ -1186,7 +1419,7 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
                         </tbody>
                     </table>
                 </div>
-                <button type="submit" class="btn-delete" onclick="return confirm('⚠️ ATENCIÓN: Se eliminarán ESTAS ${cuentasPermitidas.length} CUENTAS de sus respectivos dueños simultáneamente. ¿Confirmas la acción?');">
+                <button type="submit" class="btn-delete" onclick="return confirm('⚠️ ATENCIÓN: Se eliminarán ESTAS ${cuentasPermitidas.length} CUENTAS de sus respectivos dueños. ¿Confirmas la acción?');">
                     🗑️ Eliminar todas estas cuentas de sus dueños
                 </button>
             </form>`;
@@ -1201,7 +1434,6 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
     }
 });
 
-// 🗑️ EJECUTAR LIMPIEZA GLOBAL DESDE LA AUDITORÍA
 app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     
@@ -1277,7 +1509,6 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
     }
 });
 
-// 🚀 CARGA DE STOCK DINÁMICA (ADMIN Y SUBADMIN)
 app.post('/stock/cargar', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { correos_stock, plataforma } = req.body;
@@ -1298,7 +1529,7 @@ app.post('/stock/cargar', async (req, res) => {
                 
                 if(existsStock || existsCorreos) { duplicadas++; } 
                 else {
-                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password, propietario_id) VALUES (?, ?, ?, ?)", [plataforma, e, p, req.session.uid]);
+                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password, propietario_id, fecha_carga) VALUES (?, ?, ?, ?, datetime('now', 'localtime'))", [plataforma, e, p, req.session.uid]);
                     agregadas++;
                 }
             }
@@ -1307,7 +1538,6 @@ app.post('/stock/cargar', async (req, res) => {
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🗑️ ELIMINAR STOCK ESPECÍFICO MASIVAMENTE (ADMIN Y SUBADMIN)
 app.post('/stock/eliminar-masivo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { correos_eliminar } = req.body;
@@ -1332,14 +1562,13 @@ app.post('/stock/eliminar-masivo', async (req, res) => {
                 noEncontrados++;
             }
         }
-        res.send(`<script>alert('🗑️ Proceso de limpieza de stock completado:\\n\\n✅ Cuentas eliminadas de tu inventario: ${eliminados}\\n⚠️ Cuentas no encontradas o que ya no te pertenecen: ${noEncontrados}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('🗑️ Limpieza completada:\\n\\n✅ Cuentas eliminadas: ${eliminados}\\n⚠️ No encontradas: ${noEncontrados}'); window.location='/dash';</script>`);
     } catch (e) {
         console.error(e);
         res.redirect('/dash');
     }
 });
 
-// 🚀 CARGAR STOCK DE PERFILES EXTRA (ADMIN Y SUBADMIN)
 app.post('/stock-perfiles-extra/cargar', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { perfiles_extra_stock } = req.body;
@@ -1353,7 +1582,7 @@ app.post('/stock-perfiles-extra/cargar', async (req, res) => {
             let password = partes.slice(1).join(':').trim() || null;
 
             if (perfilInfo) {
-                await dbRun("INSERT INTO stock_perfiles_extra (perfil_info, password, propietario_id) VALUES (?, ?, ?)", [perfilInfo, password, req.session.uid]);
+                await dbRun("INSERT INTO stock_perfiles_extra (perfil_info, password, propietario_id, fecha_carga) VALUES (?, ?, ?, datetime('now', 'localtime'))", [perfilInfo, password, req.session.uid]);
                 agregados++;
             }
         }
@@ -1364,7 +1593,6 @@ app.post('/stock-perfiles-extra/cargar', async (req, res) => {
     }
 });
 
-// 🗑️ VACIAR STOCK DISPONIBLE DE PERFILES EXTRA
 app.post('/admin/vaciar-stock-perfiles-disponibles', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
@@ -1373,7 +1601,7 @@ app.post('/admin/vaciar-stock-perfiles-disponibles', async (req, res) => {
         } else {
             await dbRun("DELETE FROM stock_perfiles_extra WHERE estado = 'Disponible' AND propietario_id = ?", [req.session.uid]);
         }
-        res.send("<script>alert('✅ El stock disponible de Perfiles Extra ha sido vaciado correctamente.'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ El stock disponible de Perfiles Extra ha sido vaciado.'); window.location='/dash';</script>");
     } catch(e) { res.redirect('/dash'); }
 });
 
@@ -1381,7 +1609,7 @@ app.post('/admin/vaciar-stock-disponible', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     try {
         await dbRun("DELETE FROM stock_cuentas WHERE estado = 'Disponible'");
-        res.send("<script>alert('✅ Todo el stock NO VENDIDO (Disponible) ha sido eliminado correctamente.'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ Todo el stock disponible ha sido eliminado.'); window.location='/dash';</script>");
     } catch(e) { res.redirect('/dash'); }
 });
 
@@ -1389,11 +1617,10 @@ app.post('/admin/vaciar-stock-vendido', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     try {
         await dbRun("DELETE FROM stock_cuentas WHERE estado IN ('Vendida', 'Asignada')");
-        res.send("<script>alert('✅ Todo el stock VENDIDO y ASIGNADO ha sido eliminado de la tabla principal. (Los clientes conservan sus accesos)'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ Todo el stock vendido/asignado ha sido eliminado de la tabla principal.'); window.location='/dash';</script>");
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🚀 ASIGNACIÓN DE DINERO POR PARTE DEL ADMIN (CONVIERTE A MXN)
 app.post('/admin/asignar-dinero', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { subadmin_id, cantidad } = req.body;
@@ -1435,10 +1662,10 @@ app.post('/admin/asignar-dinero', async (req, res) => {
         </head>
         <body>
             <h2>✅ Dinero Asignado: ${saldoMostrado}</h2>
-            <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para enviarle el comprobante a su WhatsApp.</p>
+            <p>Se actualizó el saldo de ${user.user}. Haz clic abajo para notificarlo por WhatsApp.</p>
             <a href="${link}" class="btn">Notificar al Cliente</a>
             <br><br>
-            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
+            <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel</a>
             <script>window.location.replace('${link}');</script>
         </body>
         </html>
@@ -1481,12 +1708,12 @@ app.post('/admin/asignar-manual', async (req, res) => {
             }
 
             await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [receptor_id, cuenta.id]);
-            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, receptor_id]);
+            await dbRun("INSERT INTO correos (email, user_id, fecha_asignacion) VALUES (?, ?, datetime('now', 'localtime'))", [cuenta.email, receptor_id]);
             await dbRun("INSERT INTO historial_asignaciones (email, receptor_id, admin_id, tipo_operacion, estado) VALUES (?, ?, ?, 'Asignación manual', 'Asignada')", [cuenta.email, receptor_id, req.session.uid]);
             asignadasOK++;
         }
 
-        let alertMsg = "✅ Asignación masiva completada.\\n\\nCuentas asignadas exitosamente: " + asignadasOK + "\\nCuentas no procesadas: " + fallidas;
+        let alertMsg = "✅ Asignación masiva completada.\\n\\nCuentas asignadas: " + asignadasOK + "\\nNo procesadas: " + fallidas;
         if (fallidas > 0) {
             let erroresStr = msjFallidas.slice(0, 8).join('\\n');
             if (msjFallidas.length > 8) erroresStr += '\\n... y otras más.';
@@ -1500,7 +1727,6 @@ app.post('/admin/asignar-manual', async (req, res) => {
     }
 });
 
-// 🚀 SUBADMIN: CONFIGURAR PRECIOS DE SU TIENDA
 app.post('/subadmin/configurar-precios', async (req, res) => {
     if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
@@ -1521,7 +1747,6 @@ app.post('/subadmin/configurar-precios', async (req, res) => {
     }
 });
 
-// 🚀 SUBADMIN: ASIGNAR DINERO A SUS CLIENTES
 app.post('/subadmin/asignar-dinero', async (req, res) => {
     if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { cliente_id, cantidad } = req.body;
@@ -1547,13 +1772,12 @@ app.post('/subadmin/asignar-dinero', async (req, res) => {
         await dbRun("INSERT INTO historial_dinero (emisor_id, receptor_id, monto) VALUES (?, ?, ?)", [req.session.uid, cliente_id, montoMXN]);
 
         const saldoActualizadoLocal = formatearDinero(nuevoSaldoSubadminMXN, subadmin.moneda);
-        res.send(`<script>alert('✅ Operación exitosa. Dinero transferido. Te quedan ${saldoActualizadoLocal}.'); window.location='/dash';</script>`);
+        res.send(`<script>alert('✅ Operación exitosa. Te quedan ${saldoActualizadoLocal}.'); window.location='/dash';</script>`);
     } catch(err) {
         res.send("<script>alert('Error en transferencia financiera.'); window.location='/dash';</script>");
     }
 });
 
-// 🚀 COMPRA DE CUENTAS COMPLETAS
 app.post('/tienda/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -1581,14 +1805,14 @@ app.post('/tienda/comprar', async (req, res) => {
         const nuevoSaldoMXN = comprador.creditos - costoMXN;
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoMXN, req.session.uid]);
 
-        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo, tipo_producto) VALUES (?, ?, ?, ?, ?, 'cuenta_completa')", [req.session.uid, paquete, costoMXN, comprador.creditos, nuevoSaldoMXN]);
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo, tipo_producto, fecha) VALUES (?, ?, ?, ?, ?, 'cuenta_completa', datetime('now', 'localtime'))", [req.session.uid, paquete, costoMXN, comprador.creditos, nuevoSaldoMXN]);
         const compraId = compraInfo.lastID;
 
         let correosEntregados = [];
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
             await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta, password_cuenta) VALUES (?, ?, ?, ?)", [compraId, cuenta.id, cuenta.email, cuenta.password]);
-            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
+            await dbRun("INSERT INTO correos (email, user_id, fecha_asignacion) VALUES (?, ?, datetime('now', 'localtime'))", [cuenta.email, req.session.uid]);
             correosEntregados.push(`${cuenta.email} : ${cuenta.password || 'Sin clave'}`);
         }
 
@@ -1628,7 +1852,7 @@ app.post('/tienda/comprar', async (req, res) => {
                 <div class="status-badge">⚠️ PASO OBLIGATORIO DE SEGURIDAD</div>
                 <h2 style="color:#25d366; margin: 5px 0 10px 0;">✅ Compra Procesada (${costoCompradorText})</h2>
                 <p style="color:#cbd5e1; font-size:13px; line-height:1.5; margin-bottom:20px;">
-                    Para liberar y visualizar tus cuentas en el panel, es <b>estrictamente obligatorio</b> enviar el comprobante de entrega por WhatsApp al Administrador y al Asistente:
+                    Para liberar tus cuentas en el panel, envía el comprobante por WhatsApp al Administrador y al Asistente:
                 </p>
 
                 <a href="${linkAdmin}" target="_blank" id="btnPaso1" onclick="marcarPaso1()" class="step-btn btn-wa-1">
@@ -1636,7 +1860,7 @@ app.post('/tienda/comprar', async (req, res) => {
                 </a>
 
                 <a href="${linkAsistente}" target="_blank" id="btnPaso2" onclick="marcarPaso2()" class="step-btn btn-wa-2">
-                    2️⃣ Enviar Copia al Asistente (+57 311 3092659)
+                    2️⃣ Enviar Copia al Asistente
                 </a>
 
                 <button id="btnVolver" onclick="irAlPanel()" class="step-btn btn-panel" disabled>
@@ -1656,7 +1880,7 @@ app.post('/tienda/comprar', async (req, res) => {
                 function marcarPaso1() {
                     paso1OK = true;
                     const b1 = document.getElementById('btnPaso1');
-                    b1.innerHTML = '✅ 1️⃣ Enviado al Administrador (Click para reenviar)';
+                    b1.innerHTML = '✅ 1️⃣ Enviado al Administrador';
                     b1.style.opacity = '0.85';
                     verificarDesbloqueo();
                 }
@@ -1664,7 +1888,7 @@ app.post('/tienda/comprar', async (req, res) => {
                 function marcarPaso2() {
                     paso2OK = true;
                     const b2 = document.getElementById('btnPaso2');
-                    b2.innerHTML = '✅ 2️⃣ Enviado al Asistente (Click para reenviar)';
+                    b2.innerHTML = '✅ 2️⃣ Enviado al Asistente';
                     b2.style.opacity = '0.85';
                     verificarDesbloqueo();
                 }
@@ -1682,7 +1906,7 @@ app.post('/tienda/comprar', async (req, res) => {
                     if (paso1OK && paso2OK) {
                         window.location.href = '/dash';
                     } else {
-                        alert('⛔ Debes enviar obligatoriamente el mensaje al Administrador y al Asistente antes de continuar.');
+                        alert('⛔ Debes enviar obligatoriamente el mensaje al Administrador y al Asistente.');
                     }
                 }
             </script>
@@ -1694,7 +1918,6 @@ app.post('/tienda/comprar', async (req, res) => {
     }
 });
 
-// 🚀 NUEVA RUTA: COMPRA EN LA TIENDA DE PERFILES EXTRA (CANTIDAD DEL 1 AL 100)
 app.post('/tienda-perfiles/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const cantidad = parseInt(req.body.cantidad, 10);
@@ -1712,19 +1935,19 @@ app.post('/tienda-perfiles/comprar', async (req, res) => {
 
         if (comprador.creditos < costoTotalMXN) {
             const faltante = formatearDinero(costoTotalMXN - comprador.creditos, comprador.moneda);
-            return res.send(`<script>alert('⛔ Saldo insuficiente en tu cuenta. Necesitas ${formatearDinero(costoTotalMXN, comprador.moneda)} y te faltan ${faltante}.'); window.location='/dash';</script>`);
+            return res.send(`<script>alert('⛔ Saldo insuficiente. Necesitas ${formatearDinero(costoTotalMXN, comprador.moneda)} (faltan ${faltante}).'); window.location='/dash';</script>`);
         }
 
         const disponibles = await dbAll("SELECT id, perfil_info, password FROM stock_perfiles_extra WHERE estado = 'Disponible' AND propietario_id = ? LIMIT ?", [proveedor_id, cantidad]);
 
         if (disponibles.length < cantidad) {
-            return res.send(`<script>alert('⛔ El proveedor no tiene stock suficiente. Solo hay ${disponibles.length} perfiles disponibles en este momento.'); window.location='/dash';</script>`);
+            return res.send(`<script>alert('⛔ El proveedor solo tiene ${disponibles.length} perfiles disponibles en este momento.'); window.location='/dash';</script>`);
         }
 
         const nuevoSaldoMXN = comprador.creditos - costoTotalMXN;
         await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoMXN, req.session.uid]);
 
-        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo, tipo_producto) VALUES (?, ?, ?, ?, ?, 'perfil_extra')", [req.session.uid, cantidad, costoTotalMXN, comprador.creditos, nuevoSaldoMXN]);
+        const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo, tipo_producto, fecha) VALUES (?, ?, ?, ?, ?, 'perfil_extra', datetime('now', 'localtime'))", [req.session.uid, cantidad, costoTotalMXN, comprador.creditos, nuevoSaldoMXN]);
         const compraId = compraInfo.lastID;
 
         let perfilesEntregados = [];
@@ -1736,7 +1959,7 @@ app.post('/tienda-perfiles/comprar', async (req, res) => {
                 let eLimpio = perfil.perfil_info.trim().toLowerCase();
                 let yaTiene = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, eLimpio]);
                 if (!yaTiene) {
-                    await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [eLimpio, req.session.uid]);
+                    await dbRun("INSERT INTO correos (email, user_id, fecha_asignacion) VALUES (?, ?, datetime('now', 'localtime'))", [eLimpio, req.session.uid]);
                 }
             }
             perfilesEntregados.push(`${perfil.perfil_info} ${perfil.password ? ': ' + perfil.password : ''}`);
@@ -1777,7 +2000,7 @@ app.post('/tienda-perfiles/comprar', async (req, res) => {
                 <div class="status-badge">⚡ PERFILES EXTRA ENTREGADOS</div>
                 <h2 style="color:#25d366; margin: 5px 0 10px 0;">✅ ${cantidad} Perfiles (${costoCompradorText})</h2>
                 <p style="color:#cbd5e1; font-size:13px; line-height:1.5; margin-bottom:20px;">
-                    Envía el comprobante por WhatsApp al Administrador y al Asistente para notificar la compra:
+                    Notifica al Administrador y al Asistente para confirmar tu compra:
                 </p>
 
                 <a href="${linkAdmin}" target="_blank" id="btnPaso1" onclick="marcarPaso1()" class="step-btn btn-wa-1">
@@ -1844,7 +2067,6 @@ app.post('/tienda-perfiles/comprar', async (req, res) => {
     }
 });
 
-// ADMIN CURRENT EMAIL DIRECTORY — current tables only, never historical logs.
 function reunirCorreosActuales(asignaciones, cuentas, perfiles) {
     const emails = new Map();
     function add(email, detail) {
@@ -1879,7 +2101,6 @@ function reunirCorreosActuales(asignaciones, cuentas, perfiles) {
     return Array.from(emails.values()).sort((a, b) => a.email.localeCompare(b.email));
 }
 
-// Count supplier-to-direct-buyer links only. Downstream resale links are informational.
 function resumenDistribucionDirecta(rows, usuarios, adminId) {
     const admins = new Set(usuarios.filter(u => u.rol === 'Administrador').map(u => Number(u.id)));
     const directos = usuarios.filter(u => u.rol !== 'Administrador' &&
@@ -1896,7 +2117,6 @@ function resumenDistribucionDirecta(rows, usuarios, adminId) {
 app.get('/admin/emails', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     try {
-        // Revalidate the role in the database; no directory access for customers/subadmins.
         const admin = await dbGet('SELECT id, rol FROM usuarios WHERE id = ?', [req.session.uid]);
         if (!admin || admin.rol !== 'Administrador') return res.status(403).send('Acceso exclusivo para administradores.');
         const asignaciones = await dbAll(`SELECT c.email, c.user_id, c.fecha_asignacion, u.user AS usuario
@@ -1915,11 +2135,11 @@ app.get('/admin/emails', async (req, res) => {
         const json = JSON.stringify(rows).replace(/</g, '\\u003c');
         res.type('html').send(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Todos los correos · SyncBox</title>${CSS_MODERNO}
         <style>.directory{max-width:1400px;margin:32px auto;padding:0 20px}.directory .main-card{display:block}.directory-top{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}.directory h1{font-size:26px;margin:10px 0}.directory p{color:var(--text-muted,#94a3b8);line-height:1.6}.directory-metrics{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}.directory-metrics>div{flex:1;min-width:140px;padding:18px;background:#111d2f;border:1px solid #26364a;border-radius:14px}.directory-metrics strong{display:block;font-size:28px;color:#67e8f9}.directory-metrics span{color:#a8b7ca;font-size:12px}.directory-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}.directory-tools input{flex:2;min-width:200px}.directory-tools select{flex:1;min-width:150px}.directory .input-classic{margin:0}.directory button,.directory a{width:auto;text-decoration:none}.directory td{vertical-align:top;overflow-wrap:anywhere}.directory td:first-child{font-family:monospace;min-width:220px}.directory table{min-width:900px}.directory-footer{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:16px}.directory-footer div{display:flex;align-items:center;gap:12px}.directory button:disabled{opacity:.4;cursor:default}@media(max-width:600px){.directory{padding:0 12px;margin:18px auto}.directory h1{font-size:22px}.directory .main-card{padding:16px}.directory-tools>*{width:100%}.directory-metrics{gap:8px}.directory-metrics>div{min-width:110px;padding:12px}}</style></head><body><main class="directory"><div class="main-card"><div class="directory-top"><div><span style="color:#67e8f9;font-size:12px">SYNCBOX · ADMINISTRACIÓN</span><h1>Todos los correos</h1></div><a class="action-btn-pill" href="/dash">← Volver al panel</a></div>
-        <p>Correos presentes actualmente en cuentas completas, perfiles extra y asignaciones de todos los usuarios. Un correo se cuenta una sola vez aunque aparezca en varias tablas. No incluye registros eliminados conservados solo en el historial. Presencia en la base de datos no significa funcionamiento verificado.</p>
-        <div class="directory-metrics"><div><strong>${rows.length}</strong><span>Correos únicos actuales</span></div><div><strong>${rows.filter(r => r.asignados.length).length}</strong><span>Con usuario vinculado o comprador</span></div><div><strong>${rows.filter(r => r.estados.includes('Disponible')).length}</strong><span>Con registro disponible en stock</span></div><div><strong>${perfiles.filter(r => !/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/.test(String(r.perfil_info || ''))).length}</strong><span>Perfiles sin correo identificable</span></div></div>
-        <section style="margin:24px 0;padding:18px;border:1px solid #26364a;border-radius:14px"><h2 style="font-size:19px;margin-top:0">Distribución directa del administrador: ${distribucion.total} correos únicos</h2><p>Solo se cuentan los correos vinculados a compradores directos del administrador o usuarios de registro público. Las asignaciones a clientes creados por subadministradores no suman nuevas entregas. Ejemplo: 200 correos para Jonathan, de los cuales él asigna 100 a sus clientes, siguen siendo 200. Los correos presentes únicamente en clientes de subadministradores permanecen visibles abajo, pero no se contabilizan como entregas directas.</p><div class="table-wrapper" style="max-height:360px;overflow:auto"><table class="table-modern" style="min-width:0"><thead><tr><th>Comprador directo</th><th>Correos únicos entregados</th></tr></thead><tbody>${distribucionHtml}</tbody></table></div><p>Si un mismo correo está vinculado a varios compradores directos, aparece en sus filas pero se cuenta una sola vez en el total. El total general de la página sigue mostrando todos los correos actuales del sitio, incluidos los añadidos solo por subadministradores.</p></section>
-        <div class="directory-tools"><input id="email-search" class="input-classic" type="search" placeholder="Buscar correo, usuario o propietario…" aria-label="Buscar correo o usuario"><select id="email-type" class="input-classic" aria-label="Tipo"><option value="">Todos los tipos</option><option value="Cuenta completa">Cuentas completas</option><option value="Perfil extra">Perfiles extra</option><option value="Correo asignado">Correos asignados</option></select><select id="email-state" class="input-classic" aria-label="Estado"><option value="">Todos los estados</option></select><button id="email-export" class="action-btn-pill">Exportar CSV</button><button id="email-list" class="action-btn-pill">Descargar correos</button></div>
-        <div class="table-wrapper"><table class="table-modern"><thead><tr><th>Correo</th><th>Tipo</th><th>Usuario / comprador</th><th>Propietario del stock</th><th>Estado registrado</th><th>Fecha registrada</th><th>Origen</th></tr></thead><tbody id="email-rows"></tbody></table></div><div class="directory-footer"><span id="email-count" role="status"></span><div><button id="email-prev" class="action-btn-pill">Anterior</button><span id="email-page"></span><button id="email-next" class="action-btn-pill">Siguiente</button></div></div><p>Las descargas incluyen todos los resultados del filtro, no solo la página visible. Para actualizar el inventario, recarga esta página.</p></div></main>
+        <p>Correos presentes en cuentas completas, perfiles extra y asignaciones de todos los usuarios. Cada correo se muestra una vez con su procedencia y fecha registrada.</p>
+        <div class="directory-metrics"><div><strong>${rows.length}</strong><span>Correos únicos actuales</span></div><div><strong>${rows.filter(r => r.asignados.length).length}</strong><span>Con usuario o comprador</span></div><div><strong>${rows.filter(r => r.estados.includes('Disponible')).length}</strong><span>En stock libre</span></div><div><strong>${perfiles.filter(r => !/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/.test(String(r.perfil_info || ''))).length}</strong><span>Perfiles sin correo directo</span></div></div>
+        <section style="margin:24px 0;padding:18px;border:1px solid #26364a;border-radius:14px"><h2 style="font-size:19px;margin-top:0">Distribución directa del administrador: ${distribucion.total} correos únicos</h2><p>Entregas directas a subadministradores y clientes. Las reasignaciones secundarias no alteran el volumen total entregado.</p><div class="table-wrapper" style="max-height:360px;overflow:auto"><table class="table-modern" style="min-width:0"><thead><tr><th>Comprador directo</th><th>Correos entregados</th></tr></thead><tbody>${distribucionHtml}</tbody></table></div></section>
+        <div class="directory-tools"><input id="email-search" class="input-classic" type="search" placeholder="Buscar correo, usuario o propietario…" aria-label="Buscar correo o usuario"><select id="email-type" class="input-classic" aria-label="Tipo"><option value="">Todos los tipos</option><option value="Cuenta completa">Cuentas completas</option><option value="Perfil extra">Perfiles extra</option><option value="Correo asignado">Correos asignados</option></select><select id="email-state" class="input-classic" aria-label="Estado"><option value="">Todos los estados</option></select><button id="email-export" class="action-btn-pill">Exportar CSV</button><button id="email-list" class="action-btn-pill">Descargar lista</button></div>
+        <div class="table-wrapper"><table class="table-modern"><thead><tr><th>Correo</th><th>Tipo</th><th>Usuario / Comprador</th><th>Propietario del stock</th><th>Estado</th><th>Fecha Registrada</th><th>Origen</th></tr></thead><tbody id="email-rows"></tbody></table></div><div class="directory-footer"><span id="email-count" role="status"></span><div><button id="email-prev" class="action-btn-pill">Anterior</button><span id="email-page"></span><button id="email-next" class="action-btn-pill">Siguiente</button></div></div></div></main>
         <script id="email-directory-data" type="application/json">${json}</script><script>
         (function(){
             const all=JSON.parse(document.getElementById('email-directory-data').textContent);
@@ -1931,12 +2151,12 @@ app.get('/admin/emails', async (req, res) => {
             el('email-search').addEventListener('input',filter);['email-type','email-state'].forEach(id=>el(id).addEventListener('change',filter));el('email-prev').onclick=()=>{page--;render()};el('email-next').onclick=()=>{page++;render()};
             function download(content,name,type){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
             function csv(value){let s=String(value);if(/^[=+@\\t\\r-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
-            el('email-export').onclick=()=>{const lines=[['Correo','Tipo','Usuario / comprador','Propietario','Estado','Fechas','Origen'],...filtered.map(r=>[r.email,r.tipos.join(' / '),r.asignados.join(' / '),r.propietarios.join(' / '),r.estados.join(' / '),r.fechas.join(' / '),r.fuentes.join(' / ')])];download('\\uFEFF'+lines.map(row=>row.map(csv).join(',')).join('\\r\\n'),'syncbox-correos-actuales.csv','text/csv;charset=utf-8');};
-            el('email-list').onclick=()=>download(filtered.map(r=>r.email).join('\\n'),'syncbox-correos-actuales.txt','text/plain;charset=utf-8');render();
+            el('email-export').onclick=()=>{const lines=[['Correo','Tipo','Usuario / comprador','Propietario','Estado','Fechas','Origen'],...filtered.map(r=>[r.email,r.tipos.join(' / '),r.asignados.join(' / '),r.propietarios.join(' / '),r.estados.join(' / '),r.fechas.join(' / '),r.fuentes.join(' / ')])];download('\\uFEFF'+lines.map(row=>row.map(csv).join(',')).join('\\r\\n'),'syncbox-correos.csv','text/csv;charset=utf-8');};
+            el('email-list').onclick=()=>download(filtered.map(r=>r.email).join('\\n'),'syncbox-correos.txt','text/plain;charset=utf-8');render();
         })();</script></body></html>`);
     } catch (err) {
-        console.error('Error al listar correos actuales:', err.message);
-        res.status(500).send('No se pudo cargar el inventario. Inténtalo de nuevo.');
+        console.error('Error al listar correos:', err.message);
+        res.status(500).send('No se pudo cargar el inventario.');
     }
 });
 
@@ -1956,9 +2176,22 @@ app.get('/dash', async (req, res) => {
                 : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
             let params = [req.session.uid, req.session.uid];
             const usuarios = await dbAll(query, params);
-            const correos = await dbAll("SELECT * FROM correos", []);
-            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
             
+            // Traer correos con sus fechas de compra/asignación reales
+            const correos = await dbAll(`
+                SELECT 
+                    c.id, 
+                    c.email, 
+                    c.user_id, 
+                    c.fecha_asignacion,
+                    s.password,
+                    s.fecha_compra,
+                    s.estado as estado_stock
+                FROM correos c
+                LEFT JOIN stock_cuentas s ON LOWER(c.email) = LOWER(s.email) AND s.comprador_id = c.user_id
+            `, []);
+
+            const registros = await dbAll("SELECT * FROM registro_codigos ORDER BY id DESC LIMIT 5", []);
             const garantias = await dbAll(`SELECT g.*, u.user as cliente_nombre FROM garantias g JOIN usuarios u ON g.user_id = u.id ORDER BY g.estado ASC, g.id DESC`);
             const reservas = await dbAll(`SELECT r.*, u.user as cliente_nombre FROM reservas r JOIN usuarios u ON r.user_id = u.id ORDER BY r.estado ASC, r.id DESC`);
 
@@ -1966,15 +2199,12 @@ app.get('/dash', async (req, res) => {
             const stockDisp = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE estado = 'Disponible' AND propietario_id = ?", [proveedor_inventario]);
             const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE (estado = 'Vendida' OR estado = 'Asignada') AND propietario_id = ?", [proveedor_inventario]);
             
-            // Stock de perfiles extra
             const stockPerfilesDisp = await dbGet("SELECT COUNT(*) as count FROM stock_perfiles_extra WHERE estado = 'Disponible' AND propietario_id = ?", [proveedor_inventario]);
             const stockPerfilesVend = await dbGet("SELECT COUNT(*) as count FROM stock_perfiles_extra WHERE estado = 'Vendida' AND propietario_id = ?", [proveedor_inventario]);
 
             const historialAsignaciones = await dbAll("SELECT h.*, u.user as receptor, a.user as admin FROM historial_asignaciones h JOIN usuarios u ON h.receptor_id = u.id JOIN usuarios a ON h.admin_id = a.id ORDER BY h.id DESC");
-
             const historialCompras = await dbAll(`SELECT c.*, u.user as comprador, u.moneda FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
             const detallesComprasDB = await dbAll("SELECT * FROM detalles_compras");
-            const cfgGhoulflix = await dbGet("SELECT * FROM config_ghoulflix WHERE id = 1");
 
             let actividadesHtml = "";
             if (registros.length > 0) {
@@ -2045,16 +2275,6 @@ app.get('/dash', async (req, res) => {
                     `;
                 }
 
-                if (esSubAdmin) {
-                    controlesIzquierda += `
-                    <button onclick="toggleSubForm('soporte-${key}')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.12); border-color: rgba(255, 115, 0, 0.5); margin-top: 10px;">🛠️ Pedir Soporte (SubAdmin)</button>
-                    <div id="soporte-${key}" class="sub-form" style="border-color: #ff7300;">
-                        <p style="font-size: 11px; margin-bottom: 10px;">Comunícate directo con el jefe por pagos o ayudas técnicas.</p>
-                        <textarea class="input-classic" rows="2" placeholder="Describe el problema..."></textarea>
-                        <button type="button" class="btn-submit" style="background: #ff7300; color: #fff;" onclick="alert('Ticket de soporte enviado.')">Enviar Ticket</button>
-                    </div>`;
-                }
-
                 panelesIzquierdosHtml += `
                 <div id="action-${key}" class="action-panel">
                     <h4 style="margin:0 0 6px 0; font-size:11px; color:var(--accent); text-transform:uppercase; letter-spacing:1px;">⚡ Opciones ${plat.nombre}</h4>
@@ -2063,7 +2283,7 @@ app.get('/dash', async (req, res) => {
 
                 let avisoSinCorreo = "";
                 if ((esCliente || esSubAdmin) && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.18); border: 1px solid #E50914; padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas. Comunícate mediante los botones de contacto (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.18); border: 1px solid #E50914; padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas. Solicita la asignación a tu administrador.</div>`;
                 }
 
                 panelesCentroHtml += `
@@ -2093,7 +2313,7 @@ app.get('/dash', async (req, res) => {
             if (esAdminPrincipal) {
                 panelesIzquierdosHtml += `
                 <div id="action-api-ghoulflix" class="action-panel">
-                    <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🔌 Conexión del servidor de códigos</h4>
+                    <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🔌 Servidor de códigos</h4>
                     <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta códigos de acceso y enlaces mediante la conexión privada del servidor y Gmail.</p>
                 </div>
                 <div id="action-stock-admin" class="action-panel">
@@ -2113,11 +2333,11 @@ app.get('/dash', async (req, res) => {
                 </div>
                 <div id="action-dinero-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">💰 Economía Global</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Asigna dinero a tus subadministradores y controla el balance general de fondos.</p>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Asigna saldo a tus revendedores y clientes.</p>
                 </div>
                 <div id="action-historial-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🧾 Auditoría General</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Registro inmutable de todas las compras de cuentas y perfiles extra.</p>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Historial de compras de cuentas y perfiles extra.</p>
                 </div>`;
 
                 let historialAsigRows = "";
@@ -2126,14 +2346,12 @@ app.get('/dash', async (req, res) => {
                 } else {
                     historialAsignaciones.forEach(h => {
                         let fechaObj = new Date(h.fecha);
-                        let fechaFormatted = fechaObj.toLocaleDateString('es-CO');
-                        let horaFormatted = fechaObj.toLocaleTimeString('es-CO');
                         historialAsigRows += `
                         <tr>
                             <td style="font-family:monospace; color:#E50914; font-weight:600;">${h.email}</td>
                             <td><span style="color:#00D2FF; font-weight:600;">@${h.receptor}</span></td>
                             <td><span style="color:var(--text-muted);">@${h.admin}</span></td>
-                            <td><small style="color:#fff;">${fechaFormatted} ${horaFormatted}</small></td>
+                            <td><small style="color:#fff;">${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}</small></td>
                             <td><span style="color:var(--accent); font-size:11px;">${h.tipo_operacion}</span></td>
                             <td><span class="badge-status disp">${h.estado}</span></td>
                         </tr>`;
@@ -2189,7 +2407,7 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-api-ghoulflix" class="main-card">
                     <h3 style="color:#67e8f9;">◈ Servidor de códigos + ✉ Gmail</h3>
-                    <p style="color:var(--text-muted);font-size:13px;line-height:1.7;">La búsqueda combinada usa la conexión privada configurada en el servidor. No necesitas introducir ni compartir el token aquí. Las credenciales se modifican únicamente en el archivo privado o mediante variables de entorno.</p>
+                    <p style="color:var(--text-muted);font-size:13px;line-height:1.7;">Consulta directa con API y buzón configurado en el servidor.</p>
                 </div>
 
                 <div id="main-stock-admin" class="main-card">
@@ -2204,31 +2422,28 @@ app.get('/dash', async (req, res) => {
 
                     <h3 style="margin:25px 0 12px 0; font-size:18px; font-weight:600; color: #25d366;">⚡ Cargar Stock de Perfiles Extra (50 MXN c/u)</h3>
                     <form action="/stock-perfiles-extra/cargar" method="POST">
-                        <textarea name="perfiles_extra_stock" class="input-classic" placeholder="perfilextra1@correo.com:pin123&#10;perfilextra2@correo.com:pin456..." rows="4" required></textarea>
+                        <textarea name="perfiles_extra_stock" class="input-classic" placeholder="perfilextra1@correo.com:pin123..." rows="4" required></textarea>
                         <button type="submit" class="btn-submit" style="background:#25d366; color:#000;">Ingresar Perfiles Extra al Stock</button>
                     </form>
 
                     <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas del Stock</h4>
                     <form action="/stock/eliminar-masivo" method="POST">
-                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error para borrarlos de tu inventario (correo1@gmail.com&#10;correo2@hotmail.com...)" rows="3" required></textarea>
-                        <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas específicas de tu inventario?');">Borrar Cuentas Ingresadas</button>
+                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error..." rows="3" required></textarea>
+                        <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas?');">Borrar Cuentas Ingresadas</button>
                     </form>
 
                     <div style="margin-top: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
-                        <form action="/admin/vaciar-stock-disponible" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK DISPONIBLE (No Vendido)? Esta acción no se puede deshacer.');">
-                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar Stock Cuentas Disponibles</button>
+                        <form action="/admin/vaciar-stock-disponible" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK DISPONIBLE?');">
+                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar Stock Disponible</button>
                         </form>
-                        <form action="/admin/vaciar-stock-perfiles-disponibles" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas vaciar todos los perfiles extra libres?');">
-                            <button type="submit" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.12); border-color: #ff7300; color: #ff7300;">🗑️ Borrar Perfiles Extra Libres</button>
-                        </form>
-                        <form action="/admin/vaciar-stock-vendido" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK VENDIDO/ASIGNADO?');">
-                            <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar TODO Stock Vendido</button>
+                        <form action="/admin/vaciar-stock-perfiles-disponibles" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas vaciar los perfiles extra libres?');">
+                            <button type="submit" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.12); border-color: #ff7300; color: #ff7300;">🗑️ Borrar Perfiles Libres</button>
                         </form>
                     </div>
 
                     <div class="table-wrapper">
                         <table class="table-modern">
-                            <thead><tr><th>Correo (ADN)</th><th>Estado</th><th>Comprador / Receptor</th><th>Fecha Carga</th></tr></thead>
+                            <thead><tr><th>Correo (ADN)</th><th>Estado</th><th>Comprador</th><th>Fecha Carga</th></tr></thead>
                             <tbody>${stockAdnHtml}</tbody>
                         </table>
                     </div>
@@ -2237,12 +2452,12 @@ app.get('/dash', async (req, res) => {
                 <div id="main-asignacion-manual" class="main-card">
                     <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color: #00D2FF;">🎯 Asignación Manual Masiva</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
-                        Pega todas las cuentas que quieras asignar a la vez. El sistema verificará que estén disponibles en el stock, las asignará al cliente y las descontará automáticamente del inventario.
+                        Pega todas las cuentas que quieras asignar a la vez. El sistema verificará stock, vinculará la fecha y guardará todo ordenadamente.
                     </p>
                     
                     <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid var(--card-border);">
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor:</label>
                             <select name="receptor_id" class="input-classic" style="margin-bottom:0;" required>
                                 <option value="" disabled selected>-- Selecciona al usuario --</option>
                                 ${clientesOpcionesHtml}
@@ -2250,30 +2465,19 @@ app.get('/dash', async (req, res) => {
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
-                            <textarea name="correos_asignar" class="input-classic" style="margin-bottom:0;" placeholder="cuenta1@gmail.com&#10;cuenta2@gmail.com&#10;cuenta3@gmail.com..." rows="5" required></textarea>
+                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock:</label>
+                            <textarea name="correos_asignar" class="input-classic" style="margin-bottom:0;" placeholder="cuenta1@gmail.com&#10;cuenta2@gmail.com..." rows="5" required></textarea>
                         </div>
                         
-                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas al usuario seleccionado? Las cuentas se eliminarán de tu inventario disponible.');">Asignar Cuentas al Cliente</button>
+                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas?');">Asignar Cuentas al Cliente</button>
                     </form>
 
                     <div style="margin-top: 25px;">
-                        <h4 style="margin:0 0 10px 0; font-size:13px; color:#00D2FF; text-transform:uppercase; letter-spacing:1px;">📋 Historial de Asignación Manual</h4>
+                        <h4 style="margin:0 0 10px 0; font-size:13px; color:#00D2FF; text-transform:uppercase;">📋 Historial de Asignación Manual</h4>
                         <div class="table-wrapper">
                             <table class="table-modern">
-                                <thead>
-                                    <tr>
-                                        <th>Cuenta</th>
-                                        <th>Usuario Receptor</th>
-                                        <th>Administrador</th>
-                                        <th>Fecha y Hora</th>
-                                        <th>Tipo</th>
-                                        <th>Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${historialAsigRows}
-                                </tbody>
+                                <thead><tr><th>Cuenta</th><th>Receptor</th><th>Admin</th><th>Fecha</th><th>Tipo</th><th>Estado</th></tr></thead>
+                                <tbody>${historialAsigRows}</tbody>
                             </table>
                         </div>
                     </div>
@@ -2286,8 +2490,7 @@ app.get('/dash', async (req, res) => {
                             <option value="" disabled selected>Selecciona al Usuario/Subadmin...</option>
                             ${subadminsOpcionesHtml}
                         </select>
-                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Dinero a Asignar (Ej: 1000)" required>
-                        <p style="font-size:11px; color:var(--text-muted); margin-top:-4px; margin-bottom:15px;">* El valor que ingreses corresponde a tu moneda local o la base (MXN).</p>
+                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Dinero a Asignar" required>
                         <button type="submit" class="btn-submit">Actualizar Saldo y Notificar por WhatsApp</button>
                     </form>
                 </div>
@@ -2304,24 +2507,19 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            // 🎯 TIENDAS VISIBLES PARA CLIENTES Y SUBADMINISTRADORES
             if (esSubAdmin || esCliente) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🛒 Tienda de Cuentas</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Compra cuentas completas de Netflix de forma instantánea usando tu dinero disponible.</p>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Compra cuentas completas de Netflix instantáneamente con tu saldo.</p>
                 </div>
                 <div id="action-tienda-perfiles-extra" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:#25d366; text-transform:uppercase;">⚡ Perfiles Extra</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Elige de 1 a 100 perfiles extra a 50 MXN c/u en tu moneda local.</p>
-                    <div style="margin-top:10px; background: rgba(37,211,102,0.1); padding: 12px; border-radius: 8px; border: 1px solid rgba(37,211,102,0.3); text-align:center;">
-                        <span style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">Stock disponible:</span>
-                        <div style="font-size: 20px; font-weight:700; color:#25d366;">${stockPerfilesDisp.count}</div>
-                    </div>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Elige de 1 a 100 perfiles extra.</p>
                 </div>
                 <div id="action-mis-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🧾 Mi Inventario</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Revisa las cuentas y contraseñas que has comprado anteriormente.</p>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Revisa las cuentas que has comprado.</p>
                 </div>`;
 
                 let misComprasHtml = "";
@@ -2352,24 +2550,22 @@ app.get('/dash', async (req, res) => {
                 });
 
                 let tarjetasTienda = paquetesNetflix.map(p => `
-                    <div style="background: #000; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px; text-align: center; transition: 0.25s;" onmouseover="this.style.borderColor='var(--accent)';" onmouseout="this.style.borderColor='var(--card-border)';">
+                    <div style="background: #000; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px; text-align: center; transition: 0.25s;">
                         <img src="${PLATAFORMAS['netflix'].logo}" height="28" style="margin-bottom: 12px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.5));">
                         <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 20px;">${p.cant} Cuenta${p.cant > 1 ? 's' : ''}</h2>
                         <p style="color: #00D2FF; font-weight: 700; font-size: 17px; margin: 0 0 16px 0;">${formatearDinero(p.costo, usuarioActual.moneda)}</p>
                         <form action="/tienda/comprar" method="POST" style="margin:0;">
                             <input type="hidden" name="paquete" value="${p.cant}">
-                            <button type="submit" class="btn-submit" style="font-size: 11px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta${p.cant > 1 ? 's' : ''} por ${formatearDinero(p.costo, usuarioActual.moneda)}? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
+                            <button type="submit" class="btn-submit" style="font-size: 11px;" onclick="return confirm('¿Deseas comprar ${p.cant} cuenta(s)?');">Comprar Ahora</button>
                         </form>
                     </div>
                 `).join('');
 
-                // Opciones del selector 1 al 100 para Perfiles Extra
                 let opciones1a100 = "";
                 for (let i = 1; i <= 100; i++) {
                     opciones1a100 += `<option value="${i}">${i} Perfil${i > 1 ? 'es' : ''} Extra</option>`;
                 }
 
-                const precioUnitarioLocal = convertirLocal(PRECIO_BASE_PERFIL_EXTRA_MXN, usuarioActual.moneda);
                 const precioUnitarioFormateado = formatearDinero(PRECIO_BASE_PERFIL_EXTRA_MXN, usuarioActual.moneda);
 
                 panelesCentroHtml += `
@@ -2380,18 +2576,16 @@ app.get('/dash', async (req, res) => {
                             Dinero Disponible: <span style="color:#00D2FF;">${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}</span>
                         </div>
                     </div>
-                    
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 16px;">
                         ${tarjetasTienda}
                     </div>
                 </div>
 
-                <!-- 🛒 NUEVO PANEL: TIENDA DE PERFILES EXTRA -->
                 <div id="main-tienda-perfiles-extra" class="main-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                         <div>
                             <h3 style="margin:0; font-size:20px; font-weight:700; color: #25d366;">⚡ Tienda de Perfiles Extra</h3>
-                            <p style="margin:4px 0 0 0; font-size:12px; color:var(--text-muted);">Cada perfil extra cuesta <strong>50 MXN</strong> (${precioUnitarioFormateado}). Elige la cantidad sin escribirla manualmente.</p>
+                            <p style="margin:4px 0 0 0; font-size:12px; color:var(--text-muted);">Precio: ${precioUnitarioFormateado} por perfil.</p>
                         </div>
                         <div style="background: rgba(37,211,102,0.12); border: 1px solid rgba(37,211,102,0.35); padding: 8px 16px; border-radius: 50px; font-size: 12px; font-weight: 600; color: #fff;">
                             Tu Saldo: <span style="color:#25d366;">${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}</span>
@@ -2400,59 +2594,14 @@ app.get('/dash', async (req, res) => {
 
                     <div style="background: rgba(0,0,0,0.6); border: 1px solid rgba(37,211,102,0.3); border-radius: 12px; padding: 24px; max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;">
                         <form action="/tienda-perfiles/comprar" method="POST" id="form-compra-perfiles">
-                            <label style="color:#25d366; font-size:12px; font-weight:700; text-transform:uppercase; display:block; margin-bottom:8px; letter-spacing:0.8px;">
-                                1. Selecciona la cantidad de perfiles (1 al 100):
-                            </label>
-                            <select id="select-cantidad-perfiles" name="cantidad" class="input-classic" style="font-size:14px; font-weight:600; border-color: rgba(37,211,102,0.4);" onchange="calcularTotalPerfiles(this.value)">
+                            <select id="select-cantidad-perfiles" name="cantidad" class="input-classic" style="font-size:14px; font-weight:600; border-color: rgba(37,211,102,0.4);">
                                 ${opciones1a100}
                             </select>
-
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; margin: 18px 0; display:flex; flex-direction:column; gap:8px;">
-                                <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-muted);">
-                                    <span>Precio por Perfil:</span>
-                                    <strong style="color:#fff;">${precioUnitarioFormateado}</strong>
-                                </div>
-                                <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-muted);">
-                                    <span>Stock en Sistema:</span>
-                                    <strong style="color:${stockPerfilesDisp.count > 0 ? '#25d366' : '#E50914'};">${stockPerfilesDisp.count} perfiles</strong>
-                                </div>
-                                <hr style="border:none; border-top:1px solid rgba(255,255,255,0.08); margin:4px 0;">
-                                <div style="display:flex; justify-content:space-between; font-size:16px;">
-                                    <span style="color:#fff; font-weight:600;">Total a Descontar:</span>
-                                    <strong id="label-total-calculado" style="color:#25d366; font-size:18px;">${formatearDinero(PRECIO_BASE_PERFIL_EXTRA_MXN, usuarioActual.moneda)}</strong>
-                                </div>
-                            </div>
-
-                            <button type="submit" class="btn-submit" style="background:#25d366; color:#000; font-weight:800; padding:15px;" onclick="return confirm('¿Confirmas la compra inmediata de los perfiles extra seleccionados?');">
+                            <button type="submit" class="btn-submit" style="background:#25d366; color:#000; font-weight:800; padding:15px; margin-top:15px;" onclick="return confirm('¿Confirmas la compra inmediata?');">
                                 ⚡ Comprar Perfiles Extra Ahora
                             </button>
                         </form>
                     </div>
-
-                    <script>
-                        function calcularTotalPerfiles(cant) {
-                            const cantidad = parseInt(cant, 10) || 1;
-                            const precioBaseMXN = ${PRECIO_BASE_PERFIL_EXTRA_MXN};
-                            const monedaUsuario = '${usuarioActual.moneda}';
-                            const tasaCOP = ${TASAS_CAMBIO.COP};
-                            const tasaARS = ${TASAS_CAMBIO.ARS};
-
-                            const totalMXN = precioBaseMXN * cantidad;
-                            let totalLocal = totalMXN;
-                            let locale = 'es-MX';
-
-                            if (monedaUsuario === 'COP') {
-                                totalLocal = Math.round((totalMXN * tasaCOP) / 100) * 100;
-                                locale = 'es-CO';
-                            } else if (monedaUsuario === 'ARS') {
-                                totalLocal = Math.round((totalMXN * tasaARS) / 10) * 10;
-                                locale = 'es-AR';
-                            }
-
-                            const textoFormateado = '$' + totalLocal.toLocaleString(locale) + ' ' + monedaUsuario;
-                            document.getElementById('label-total-calculado').innerText = textoFormateado;
-                        }
-                    </script>
                 </div>
 
                 <div id="main-mis-compras" class="main-card">
@@ -2467,7 +2616,6 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            // 🚀 PANELES EXCLUSIVOS PARA SUBADMINISTRADORES
             if (esSubAdmin) {
                 const misPrecios = await dbAll("SELECT paquete, precio FROM precios_subadmin WHERE subadmin_id = ?", [req.session.uid]);
                 let inputsPrecios = [1, 2, 3, 4, 5, 10].map(cant => {
@@ -2486,7 +2634,6 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-mi-tienda" class="main-card">
                     <h3 style="margin:0 0 8px 0; font-size:19px; color:#00D2FF;">⚙️ Configurar Precios de Mi Tienda</h3>
-                    <p style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">Establece los precios a los que le venderás a tus clientes en tu moneda (${usuarioActual.moneda}). El sistema impide colocar precios menores a lo que te cobra el Administrador.</p>
                     <form action="/subadmin/configurar-precios" method="POST">
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:18px;">${inputsPrecios}</div>
                         <button type="submit" class="btn-submit">Guardar Precios de Venta</button>
@@ -2495,15 +2642,6 @@ app.get('/dash', async (req, res) => {
                 
                 <div id="main-mi-stock" class="main-card">
                     <h3 style="margin:0 0 15px 0; font-size:19px; color:#00D2FF;">📦 Cargar Mi Inventario Propio</h3>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:18px;">
-                        <div style="background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.25); padding: 12px; border-radius: 10px; text-align:center;">
-                            <strong style="color: #00D2FF; font-size:24px;">${stockDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">Cuentas Disponibles</small>
-                        </div>
-                        <div style="background: rgba(37, 211, 102, 0.08); border: 1px solid rgba(37, 211, 102, 0.25); padding: 12px; border-radius: 10px; text-align:center;">
-                            <strong style="color: #25d366; font-size:24px;">${stockPerfilesDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">Perfiles Extra Libres</small>
-                        </div>
-                    </div>
-
                     <h4 style="margin:10px 0 6px 0; font-size:14px; color:#00D2FF;">1. Cargar Cuentas Completas</h4>
                     <form action="/stock/cargar" method="POST">
                         <input type="hidden" name="plataforma" value="netflix">
@@ -2511,45 +2649,38 @@ app.get('/dash', async (req, res) => {
                         <button type="submit" class="btn-submit">Subir Cuentas a mi Inventario</button>
                     </form>
 
-                    <h4 style="margin:20px 0 6px 0; font-size:14px; color:#25d366;">2. Cargar Perfiles Extra a mi Tienda</h4>
+                    <h4 style="margin:20px 0 6px 0; font-size:14px; color:#25d366;">2. Cargar Perfiles Extra</h4>
                     <form action="/stock-perfiles-extra/cargar" method="POST">
                         <textarea name="perfiles_extra_stock" class="input-classic" placeholder="perfilextra1@correo.com:pin123..." rows="4" required></textarea>
                         <button type="submit" class="btn-submit" style="background:#25d366; color:#000;">Subir Perfiles Extra</button>
-                    </form>
-
-                    <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas de mi Stock</h4>
-                    <form action="/stock/eliminar-masivo" method="POST">
-                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error (correo1@gmail.com&#10;correo2@hotmail.com...)" rows="3" required></textarea>
-                        <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas de tu inventario?');">Borrar Cuentas Ingresadas</button>
                     </form>
                 </div>
 
                 <div id="main-dinero-clientes" class="main-card">
                     <h3 style="margin:0 0 8px 0; font-size:19px; color:#00D2FF;">💸 Asignar Dinero a Mis Clientes</h3>
-                    <p style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">Transfiere de tu saldo (${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}) a las cuentas de tus clientes.</p>
                     <form action="/subadmin/asignar-dinero" method="POST">
                         <select name="cliente_id" class="input-classic" required>
                             <option value="" disabled selected>Selecciona a tu cliente...</option>
                             ${misClientesOptions}
                         </select>
-                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Monto a transferir en tu moneda (${usuarioActual.moneda})" required>
+                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Monto a transferir" required>
                         <button type="submit" class="btn-submit">Transferir Dinero</button>
                     </form>
                 </div>`;
                 
                 panelesIzquierdosHtml += `
-                <div id="action-mi-tienda" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">⚙️ Administración Tienda</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Controla tus márgenes de ganancia por paquete.</p></div>
-                <div id="action-mi-stock" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Inventario Privado</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Gestiona las cuentas y perfiles extra que vendes a tus clientes.</p></div>
-                <div id="action-dinero-clientes" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">💸 Billetera</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Reparte tu saldo entre tus clientes registrados.</p></div>
+                <div id="action-mi-tienda" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">⚙️ Tienda</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Márgenes de ganancia por paquete.</p></div>
+                <div id="action-mi-stock" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Inventario</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Gestión de tus cuentas en stock.</p></div>
+                <div id="action-dinero-clientes" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">💸 Saldo</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Envía créditos a tus clientes.</p></div>
                 `;
             }
 
             panelesIzquierdosHtml += `
-            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea nuevas cuentas de clientes o subadministradores para darles acceso al panel SyncBox.</p></div>
-            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
-            <div id="action-borrar-correos-masivo" class="action-panel"><h4 style="margin:0; font-size:11px; color:#E50914; text-transform:uppercase;">🗑️ Borrado Masivo</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Busca a un usuario (ej. Juan), pega sin límite los correos que no eran para él y bórralos de su perfil en un solo clic.</p></div>
-            <div id="action-auditoria-global" class="action-panel"><h4 style="margin:0; font-size:11px; color:#ff7300; text-transform:uppercase;">🔎 Limpieza Global</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Pega una lista de correos mezclados. El sistema detectará quiénes son los dueños y te permitirá borrarlos todos de una vez.</p></div>
-            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra tus usuarios directos y registros públicos.</p></div>
+            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea cuentas de clientes o revendedores.</p></div>
+            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula cuentas a tus clientes.</p></div>
+            <div id="action-borrar-correos-masivo" class="action-panel"><h4 style="margin:0; font-size:11px; color:#E50914; text-transform:uppercase;">🗑️ Borrado Masivo</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Elimina correos de un usuario en un solo clic.</p></div>
+            <div id="action-auditoria-global" class="action-panel"><h4 style="margin:0; font-size:11px; color:#ff7300; text-transform:uppercase;">🔎 Limpieza Global</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Detecta los dueños de una lista de correos y límpialos.</p></div>
+            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta ordenada de correos y fechas de compra, con descarga independiente en Excel por revendedor.</p></div>
             `;
             
             let tablaUsuariosHtml = "";
@@ -2561,7 +2692,7 @@ app.get('/dash', async (req, res) => {
                     : usuarios.filter(u => u.creado_por === req.session.uid);
                 
                 if (usuariosVisibles.length === 0) {
-                    tablaUsuariosHtml = "<tr><td colspan='5' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay usuarios registrados aún.</td></tr>";
+                    tablaUsuariosHtml = "<tr><td colspan='6' style='padding: 20px; text-align: center; color: var(--text-muted);'>No hay usuarios registrados aún.</td></tr>";
                 } else {
                     let renderRow = (u) => {
                         let correosDelUsuario = correos.filter(c => c.user_id === u.id);
@@ -2570,12 +2701,22 @@ app.get('/dash', async (req, res) => {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
                                 let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.4);" : "background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);";
-                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:6px 10px; border-radius:6px; font-size:11px; margin-bottom:4px;">
-                                    <span>${c.email}</span>
+                                
+                                let fechaCompraStr = c.fecha_compra || c.fecha_asignacion || 'Fecha no registrada';
+                                let fechaSolo = fechaCompraStr.split(' ')[0];
+
+                                return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:6px 10px; border-radius:6px; font-size:11px; margin-bottom:4px; gap:8px;">
+                                    <div style="overflow:hidden; text-overflow:ellipsis;">
+                                        <span style="font-weight:600; color:#fff;">${c.email}</span>
+                                        <div style="font-size:10px; color:var(--text-muted); display:flex; gap:10px; margin-top:2px;">
+                                            <span>📅 Compra: <b style="color:#00D2FF;">${fechaSolo}</b></span>
+                                            ${c.password ? `<span>🔑 <b style="color:#25d366;">${c.password}</b></span>` : ''}
+                                        </div>
+                                    </div>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
                                 </div>`;
                             }).join('');
-                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos (Auto-eliminación 24h)</span>"; }
+                        } else { listaCorreosHtml = "<span style='color:var(--text-muted); font-size:11px; font-style: italic;'>Sin correos asignados</span>"; }
 
                         let selectorRol = "";
                         if (esAdminPrincipal) {
@@ -2599,22 +2740,29 @@ app.get('/dash', async (req, res) => {
 
                         return `<tr>
                             <td style="font-weight: 500; padding-left: 15px;">
-                                <span style="color: #fff; font-size: 13px; font-weight:600;">${icon} ${u.user}</span>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span style="color: #fff; font-size: 13px; font-weight:600;">${icon} ${u.user}</span>
+                                    <span style="background:rgba(0,210,255,0.1); border:1px solid rgba(0,210,255,0.3); color:#00D2FF; padding:2px 6px; border-radius:4px; font-size:10px;">${correosDelUsuario.length} Cuentas</span>
+                                </div>
                                 <div style="margin-top: 5px; line-height: 1.4;">
                                     <small style="color:var(--accent); font-weight:600; font-size:10px; display:block;">🔑 Pass: ${u.pass}</small>
                                     <small style="color:var(--text-muted); font-size:10px; display:block;">📱 Tel: ${telMostrado}</small>
                                     <small style="color:var(--text-muted); font-size:10px; display:block;">📅 Reg: ${dateFormated}</small>
-                                    ${esAdminPrincipal ? `<small style="color:#25d366; font-weight:600; font-size:10px; display:block;">🪙 Dinero: ${formatearDinero(u.creditos, u.moneda)}</small>
-                                    <small style="color:#E50914; font-weight:600; font-size:10px; display:block;">🔴 Deuda: ${formatearDinero(u.deuda, u.moneda)}</small>` : ''}
+                                    ${esAdminPrincipal ? `<small style="color:#25d366; font-weight:600; font-size:10px; display:block;">🪙 Saldo: ${formatearDinero(u.creditos, u.moneda)}</small>` : ''}
                                 </div>
                             </td>
-                            <td style="width: 110px;">${selectorRol}</td>
-                            <td style="width: 38%;"><div style="max-height: 120px; overflow-y: auto; padding-right: 6px;">${listaCorreosHtml}</div></td>
+                            <td style="width: 100px;">${selectorRol}</td>
+                            <td style="width: 38%;"><div style="max-height: 160px; overflow-y: auto; padding-right: 6px;">${listaCorreosHtml}</div></td>
                             <td style="font-size: 11px; color: var(--text-muted);">${idCreadorTexto}</td>
+                            <td style="text-align: center; width: 130px;">
+                                <a href="/admin/descargar-excel/${u.id}" class="btn-excel" title="Descargar plantilla Excel con todos los correos y fechas de compra de ${u.user}">
+                                    📊 Excel (${correosDelUsuario.length})
+                                </a>
+                            </td>
                             <td style="text-align: center;">
                                 <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario?');" style="margin:0;">
                                     <input type="hidden" name="user_id" value="${u.id}">
-                                    <button type="submit" style="background: rgba(229,9,20,0.12); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#E50914'; this.style.color='#fff';" onmouseout="this.style.background='rgba(229,9,20,0.12)'; this.style.color='#E50914';">Eliminar</button>
+                                    <button type="submit" style="background: rgba(229,9,20,0.12); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; transition:0.2s;">Eliminar</button>
                                 </form>
                             </td>
                         </tr>`;
@@ -2625,12 +2773,12 @@ app.get('/dash', async (req, res) => {
                         let clientesDirectos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
 
                         if (subadmins.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS SUBADMINISTRADORES</td></tr>`;
+                            tablaUsuariosHtml += `<tr><td colspan="6" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS SUBADMINISTRADORES / REVENDEDORES</td></tr>`;
                             subadmins.forEach(sa => { tablaUsuariosHtml += renderRow(sa); });
                         }
 
                         if (clientesDirectos.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS CLIENTES DIRECTOS Y PÚBLICOS</td></tr>`;
+                            tablaUsuariosHtml += `<tr><td colspan="6" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS CLIENTES DIRECTOS Y PÚBLICOS</td></tr>`;
                             clientesDirectos.forEach(c => { tablaUsuariosHtml += renderRow(c); });
                         }
                     } else {
@@ -2644,11 +2792,11 @@ app.get('/dash', async (req, res) => {
                 <div id="main-auditoria-global" class="main-card">
                     <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color:#ff7300;">🔎 Buscar y Limpiar Cuentas Masivamente</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
-                        Pega 20, 30 o más cuentas (incluso de clientes diferentes). El sistema te mostrará en el visor de abajo <b>a qué usuarios pertenecen</b> y te dará la opción de <b>quitárselas a todos</b> de una vez.
+                        Pega cuentas y el sistema te mostrará a qué usuarios pertenecen para quitárselas de una sola vez.
                     </p>
                     <form action="/admin/auditar-cuentas" method="POST" target="marco_resultados" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(255, 115, 0, 0.35);" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #ff7300; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">Pega la lista de correos a investigar / borrar:</label>
+                            <label style="color: #ff7300; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">Pega la lista de correos a investigar:</label>
                             <textarea name="correos_auditar" class="input-classic" style="margin-bottom:0;" placeholder="correo1@gmail.com&#10;correo2@hotmail.com..." rows="8" required></textarea>
                         </div>
                         <button type="submit" class="btn-submit" style="background: #ff7300; color: #fff;">🔎 Buscar Dueños de estas Cuentas</button>
@@ -2705,7 +2853,6 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div class="dashboard-grid">
-                    
                     <div class="left-sidebar">
                         <div class="side-card" style="padding: 16px;">
                             <h4>📺 Plataformas</h4>
@@ -2736,7 +2883,7 @@ app.get('/dash', async (req, res) => {
                             <form action="/admin/crear" method="POST" onsubmit="
                                 const tel = this.telefono.value.replace(/\\s+/g, '');
                                 if(!/^\\+[1-9]\\d{7,14}$/.test(tel)) {
-                                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de país (Ejemplo: +521234567890 o +573001234567).');
+                                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de país.');
                                     this.telefono.focus();
                                     return false;
                                 }
@@ -2766,28 +2913,31 @@ app.get('/dash', async (req, res) => {
                         <div id="main-borrar-correos-masivo" class="main-card">
                             <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color:#E50914;">🗑️ Borrar Correos Masivamente a un Usuario</h3>
                             <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
-                                Busca al usuario (ej. Juan), selecciónalo y pega sin límite todos los correos que deseas quitarle de su cuenta (20, 50 o los que necesites).
+                                Selecciona al usuario y pega la lista de correos a eliminar.
                             </p>
                             <form action="/admin/borrar-correos-masivo" method="POST" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(229, 9, 20, 0.35);">
                                 <div style="margin-bottom: 14px;">
                                     <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar y seleccionar usuario:</label>
-                                    <input type="text" id="buscador-user-borrar" class="input-classic" placeholder="🔎 Escribe aquí para filtrar el nombre (ej: juan)..." oninput="filtrarSelectorUsuarios('buscador-user-borrar', 'select-user-borrar')" style="margin-bottom: 8px; border-color: rgba(0, 210, 255, 0.4);">
+                                    <input type="text" id="buscador-user-borrar" class="input-classic" placeholder="🔎 Filtrar usuario..." oninput="filtrarSelectorUsuarios('buscador-user-borrar', 'select-user-borrar')" style="margin-bottom: 8px; border-color: rgba(0, 210, 255, 0.4);">
                                     <select id="select-user-borrar" name="user_id" class="input-classic" style="margin-bottom:0;" required>
                                         <option value="" disabled selected>-- Selecciona al usuario --</option>
                                         ${clientesOpcionesHtml}
                                     </select>
                                 </div>
                                 <div style="margin-bottom: 15px;">
-                                    <label style="color: #E50914; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pega los correos que le vas a borrar (sin límite):</label>
-                                    <textarea name="correos_borrar" class="input-classic" style="margin-bottom:0;" placeholder="correo1@gmail.com&#10;correo2@gmail.com&#10;correo3@hotmail.com..." rows="8" required></textarea>
+                                    <label style="color: #E50914; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pega los correos a borrar:</label>
+                                    <textarea name="correos_borrar" class="input-classic" style="margin-bottom:0;" placeholder="correo1@gmail.com&#10;correo2@gmail.com..." rows="8" required></textarea>
                                 </div>
-                                <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;" onclick="return confirm('⚠️ ¿Seguro que deseas borrarle todos estos correos al usuario seleccionado?');">🗑️ Borrarle estos correos al usuario</button>
+                                <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;" onclick="return confirm('⚠️ ¿Seguro que deseas borrarle estos correos?');">🗑️ Borrarle estos correos al usuario</button>
                             </form>
                         </div>
 
                         <div id="main-base-datos" class="main-card">
-                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                                <h3 style="margin:0; font-size:19px; font-weight:600; color:#00D2FF;">🗄️ Base de Datos SyncBox</h3>
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:15px;">
+                                <div>
+                                    <h3 style="margin:0; font-size:19px; font-weight:600; color:#00D2FF;">🗄️ Base de Datos SyncBox</h3>
+                                    <p style="margin:4px 0 0 0; font-size:12px; color:var(--text-muted);">Consulta de correos, contraseñas y fechas de compra, con descarga independiente en Excel por cada revendedor.</p>
+                                </div>
                                 <form action="/dash" method="GET" style="display:flex; gap:8px; margin:0;">
                                     <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0; padding: 9px 14px; width: 200px;">
                                     <button type="submit" class="btn-submit" style="padding: 9px 18px; width:auto;">Buscar</button>
@@ -2796,10 +2946,11 @@ app.get('/dash', async (req, res) => {
                             <div class="table-wrapper">
                                 <table class="table-modern">
                                     <thead><tr>
-                                        <th>Usuario</th>
+                                        <th>Usuario / Revendedor</th>
                                         <th>Rol</th>
-                                        <th style="width: 38%;">Correos Vinculados</th>
+                                        <th style="width: 38%;">Correos y Fechas de Compra</th>
                                         <th>Origen</th>
+                                        <th style="text-align:center;">Descargar Excel</th>
                                         <th style="text-align:center;">Acción</th>
                                     </tr></thead>
                                     <tbody>${tablaUsuariosHtml}</tbody>
@@ -2870,7 +3021,9 @@ app.get('/dash', async (req, res) => {
     }
 });
 
-// BEGIN DUAL LOOKUP HELPERS
+// =========================================================================
+// BÚSQUEDA COMBINADA Y HELPERS IMAP / GMAIL
+// =========================================================================
 function traducirErrorCodigo(message, status) {
     const text = String(message || '').toLowerCase();
     if (status === 429 || /too many requests|rate limit/.test(text)) return 'El servidor limita las solicitudes. Espera antes de volver a intentar.';
@@ -2887,6 +3040,7 @@ function traducirErrorCodigo(message, status) {
 function escapeResultado(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
 function enlaceNetflixSeguro(value) {
     try {
         const u = new URL(value);
@@ -2894,6 +3048,7 @@ function enlaceNetflixSeguro(value) {
             (u.hostname === 'netflix.com' || u.hostname.endsWith('.netflix.com')) ? u.href : null;
     } catch (_) { return null; }
 }
+
 function normalizarResultadoFuente(data, fuente, tipo) {
     const value = data && typeof data === 'object' ? data : {};
     let code = value.code == null ? null : String(value.code);
@@ -2906,6 +3061,7 @@ function normalizarResultadoFuente(data, fuente, tipo) {
         status: success ? 'found' : value.source_error ? 'error' : 'not_found',
         error: success ? null : fuente === 'Gmail' ? 'No se encontró un resultado reciente válido en Gmail.' : value.terminal ? value.error : traducirErrorCodigo(value.error, 0) };
 }
+
 function extraerCodigoGmail(mail, tipo) {
     if (!mail) return { success: false };
     const received = new Date(mail.date).getTime();
@@ -2924,6 +3080,7 @@ function extraerCodigoGmail(mail, tipo) {
     }
     return { success: !!(code || link), code, link };
 }
+
 async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
     const controller = new AbortController();
     const deadline = Date.now() + 60000;
@@ -2950,7 +3107,6 @@ async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
             while (!controller.signal.aborted && Date.now() < deadline) {
                 if (index === 0 && tipo === 'reset_link' && attempts > 0) break;
                 attempts++;
-                console.log('[Busqueda] Fuente:', sources[index].source, '| intento:', attempts);
                 let value;
                 try {
                     if (index === 0) value = await consultarCodigoGhoulflixApi(email, tipo, controller.signal);
@@ -2979,9 +3135,10 @@ async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
     }
     const best = sources.find(x => x.success);
     return { success: !!best, code: best ? best.code : null, link: best ? best.link : null,
-        source: best ? best.source : null, sources: sources.map(x => x.status === 'searching' ? { ...x, status: 'stopped', error: best ? 'Consulta detenida al encontrar un resultado en la otra fuente.' : 'Tiempo de búsqueda finalizado.' } : x),
-        error: best ? null : 'No se encontró un resultado válido durante la búsqueda. Comprueba el envío del correo y los permisos.' };
+        source: best ? best.source : null, sources: sources.map(x => x.status === 'searching' ? { ...x, status: 'stopped', error: best ? 'Consulta detenida al encontrar un resultado.' : 'Tiempo de búsqueda finalizado.' } : x),
+        error: best ? null : 'No se encontró un resultado válido durante la búsqueda.' };
 }
+
 function renderBusquedaCliente(email, tipo, etiqueta) {
     const payload = JSON.stringify({ email, code_type: tipo }).replace(/</g, '\\u003c');
     return `<main class="lookup-shell"><div class="lookup-top">BÚSQUEDA AUTOMÁTICA</div><h2>${escapeResultado(etiqueta)}</h2><p class="lookup-email">${escapeResultado(email)}</p><section id="lookup-progress"><div id="lookup-seconds">60 s</div><p id="lookup-status">Buscando en Gmail y el servidor de códigos…</p><p class="lookup-muted">La búsqueda se repite automáticamente. No necesitas pulsar otra vez.</p></section><div id="lookup-results" aria-live="polite"></div></main>
@@ -3004,8 +3161,8 @@ function renderBusquedaCliente(email, tipo, etiqueta) {
                 method:'POST',credentials:'same-origin',cache:'no-store',signal:controller.signal,
                 headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)
             });
-            const data=await response.json().catch(function(){throw new Error('El servidor devolvió una respuesta no válida. Revisa la terminal de Node.');});
-            if(!response.ok)throw new Error(response.status===401?'Tu sesión venció. Vuelve a iniciar sesión.':response.status===403?'No tienes permiso para consultar esta cuenta.':'La consulta falló (HTTP '+response.status+').');
+            const data=await response.json().catch(function(){throw new Error('El servidor devolvió una respuesta no válida.');});
+            if(!response.ok)throw new Error(response.status===401?'Tu sesión venció.':response.status===403?'No tienes permiso para consultar esta cuenta.':'La consulta falló.');
             const sources=Array.isArray(data.sources)?data.sources:[];
             if(!sources.length && data.success!==true)throw new Error(data.error||'La búsqueda terminó sin un resultado.');
             const title=node('h2',data.success?'Resultado disponible':'Búsqueda finalizada sin código');results.append(title);
@@ -3024,40 +3181,16 @@ function renderBusquedaCliente(email, tipo, etiqueta) {
                     const copy=node('button',code?'Copiar código':'Copiar enlace','lookup-button');copy.addEventListener('click',async function(){try{await navigator.clipboard.writeText(code||link);copy.textContent='✓ Copiado';}catch(e){copy.textContent='Selecciona y copia el resultado';}});card.append(copy);
                 }else card.append(node('p',item.error||'No se encontró un resultado.','lookup-muted'));
             });
-            results.append(node('p','Búsqueda terminada en '+((Date.now()-started)/1000).toFixed(1)+' s. Gmail revisa mensajes de los últimos 5 minutos.','lookup-muted'));
+            results.append(node('p','Búsqueda terminada en '+((Date.now()-started)/1000).toFixed(1)+' s.','lookup-muted'));
         }catch(error){
             results.append(node('h2','No se pudo completar la búsqueda'));
-            results.append(node('p',error.name==='AbortError'?'La conexión superó el tiempo de espera. No sigas pulsando: revisa la terminal del servidor y vuelve a intentarlo después.':error.message,'lookup-error'));
+            results.append(node('p',error.name==='AbortError'?'La conexión superó el tiempo de espera.':error.message,'lookup-error'));
         }finally{
             finished=true;clearInterval(ticker);clearTimeout(deadline);progress.hidden=true;release();
         }
     })();
     </script>`;
 }
-
-function renderEsperaAutomatica() {
-    return `<div id="lookup-wait" style="max-width:660px;margin:30px auto;padding:32px;border:1px solid #28465a;border-radius:20px;background:#101b2d;text-align:center;color:#e6f9ff;font-family:Inter,sans-serif"><div style="font-size:12px;color:#67e8f9;letter-spacing:2px">BÚSQUEDA AUTOMÁTICA</div><h2>Buscando tu código…</h2><div id="lookup-seconds" style="font-size:48px;font-weight:700;color:#9cffe2">60 s</div><p style="color:#a6b6cc;line-height:1.7">Revisando Gmail y el servidor de códigos.<br>No necesitas volver a pulsar el botón.</p></div><script>window.lookupStarted=Date.now();window.lookupClock=setInterval(function(){var left=Math.max(0,60-Math.floor((Date.now()-window.lookupStarted)/1000));var el=document.getElementById('lookup-seconds');if(el)el.textContent=left>0?left+' s':'Finalizando…';if(left===0)clearInterval(window.lookupClock);},250);</script>`;
-}
-function renderBusquedaCombinada(resultado, email, etiqueta, tiempo) {
-    const cards = resultado.sources.map(item => {
-        const content = item.success
-            ? (item.code ? `<div class="dual-code">${escapeResultado(item.code)}</div>` : '<p>Enlace de verificación disponible</p>') +
-              (item.link ? `<a class="dual-button" href="${escapeResultado(item.link)}" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a>` : '') +
-              `<button class="dual-button dual-copy" data-copy="${escapeResultado(item.code || item.link)}">Copiar ${item.code ? 'código' : 'enlace'}</button>`
-            : `<p class="dual-note">${escapeResultado(item.error)}</p>`;
-        return `<section class="dual-card ${item.success ? 'found' : ''}"><div class="dual-card-top"><strong>${item.source === 'Gmail' ? '✉ Gmail' : '◈ Servidor de códigos'}</strong><span class="dual-status">${item.success ? 'Encontrado' : item.status === 'stopped' ? 'Finalizada' : 'Sin resultado'}</span></div>${content}</section>`;
-    }).join('');
-    return `<style>
-    .dual-wrap{max-width:880px;margin:24px auto;padding:24px;box-sizing:border-box;background:linear-gradient(135deg,#101b2d,#0a101d);border:1px solid #26374d;border-radius:22px;color:#f1f5f9}
-    .dual-eyebrow{font-size:11px;letter-spacing:2px;color:#67e8f9;font-weight:700}.dual-wrap h2{font-size:25px;margin:12px 0}.dual-note{color:#a6b6cc;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
-    .dual-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}.dual-card{padding:22px;background:#101827;border:1px solid #2b3b51;border-radius:15px;min-width:0}.dual-card.found{border-color:#32c998;background:linear-gradient(145deg,#102b2a,#101827)}
-    .dual-card-top{display:flex;justify-content:space-between;align-items:center;gap:10px}.dual-status{font-size:10px;padding:6px 9px;border-radius:99px;background:#243249;color:#becbde}.found .dual-status{background:#164936;color:#87f7cc}
-    .dual-code{font:700 clamp(27px,5vw,42px) monospace;letter-spacing:5px;padding:26px 0;color:#b0fff0;user-select:all}.dual-button{border:1px solid #395068;background:#172b41;color:#e5faff;border-radius:9px;padding:11px 14px;cursor:pointer;text-decoration:none;display:inline-block;margin:6px 6px 0 0;font:600 12px Inter,sans-serif}
-    .dual-footer{margin-top:20px;color:#8296af;font-size:11px;line-height:1.7}@media(max-width:600px){.dual-grid{grid-template-columns:1fr}.dual-wrap{padding:18px;margin:10px}}
-    </style><main class="dual-wrap"><div class="dual-eyebrow">BÚSQUEDA COMBINADA · NETFLIX</div><h2>${resultado.success ? 'Tu resultado está disponible' : 'Todavía no hay un resultado válido'}</h2><p class="dual-note">${escapeResultado(etiqueta)}<br>${escapeResultado(email)}</p><div class="dual-grid">${cards}</div><div class="dual-footer">Búsqueda automática · ${(tiempo / 1000).toFixed(1)} s<br>Gmail: mensajes de los últimos 5 minutos. Servidor de códigos: resultado autorizado por su API; no garantiza que sea un código nuevo.</div></main>
-    <script>window.parent.postMessage('lookup-complete',location.origin);document.querySelectorAll('.dual-copy').forEach(function(button){button.addEventListener('click',async function(){try{await navigator.clipboard.writeText(button.dataset.copy);button.textContent='✓ Copiado';}catch(e){button.textContent='Selecciona y copia el resultado';}});});</script>`;
-}
-// END DUAL LOOKUP HELPERS
 
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion, signal) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
@@ -3122,7 +3255,6 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         return null;
 
     } catch (err) {
-        console.log(`⚠ Advertencia IMAP (${correoBuzon}):`, err.message);
         if (connection) connection.end();
         return null;
     } finally {
@@ -3137,110 +3269,10 @@ app.post('/buscar', async (req, res) => {
     
     const cssIframe = `<style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body, html { 
-            font-family: 'Inter', sans-serif !important; 
-            background: transparent !important; 
-            color: #f8fafc;
-            margin: 0; padding: 0; 
-        } 
-        
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.5); border-radius: 10px; }
-
-        .magic-email-wrapper table, .magic-email-wrapper td, .magic-email-wrapper tr, .magic-email-wrapper body, .magic-email-wrapper div {
-            background-color: transparent !important; background: transparent !important; border: none !important;
-        }
-        
-        .magic-email-wrapper * {
-            font-family: 'Inter', sans-serif !important;
-            color: #f8fafc !important;
-            line-height: 1.6 !important;
-            box-shadow: none !important;
-        }
-
-        .magic-email-wrapper h1, 
-        .magic-email-wrapper h2, 
-        .magic-email-wrapper h3, 
-        .magic-email-wrapper strong {
-            color: #00D2FF !important; 
-            text-shadow: 0 0 8px rgba(0, 210, 255, 0.8), 0 0 15px rgba(0, 210, 255, 0.5) !important;
-        }
-        
-        .magic-email-wrapper a {
-            background-color: #E50914 !important;
-            color: #fff !important;
-            padding: 10px 20px !important;
-            border-radius: 4px !important;
-            display: inline-block !important;
-            text-decoration: none !important;
-            text-shadow: none !important;
-            font-weight: bold !important;
-        }
-
-        .magic-email-wrapper p, 
-        .magic-email-wrapper span {
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3) !important;
-            font-size: 15px !important;
-        }
-
-        .magic-email-wrapper img {
-            filter: drop-shadow(0 0 15px rgba(229, 9, 20, 0.9)) !important;
-            border-radius: 4px !important;
-            max-width: 100% !important;
-        }
-
-        .magic-email-wrapper { 
-            width: 100%; 
-            display: flex;
-            justify-content: center;
-            padding: 20px 0;
-        }
-        
-        .magic-email-wrapper > * {
-            max-width: 600px;
-            width: 100%;
-        }
-
-        .api-result-box {
-            max-width: 520px;
-            margin: 35px auto;
-            background: rgba(10, 14, 22, 0.95);
-            border: 1px solid rgba(0, 210, 255, 0.35);
-            border-radius: 16px;
-            padding: 30px;
-            text-align: center;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.9);
-        }
-        .code-pill {
-            font-family: monospace;
-            font-size: 40px;
-            font-weight: 700;
-            letter-spacing: 6px;
-            color: #00D2FF;
-            background: #000;
-            border: 1px solid rgba(0, 210, 255, 0.4);
-            padding: 18px 28px;
-            border-radius: 12px;
-            display: inline-block;
-            margin: 18px 0;
-            user-select: all;
-        }
-        .btn-copy-api {
-            background: #00D2FF;
-            color: #000;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 700;
-            cursor: pointer;
-            text-transform: uppercase;
-            font-size: 12px;
-            text-decoration: none;
-            display: inline-block;
-            margin-top: 10px;
-        }
+        body, html { font-family: 'Inter', sans-serif !important; background: transparent !important; color: #f8fafc; margin: 0; padding: 0; }
+        .magic-email-wrapper { width: 100%; display: flex; justify-content: center; padding: 20px 0; }
+        .magic-email-wrapper > * { max-width: 600px; width: 100%; }
+        .api-result-box { max-width: 520px; margin: 35px auto; background: rgba(10, 14, 22, 0.95); border: 1px solid rgba(0, 210, 255, 0.35); border-radius: 16px; padding: 30px; text-align: center; }
     </style>`;
 
     try {
@@ -3255,7 +3287,7 @@ app.post('/buscar', async (req, res) => {
         if (esCliente && !esAdminPrincipal) {
             const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
             if (!tieneAcceso) {
-                return res.send(`${cssIframe}<div class="api-result-box" style="border-color:#E50914;"><h2 style="color:#E50914; margin-top:0;">⛔ Not assigned to your profile</h2><p style="color:#cbd5e1; font-size:13px;">No tienes este correo asignado a tu perfil. Solicítalo a tu administrador o subadministrador.</p></div>`);
+                return res.send(`${cssIframe}<div class="api-result-box" style="border-color:#E50914;"><h2 style="color:#E50914; margin-top:0;">⛔ Not assigned to your profile</h2><p style="color:#cbd5e1; font-size:13px;">No tienes este correo asignado a tu perfil.</p></div>`);
             }
         } else if (esSubAdmin && !esAdminPrincipal) {
             const enPool = await dbGet(`
@@ -3270,7 +3302,6 @@ app.post('/buscar', async (req, res) => {
         }
 
         if (tiposApiGhoulflix.includes(accion)) {
-            const startMs = Date.now();
             const etiquetasTipo = {
                 'signin_6digit': '🔢 Código de Inicio de Sesión (6 Dígitos)',
                 'signin_4digit': '📺 Código de TV / Dispositivo (4 Dígitos)',
@@ -3279,7 +3310,7 @@ app.post('/buscar', async (req, res) => {
             };
 
             if (plataforma !== 'netflix') {
-                return res.send(`${cssIframe}<div class="api-result-box">La búsqueda combinada de códigos está disponible para Netflix.</div>`);
+                return res.send(`${cssIframe}<div class="api-result-box">Disponible para Netflix.</div>`);
             }
             res.setHeader('Cache-Control', 'no-store');
             return res.send(cssIframe + renderBusquedaCliente(correoIngresado, accion, etiquetasTipo[accion]));
@@ -3297,75 +3328,13 @@ app.post('/buscar', async (req, res) => {
 
         if (!resultadoExitoso) { 
             return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;">
-                <h2 style="color:#f8fafc; font-weight:300; text-shadow: 0 0 10px rgba(0, 210, 255, 0.6);">Mensaje no encontrado</h2>
-                <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#00D2FF;">${email_search}</strong></p>
+                <h2 style="color:#f8fafc; font-weight:300;">Mensaje no encontrado</h2>
+                <p>No hay correos recientes en el buzón para: <br><strong style="color:#00D2FF;">${email_search}</strong></p>
             </div>`); 
         }
 
         const { mail } = resultadoExitoso;
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
-        const textoCorreo = textoBruto.toLowerCase();
-
-        if (accion === 'pais') {
-            let paisDetectado = null;
-            
-            const codigosPais = {
-                'US': '🇺🇸 Estados Unidos', 'CO': '🇨🇴 Colombia', 'BR': '🇧🇷 Brasil',
-                'JP': '🇯🇵 Japón', 'MX': '🇲🇽 México', 'ES': '🇪🇸 España',
-                'AR': '🇦🇷 Argentina', 'CL': '🇨🇱 Chile', 'PE': '🇵🇪 Perú',
-                'EC': '🇪🇨 Ecuador', 'VE': '🇻🇪 Venezuela', 'UY': '🇺🇾 Uruguay',
-                'PY': '🇵🇾 Paraguay', 'BO': '🇧🇴 Bolivia', 'CR': '🇨🇷 Costa Rica',
-                'PA': '🇵🇦 Panamá', 'DO': '🇩🇴 República Dominicana', 'GT': '🇬🇹 Guatemala',
-                'HN': '🇭🇳 Honduras', 'SV': '🇸🇻 El Salvador', 'NI': '🇳🇮 Nicaragua',
-                'PR': '🇵🇷 Puerto Rico', 'CA': '🇨🇦 Canadá', 'GB': '🇬🇧 Reino Unido',
-                'FR': '🇫🇷 Francia', 'DE': '🇩🇪 Alemania', 'IT': '🇮🇹 Italia',
-                'PT': '🇵🇹 Portugal', 'TR': '🇹🇷 Turquía', 'IN': '🇮🇳 India',
-                'ZA': '🇿🇦 Sudáfrica', 'KR': '🇰🇷 Corea del Sur', 'AU': '🇦🇺 Australia',
-                'NL': '🇳🇱 Países Bajos', 'SE': '🇸🇪 Suecia', 'NO': '🇳🇴 Noruega',
-                'DK': '🇩🇰 Dinamarca', 'FI': '🇫🇮 Finlandia', 'PL': '🇵🇱 Polonia',
-                'CH': '🇨🇭 Suiza', 'AT': '🇦🇹 Austria', 'BE': '🇧🇪 Bélgica',
-                'IE': '🇮🇪 Irlanda', 'NZ': '🇳🇿 Nueva Zelanda', 'SG': '🇸🇬 Singapur'
-            };
-
-            let matchSrc = textoBruto.match(/_([A-Z]{2})_EVO/);
-            if (matchSrc && matchSrc[1]) {
-                let codigo = matchSrc[1].toUpperCase();
-                paisDetectado = codigosPais[codigo] || ("🌍 Código de País: " + codigo);
-            }
-
-            if (!paisDetectado) {
-                const reglasPais = [
-                    { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
-                    { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] },
-                    { id: "🇧🇷 Brasil", keys: ['brasil', 'brazil', 'são paulo', '0800-'] },
-                    { id: "🇯🇵 Japón", keys: ['japan', 'japón', 'tokyo', '合同会社'] },
-                    { id: "🇲🇽 México", keys: ['méxico', 'mexico', 'cdmx', '01 800'] },
-                    { id: "🇪🇸 España", keys: ['españa', 'spain', 'madrid', '900 '] },
-                    { id: "🇦🇷 Argentina", keys: ['argentina', 'buenos aires'] },
-                    { id: "🇨🇱 Chile", keys: ['chile', 'santiago'] },
-                    { id: "🇵🇪 Perú", keys: ['perú', 'peru', 'lima'] },
-                    { id: "🇪🇨 Ecuador", keys: ['ecuador', 'quito', 'guayaquil'] }
-                ];
-                for (let regla of reglasPais) { 
-                    if (regla.keys.some(k => textoCorreo.includes(k))) { 
-                        paisDetectado = regla.id; 
-                        break; 
-                    } 
-                }
-            }
-
-            let htmlRes = paisDetectado 
-                ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#00D2FF; text-shadow: 0 0 15px rgba(0, 210, 255, 0.8);">${paisDetectado}</div>` 
-                : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
-        }
-
-        if (accion === 'ip') {
-            const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
-            let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#00D2FF; text-shadow: 0 0 10px rgba(0,210,255,0.6); margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;">${ipContenido}</div></div>`);
-        }
 
         if (/\b\d{4,6}\b/.test(textoBruto) && plataforma === 'netflix') {
             try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
@@ -3377,7 +3346,10 @@ app.post('/buscar', async (req, res) => {
             </div>
         `);
 
-    } catch (err) { if (res.headersSent) { if (!res.destroyed) res.end('<p>La búsqueda se interrumpió. Vuelve a intentarlo.</p>'); return; } res.send(`${cssIframe}<h2 style="color:#00D2FF; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
+    } catch (err) { 
+        if (res.headersSent) { if (!res.destroyed) res.end('<p>La búsqueda se interrumpió.</p>'); return; } 
+        res.send(`${cssIframe}<h2 style="color:#00D2FF; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); 
+    }
 });
 
 app.listen(10000, () => {
