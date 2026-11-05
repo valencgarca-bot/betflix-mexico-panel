@@ -261,7 +261,6 @@ async function consultarCodigoGhoulflixApi(email, code_type, signal) {
             code_type: code_type
         }, signal);
 
-        // Si el token expiró (401 o error de autenticación), re-autenticar automáticamente 1 vez
         if ((resp.statusCode === 401 || (resp.data && resp.data.error && /authentication required|invalid token|token expired|expired token/i.test(resp.data.error))) && cfg.login_id && cfg.password) {
             const relogin = await loginEnGhoulflixApi();
             if (relogin.success) {
@@ -305,20 +304,20 @@ const CSS_MODERNO = `
     :root {
         --text-main: #f8fafc;
         --text-muted: #94a3b8;
-        --card-bg: rgba(8, 10, 15, 0.94);
-        --card-border: rgba(255, 255, 255, 0.12);
-        --accent: #00D2FF;
-        --accent-hover: #0099CC;
-        --btn-bg: rgba(0, 210, 255, 0.08);
+        --card-bg: rgba(12, 16, 24, 0.94);
+        --card-border: rgba(255, 215, 0, 0.25); /* Toque Navideño Dorado */
+        --accent: #FFD700; /* Dorado Navidad */
+        --accent-hover: #FBBF24;
+        --btn-bg: rgba(229, 9, 20, 0.15); /* Fondo Botones Rojo Claro */
         --shadow-elegant: 0 15px 40px rgba(0, 0, 0, 0.9);
         --blur-effect: blur(12px);
         --radius: 14px;
     }
     @keyframes pureSeriesSlideshow {
-        0% { background-image: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.75)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
-        33% { background-image: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.75)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2000&auto=format&fit=crop'); }
-        66% { background-image: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.75)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
-        100% { background-image: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.75)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
+        0% { background-image: linear-gradient(rgba(10, 0, 0, 0.75), rgba(0, 10, 0, 0.75)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
+        33% { background-image: linear-gradient(rgba(10, 0, 0, 0.75), rgba(0, 10, 0, 0.75)), url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2000&auto=format&fit=crop'); }
+        66% { background-image: linear-gradient(rgba(10, 0, 0, 0.75), rgba(0, 10, 0, 0.75)), url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop'); }
+        100% { background-image: linear-gradient(rgba(10, 0, 0, 0.75), rgba(0, 10, 0, 0.75)), url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2000&auto=format&fit=crop'); }
     }
     body { 
         background-size: cover; background-position: center; background-attachment: fixed; 
@@ -326,8 +325,59 @@ const CSS_MODERNO = `
         color: var(--text-main); font-family: 'Inter', sans-serif; 
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; 
     }
+    
+    /* EFECTOS NAVIDEÑOS CSS */
+    .snowflake-anim {
+        position: absolute;
+        top: -30px;
+        color: rgba(255, 255, 255, 0.9);
+        text-shadow: 0 0 8px rgba(255,255,255,0.8);
+        animation: fall linear infinite;
+    }
+    @keyframes fall {
+        0% { transform: translateY(-20px) translateX(0px) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(105vh) translateX(30px) rotate(360deg); opacity: 0.2; }
+    }
+    .lights-container {
+        position: fixed; top: -5px; width: 100%; height: 20px; z-index: 9999;
+        pointer-events: none; display: flex; justify-content: space-around;
+    }
+    .light {
+        width: 10px; height: 15px; border-radius: 50%;
+        background: #ff0000; box-shadow: 0 5px 15px #ff0000;
+        animation: blink 1.5s infinite alternate;
+        margin: 0 5px;
+    }
+    .light:nth-child(even) { background: #22c55e; box-shadow: 0 5px 15px #22c55e; animation-delay: 0.5s; }
+    .light:nth-child(3n) { background: #FFD700; box-shadow: 0 5px 15px #FFD700; animation-delay: 1s; }
+    .light:nth-child(4n) { background: #3b82f6; box-shadow: 0 5px 15px #3b82f6; animation-delay: 1.5s; }
+    @keyframes blink {
+        0% { opacity: 0.3; transform: scale(0.9); }
+        100% { opacity: 1; transform: scale(1.2); }
+    }
+    .santa-wrapper {
+        position: fixed; bottom: -10px; right: 20px; z-index: 10000;
+        display: flex; flex-direction: column; align-items: center;
+        pointer-events: none; animation: floatSanta 4s ease-in-out infinite;
+    }
+    .santa-sign {
+        background: #E50914; color: #fff; border: 2px solid #FFD700;
+        padding: 8px 16px; border-radius: 10px; font-weight: 800;
+        font-size: 14px; margin-bottom: -15px; z-index: 2;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.5); text-transform: uppercase;
+        letter-spacing: 1px; transform: rotate(-5deg); text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .santa-img { width: 140px; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.6)); z-index: 1; }
+    @keyframes floatSanta {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-15px); }
+    }
+    @media (max-width: 768px) {
+        .santa-wrapper { right: 5px; bottom: -15px; transform: scale(0.85); }
+    }
+
     .top-header { 
-        background: rgba(0, 0, 0, 0.6); 
+        background: rgba(10, 0, 0, 0.65); 
         border-bottom: 1px solid var(--card-border);
         backdrop-filter: var(--blur-effect);
         padding: 16px 35px; 
@@ -343,7 +393,7 @@ const CSS_MODERNO = `
         padding: 10px 16px; border: 1px solid var(--card-border); backdrop-filter: var(--blur-effect); 
         border-radius: 12px; cursor: pointer; transition: 0.25s; width: 100%; box-sizing: border-box;
     }
-    .user-pill:hover { border-color: #E50914; background: rgba(229, 9, 20, 0.1); }
+    .user-pill:hover { border-color: #E50914; background: rgba(229, 9, 20, 0.15); }
     .user-pill img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid var(--accent); }
     .user-pill .info { display: flex; flex-direction: column; overflow: hidden; }
     .user-pill .info strong { color: var(--text-main); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -354,7 +404,7 @@ const CSS_MODERNO = `
         background: rgba(0, 0, 0, 0.8); border: 1px solid var(--card-border); padding: 10px 20px; 
         width: 250px; border-radius: 50px; color: #fff; font-size: 12px; outline: none; transition: 0.3s; 
     }
-    .search-top input:focus { border-color: var(--accent); width: 290px; box-shadow: 0 0 15px rgba(0,210,255,0.2); }
+    .search-top input:focus { border-color: var(--accent); width: 290px; box-shadow: 0 0 15px rgba(255,215,0,0.2); }
     
     .dashboard-grid { 
         display: grid; 
@@ -389,7 +439,7 @@ const CSS_MODERNO = `
         color: var(--text-main); cursor: pointer; transition: 0.25s; text-transform: uppercase; 
         letter-spacing: 0.5px; text-align: center; box-sizing: border-box;
     }
-    .action-btn-pill:hover { background: rgba(0, 210, 255, 0.14); border-color: var(--accent); transform: translateY(-1px); }
+    .action-btn-pill:hover { background: var(--btn-bg); border-color: var(--accent); transform: translateY(-1px); }
     
     .api-grid-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
     
@@ -398,7 +448,7 @@ const CSS_MODERNO = `
         padding: 16px 20px; border-radius: 10px; font-size: 14px; margin-top: 8px; 
         color: var(--text-main); outline: none; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: 0.3s; 
     }
-    .search-input-large:focus { border-color: var(--accent); box-shadow: 0 0 20px rgba(0,210,255,0.25); }
+    .search-input-large:focus { border-color: var(--accent); box-shadow: 0 0 20px rgba(255,215,0,0.25); }
     
     .iframe-container { display: none; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; height: 560px; width: 100%; overflow: hidden; box-shadow: var(--shadow-elegant); }
     
@@ -417,7 +467,7 @@ const CSS_MODERNO = `
     
     .plat-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .plat-mini-btn { background: #000000; border: 1px solid var(--card-border); padding: 12px; border-radius: 10px; cursor: pointer; display: flex; justify-content: center; align-items: center; height: 52px; transition: 0.25s; }
-    .plat-mini-btn:hover, .plat-mini-btn.active-plat { background: rgba(0, 210, 255, 0.15); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,210,255,0.25); }
+    .plat-mini-btn:hover, .plat-mini-btn.active-plat { background: rgba(255, 215, 0, 0.15); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,215,0,0.25); }
     .plat-mini-btn img { max-height: 24px; max-width: 85%; object-fit: contain; }
     
     .provider-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
@@ -444,8 +494,8 @@ const CSS_MODERNO = `
         align-items: center;
         gap: 8px;
     }
-    .menu-btn-item:hover { background: rgba(0, 210, 255, 0.12); border-color: rgba(0, 210, 255, 0.35); transform: translateX(3px); }
-    .menu-btn-item.active-menu { background: rgba(0, 210, 255, 0.18); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .menu-btn-item:hover { background: rgba(255, 215, 0, 0.12); border-color: rgba(255, 215, 0, 0.35); transform: translateX(3px); }
+    .menu-btn-item.active-menu { background: rgba(255, 215, 0, 0.18); border-color: var(--accent); color: #fff; font-weight: 600; }
     
     .activity-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 4px; }
     .activity-item { background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); padding: 10px 12px; border-radius: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
@@ -454,10 +504,10 @@ const CSS_MODERNO = `
     .activity-user { color: var(--accent); font-weight: 600; }
     
     .input-classic { width: 100%; padding: 12px 14px; margin-bottom: 12px; border-radius: 8px; border: 1px solid var(--card-border); background: #000000; color: white; box-sizing: border-box; outline: none; font-size: 13px; font-family: 'Inter', sans-serif; }
-    .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 12px rgba(0,210,255,0.2); }
+    .input-classic:focus { border-color: var(--accent); box-shadow: 0 0 12px rgba(255,215,0,0.2); }
     
     .btn-submit { background: var(--accent); color: #000; border: none; padding: 13px 18px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: 0.25s; text-transform: uppercase; letter-spacing: 0.8px; font-size: 12px; }
-    .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(0, 210, 255, 0.4); color: #fff; }
+    .btn-submit:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(255, 215, 0, 0.4); color: #000; }
     
     .sub-form { display: none; background: rgba(0,0,0,0.75); padding: 15px; border-radius: 10px; margin-top: 6px; border: 1px solid rgba(255,255,255,0.12); }
     
@@ -575,6 +625,51 @@ const CSS_MODERNO = `
         openTab(active);
     });
 </script>
+`;
+
+// SCRIPT GLOBAL NAVIDEÑO - Inserta Papá Noel, Nieve y Luces de Navidad optimizadas
+const CHRISTMAS_EXTRAS = `
+    <div class="santa-wrapper">
+        <div class="santa-sign">¡Feliz Navidad! 🎄</div>
+        <img src="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Santa%20claus/3D/santa_claus_3d.png" alt="Santa" class="santa-img">
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Nieve Animada Optimizada
+            const snowContainer = document.createElement('div');
+            snowContainer.style.position = 'fixed';
+            snowContainer.style.top = '0';
+            snowContainer.style.left = '0';
+            snowContainer.style.width = '100vw';
+            snowContainer.style.height = '100vh';
+            snowContainer.style.pointerEvents = 'none';
+            snowContainer.style.zIndex = '9998';
+            snowContainer.style.overflow = 'hidden';
+            document.body.appendChild(snowContainer);
+
+            for (let i = 0; i < 35; i++) {
+                let flake = document.createElement('div');
+                flake.innerHTML = '❄';
+                flake.className = 'snowflake-anim';
+                flake.style.left = Math.random() * 100 + 'vw';
+                flake.style.animationDuration = (Math.random() * 3 + 5) + 's';
+                flake.style.animationDelay = (Math.random() * 5) + 's';
+                flake.style.fontSize = (Math.random() * 10 + 10) + 'px';
+                flake.style.opacity = Math.random() * 0.7 + 0.3;
+                snowContainer.appendChild(flake);
+            }
+
+            // Luces de Navidad Intermitentes Superiores
+            const lightsContainer = document.createElement('div');
+            lightsContainer.className = 'lights-container';
+            for(let i=0; i<40; i++) {
+                let light = document.createElement('div');
+                light.className = 'light';
+                lightsContainer.appendChild(light);
+            }
+            document.body.appendChild(lightsContainer);
+        });
+    </script>
 `;
 
 // =========================================================================
@@ -757,7 +852,7 @@ app.get('/', (req, res) => {
 
     let mensajeBienvenida = `
         <div style="text-align: center; margin-bottom: 25px;">
-            <h3 style="color: #00D2FF; margin: 0 0 5px 0; font-size: 18px; font-weight: 600;">¡Bienvenido a SyncBox!</h3>
+            <h3 style="color: var(--accent); margin: 0 0 5px 0; font-size: 18px; font-weight: 600;">¡Bienvenido a SyncBox!</h3>
             <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.5;">Somos nuevos en el mercado pero con las mejores cuentas.</p>
         </div>
     `;
@@ -778,12 +873,12 @@ app.get('/', (req, res) => {
                 <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
                 <div class="input-group">
                     <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de tu país (Ej: +52... o +57...)" required>
-                    <small style="display:block; text-align:left; color:#00D2FF; font-size:11px; margin-top:5px;">* Obligatorio poner el <b>+</b> y código de país (Ej: +52 o +57)</small>
+                    <small style="display:block; text-align:left; color:var(--accent); font-size:11px; margin-top:5px;">* Obligatorio poner el <b>+</b> y código de país (Ej: +52 o +57)</small>
                 </div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
                 <button type="submit" class="btn-submit">Completar Registro</button>
             </form>
-            <div style="margin-top: 20px;"><a href="/" style="color: #00D2FF; font-size: 12px; text-decoration: none;">← Volver al Login</a></div>
+            <div style="margin-top: 20px;"><a href="/" style="color: var(--accent); font-size: 12px; text-decoration: none;">← Volver al Login</a></div>
         `;
     } else {
         contenidoForm = `
@@ -793,7 +888,7 @@ app.get('/', (req, res) => {
                 <div class="input-group"><input type="password" name="pass" placeholder="Contraseña" required></div>
                 <button type="submit" class="btn-submit">Ingresar</button>
             </form>
-            <div style="margin-top: 20px;"><a href="/?mode=registro" style="color: #00D2FF; font-size: 12px; text-decoration: none;">¿No tienes cuenta? Regístrate aquí</a></div>
+            <div style="margin-top: 20px;"><a href="/?mode=registro" style="color: var(--accent); font-size: 12px; text-decoration: none;">¿No tienes cuenta? Regístrate aquí</a></div>
         `;
     }
 
@@ -807,10 +902,10 @@ app.get('/', (req, res) => {
         ${CSS_MODERNO}
         <style>
             body { display: flex; justify-content: center; align-items: center; }
-            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; margin: 15px; }
+            .login-box { position: relative; z-index: 2; background: rgba(0, 0, 0, 0.92); border: 1px solid rgba(255, 215, 0, 0.25); border-radius: 16px; padding: 40px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.98); text-align: center; margin: 15px; }
             .input-group { margin-bottom: 20px; }
             .input-group input { width: 100%; background: #000000; border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; height: 52px; padding: 0 20px; box-sizing: border-box; font-size: 14px; border-radius: 8px; outline: none; transition: 0.3s; }
-            .input-group input:focus { border-color: #00D2FF; box-shadow: 0 0 15px rgba(0,210,255,0.2);}
+            .input-group input:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(255,215,0,0.2);}
             .help-text { color: #888; font-size: 12px; margin-top: 20px; margin-bottom: 5px; line-height: 1.6; font-weight: 300; }
         </style>
     </head>
@@ -820,6 +915,7 @@ app.get('/', (req, res) => {
             ${contenidoForm}
             <div class="help-text">Panel cifrado. Conexión segura.</div>
         </div>
+        ${CHRISTMAS_EXTRAS}
     </body>
     </html>
     `);
@@ -851,6 +947,7 @@ app.post('/registrar-cliente', async (req, res) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Redirigiendo a WhatsApp...</title>
+            ${CSS_MODERNO}
             <style>
                 body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
                 h2 { color: #25d366; font-size: 24px; }
@@ -865,6 +962,7 @@ app.post('/registrar-cliente', async (req, res) => {
             <script>
                 window.location.replace('${linkRedireccion}');
             </script>
+            ${CHRISTMAS_EXTRAS}
         </body>
         </html>
         `);
@@ -1150,13 +1248,13 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
                 body { font-family: 'Inter', sans-serif; background: transparent; color: #fff; margin: 0; padding: 20px; }
-                .table-modern { width: 100%; border-collapse: collapse; background: rgba(10, 14, 22, 0.95); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255, 115, 0, 0.3); }
+                .table-modern { width: 100%; border-collapse: collapse; background: rgba(10, 14, 22, 0.95); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255, 215, 0, 0.3); }
                 .table-modern th, .table-modern td { padding: 12px 15px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px; }
-                .table-modern th { color: #ff7300; font-size: 11px; text-transform: uppercase; background: rgba(255, 255, 255, 0.03); letter-spacing: 1px; }
+                .table-modern th { color: #FFD700; font-size: 11px; text-transform: uppercase; background: rgba(255, 255, 255, 0.03); letter-spacing: 1px; }
                 .btn-delete { background: #E50914; color: #fff; padding: 14px 20px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 20px; text-transform: uppercase; font-size: 12px; transition: 0.3s; }
                 .btn-delete:hover { box-shadow: 0 0 20px rgba(229,9,20,0.6); }
             </style>
-            <h3 style="color:#ff7300; margin-top:0; font-size: 22px;">🔎 Resultados de Auditoría</h3>
+            <h3 style="color:#FFD700; margin-top:0; font-size: 22px;">🔎 Resultados de Auditoría</h3>
             <p style="font-size:13px; color:#cbd5e1; margin-bottom: 20px;">Se encontraron <strong>${cuentasPermitidas.length} cuentas asignadas</strong> de las ${correosUnicos.length} ingresadas.</p>
         `;
 
@@ -1170,11 +1268,11 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
             html += `
             <form action="/admin/ejecutar-limpieza-global" method="POST" target="_top">
                 <input type="hidden" name="emails_json" value="${jsonSeguro}">
-                <div style="max-height: 350px; overflow-y: auto; border-radius: 10px; border: 1px solid rgba(255, 115, 0, 0.3);">
+                <div style="max-height: 350px; overflow-y: auto; border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.3);">
                     <table class="table-modern">
                         <thead><tr><th>Correo</th><th>Usuario Dueño</th></tr></thead>
                         <tbody>
-                            ${cuentasPermitidas.map(c => `<tr><td style="color:#00D2FF; font-family:monospace; font-weight:600;">${c.email}</td><td>@${c.dueno}</td></tr>`).join('')}
+                            ${cuentasPermitidas.map(c => `<tr><td style="color:var(--accent); font-family:monospace; font-weight:600;">${c.email}</td><td>@${c.dueno}</td></tr>`).join('')}
                         </tbody>
                     </table>
                 </div>
@@ -1385,10 +1483,11 @@ app.post('/admin/asignar-dinero', async (req, res) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Aviso de Dinero</title>
+            ${CSS_MODERNO}
             <style>
                 body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-                h2 { color: #00D2FF; font-size: 24px; }
-                .btn { background: #00D2FF; color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(0,210,255,0.4); margin-top: 20px;}
+                h2 { color: var(--accent); font-size: 24px; }
+                .btn { background: var(--accent); color: #000; padding: 18px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 5px 20px rgba(255,215,0,0.4); margin-top: 20px;}
             </style>
         </head>
         <body>
@@ -1398,6 +1497,7 @@ app.post('/admin/asignar-dinero', async (req, res) => {
             <br><br>
             <a href="/dash" style="color:var(--text-muted); font-size: 12px;">Volver al Panel sin notificar</a>
             <script>window.location.replace('${link}');</script>
+            ${CHRISTMAS_EXTRAS}
         </body>
         </html>
         `);
@@ -1570,12 +1670,13 @@ app.post('/tienda/comprar', async (req, res) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Confirmación Obligatoria de Compra</title>
+            ${CSS_MODERNO}
             <style>
                 body { background: #050505; color: #fff; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-                .card-confirm { background: rgba(12, 15, 22, 0.96); border: 1px solid rgba(0, 210, 255, 0.35); border-radius: 16px; padding: 30px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.95); }
+                .card-confirm { background: rgba(12, 15, 22, 0.96); border: 1px solid rgba(255, 215, 0, 0.35); border-radius: 16px; padding: 30px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.95); }
                 .step-btn { display: block; width: 100%; padding: 16px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; margin-top: 14px; box-sizing: border-box; cursor: pointer; border: none; transition: 0.25s; text-transform: uppercase; letter-spacing: 0.5px; }
                 .btn-wa-1 { background: #25d366; color: #000; box-shadow: 0 4px 15px rgba(37,211,102,0.35); }
-                .btn-wa-2 { background: #00D2FF; color: #000; box-shadow: 0 4px 15px rgba(0,210,255,0.35); }
+                .btn-wa-2 { background: var(--accent); color: #000; box-shadow: 0 4px 15px rgba(255,215,0,0.35); }
                 .btn-panel { background: rgba(255,255,255,0.08); color: #64748b; border: 1px solid rgba(255,255,255,0.1); cursor: not-allowed; margin-top: 22px; }
                 .btn-panel.unlocked { background: #E50914; color: #fff; border-color: #E50914; cursor: pointer; box-shadow: 0 5px 20px rgba(229,9,20,0.5); }
                 .status-badge { display: inline-block; padding: 4px 10px; border-radius: 50px; font-size: 11px; font-weight: 700; margin-bottom: 10px; background: rgba(229,9,20,0.15); color: #E50914; border: 1px solid #E50914; }
@@ -1601,7 +1702,7 @@ app.post('/tienda/comprar', async (req, res) => {
                     🔒 Completa los 2 envíos para ir al Panel
                 </button>
             </div>
-
+            ${CHRISTMAS_EXTRAS}
             <script>
                 let paso1OK = false;
                 let paso2OK = false;
@@ -1807,8 +1908,8 @@ app.get('/dash', async (req, res) => {
                 <div id="action-stock-admin" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Control de Inventario</h4>
                     <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Carga masiva de cuentas al sistema para la venta automática a subadministradores.</p>
-                    <div style="margin-top:10px; background: rgba(0, 210, 255, 0.08); padding: 16px; border-radius: 10px; border: 1px solid rgba(0, 210, 255, 0.25);">
-                        <div style="font-size: 26px; font-weight: 700; color: #00D2FF;">${stockDisp.count}</div>
+                    <div style="margin-top:10px; background: rgba(255, 215, 0, 0.08); padding: 16px; border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.25);">
+                        <div style="font-size: 26px; font-weight: 700; color: var(--accent);">${stockDisp.count}</div>
                         <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cuentas Disponibles</div>
                         <hr style="border:none; border-top:1px solid rgba(255,255,255,0.1); margin: 12px 0;">
                         <div style="font-size: 20px; font-weight: 700; color: #fff;">${stockVend.count}</div>
@@ -1839,10 +1940,10 @@ app.get('/dash', async (req, res) => {
                         historialAsigRows += `
                         <tr>
                             <td style="font-family:monospace; color:#E50914; font-weight:600;">${h.email}</td>
-                            <td><span style="color:#00D2FF; font-weight:600;">@${h.receptor}</span></td>
+                            <td><span style="color:var(--accent); font-weight:600;">@${h.receptor}</span></td>
                             <td><span style="color:var(--text-muted);">@${h.admin}</span></td>
                             <td><small style="color:#fff;">${fechaFormatted} ${horaFormatted}</small></td>
-                            <td><span style="color:var(--accent); font-size:11px;">${h.tipo_operacion}</span></td>
+                            <td><span style="color:#00D2FF; font-size:11px;">${h.tipo_operacion}</span></td>
                             <td><span class="badge-status disp">${h.estado}</span></td>
                         </tr>`;
                     });
@@ -1858,7 +1959,7 @@ app.get('/dash', async (req, res) => {
                         let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta}</div>`).join('');
                         historialGlobalHtml += `
                         <tr>
-                            <td><span style="color:#00D2FF; font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
+                            <td><span style="color:var(--accent); font-weight:600;">@${c.comprador}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad}</td>
                             <td><span style="color:#E50914;">-${formatearDinero(c.creditos_usados, c.moneda)}</span><br><small style="color:var(--text-muted);">Quedan: ${formatearDinero(c.saldo_nuevo, c.moneda)}</small></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:11px;">${cuentasEntregadas}</div></td>
@@ -1875,9 +1976,9 @@ app.get('/dash', async (req, res) => {
                         let estadoBadge = s.estado === 'Disponible' 
                             ? '<span class="badge-status disp">Libre</span>' 
                             : (s.estado === 'Asignada' 
-                                ? '<span class="badge-status vendida" style="border-color:#00D2FF; color:#00D2FF; background:rgba(0,210,255,0.15);">Asignada</span>' 
+                                ? '<span class="badge-status vendida" style="border-color:var(--accent); color:var(--accent); background:rgba(255,215,0,0.15);">Asignada</span>' 
                                 : '<span class="badge-status vendida">Vendida</span>');
-                        let compradorTxt = s.comprador ? `<span style="color:#00D2FF;">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra || 'N/A'}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
+                        let compradorTxt = s.comprador ? `<span style="color:var(--accent);">@${s.comprador}</span><br><small style="color:var(--text-muted);">${s.fecha_compra || 'N/A'}</small>` : '<span style="color:var(--text-muted);">Nadie</span>';
                         
                         stockAdnHtml += `
                         <tr>
@@ -1894,12 +1995,12 @@ app.get('/dash', async (req, res) => {
 
                 panelesCentroHtml += `
                 <div id="main-api-ghoulflix" class="main-card">
-                    <h3 style="color:#67e8f9;">◈ Servidor de códigos + ✉ Gmail</h3>
+                    <h3 style="color:var(--accent);">◈ Servidor de códigos + ✉ Gmail</h3>
                     <p style="color:var(--text-muted);font-size:13px;line-height:1.7;">La búsqueda combinada usa la conexión privada configurada en el servidor. No necesitas introducir ni compartir el token aquí. Las credenciales se modifican únicamente en el archivo privado o mediante variables de entorno.</p>
                 </div>
 
                 <div id="main-stock-admin" class="main-card">
-                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: #00D2FF;">📦 Cargar Stock y Ver Historial</h3>
+                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: var(--accent);">📦 Cargar Stock y Ver Historial</h3>
                     <form action="/stock/cargar" method="POST">
                         <select name="plataforma" class="input-classic" required>
                             <option value="netflix">Netflix</option>
@@ -1932,14 +2033,14 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div id="main-asignacion-manual" class="main-card">
-                    <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color: #00D2FF;">🎯 Asignación Manual Masiva</h3>
+                    <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color: var(--accent);">🎯 Asignación Manual Masiva</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
                         Pega todas las cuentas que quieras asignar a la vez. El sistema verificará que estén disponibles en el stock, las asignará al cliente y las descontará automáticamente del inventario.
                     </p>
                     
                     <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid var(--card-border);">
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
+                            <label style="color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
                             <select name="receptor_id" class="input-classic" style="margin-bottom:0;" required>
                                 <option value="" disabled selected>-- Selecciona al usuario --</option>
                                 ${clientesOpcionesHtml}
@@ -1947,7 +2048,7 @@ app.get('/dash', async (req, res) => {
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
+                            <label style="color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
                             <textarea name="correos_asignar" class="input-classic" style="margin-bottom:0;" placeholder="cuenta1@gmail.com&#10;cuenta2@gmail.com&#10;cuenta3@gmail.com..." rows="5" required></textarea>
                         </div>
                         
@@ -1955,7 +2056,7 @@ app.get('/dash', async (req, res) => {
                     </form>
 
                     <div style="margin-top: 25px;">
-                        <h4 style="margin:0 0 10px 0; font-size:13px; color:#00D2FF; text-transform:uppercase; letter-spacing:1px;">📋 Historial de Asignación Manual</h4>
+                        <h4 style="margin:0 0 10px 0; font-size:13px; color:var(--accent); text-transform:uppercase; letter-spacing:1px;">📋 Historial de Asignación Manual</h4>
                         <div class="table-wrapper">
                             <table class="table-modern">
                                 <thead>
@@ -1977,7 +2078,7 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div id="main-dinero-admin" class="main-card">
-                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: #00D2FF;">💰 Asignación de Dinero</h3>
+                    <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: var(--accent);">💰 Asignación de Dinero</h3>
                     <form action="/admin/asignar-dinero" method="POST">
                         <select name="subadmin_id" class="input-classic" required>
                             <option value="" disabled selected>Selecciona al Usuario/Subadmin...</option>
@@ -1990,7 +2091,7 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div id="main-historial-compras" class="main-card">
-                    <h3 style="margin:0 0 10px 0; font-size:19px; font-weight:600; color: #00D2FF;">🧾 Historial Global de Tienda</h3>
+                    <h3 style="margin:0 0 10px 0; font-size:19px; font-weight:600; color: var(--accent);">🧾 Historial Global de Tienda</h3>
                     <div class="table-wrapper">
                         <table class="table-modern">
                             <thead><tr><th>Subadmin / Cliente</th><th style="text-align:center;">Cant.</th><th>Dinero Descontado</th><th>Cuentas Entregadas</th></tr></thead>
@@ -2019,10 +2120,10 @@ app.get('/dash', async (req, res) => {
                     misComprasHtml = "<tr><td colspan='4' style='text-align:center; padding:18px; color:var(--text-muted);'>Aún no has realizado compras.</td></tr>";
                 } else {
                     misComprasLog.forEach(c => {
-                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta} <span style="color:#00D2FF; margin-left: 5px;">${d.password_cuenta ? '🔑 '+d.password_cuenta : ''}</span></div>`).join('');
+                        let cuentasEntregadas = detallesComprasDB.filter(d => d.compra_id === c.id).map(d => `<div style="font-family:monospace; color:#E50914; padding:2px 0;">${d.email_cuenta} <span style="color:var(--accent); margin-left: 5px;">${d.password_cuenta ? '🔑 '+d.password_cuenta : ''}</span></div>`).join('');
                         misComprasHtml += `
                         <tr>
-                            <td><span style="color:#00D2FF; font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
+                            <td><span style="color:var(--accent); font-weight:600;">#${c.id}</span><br><small style="color:var(--text-muted);">${c.fecha}</small></td>
                             <td style="text-align:center; font-weight:bold; color:#fff;">${c.cantidad} Netflix</td>
                             <td><span style="color:#E50914;">-${formatearDinero(c.creditos_usados, usuarioActual.moneda)}</span></td>
                             <td><div style="max-height:80px; overflow-y:auto; font-size:12px;">${cuentasEntregadas}</div></td>
@@ -2042,7 +2143,7 @@ app.get('/dash', async (req, res) => {
                     <div style="background: #000; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px; text-align: center; transition: 0.25s;" onmouseover="this.style.borderColor='var(--accent)';" onmouseout="this.style.borderColor='var(--card-border)';">
                         <img src="${PLATAFORMAS['netflix'].logo}" height="28" style="margin-bottom: 12px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.5));">
                         <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 20px;">${p.cant} Cuenta${p.cant > 1 ? 's' : ''}</h2>
-                        <p style="color: #00D2FF; font-weight: 700; font-size: 17px; margin: 0 0 16px 0;">${formatearDinero(p.costo, usuarioActual.moneda)}</p>
+                        <p style="color: var(--accent); font-weight: 700; font-size: 17px; margin: 0 0 16px 0;">${formatearDinero(p.costo, usuarioActual.moneda)}</p>
                         <form action="/tienda/comprar" method="POST" style="margin:0;">
                             <input type="hidden" name="paquete" value="${p.cant}">
                             <button type="submit" class="btn-submit" style="font-size: 11px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta${p.cant > 1 ? 's' : ''} por ${formatearDinero(p.costo, usuarioActual.moneda)}? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
@@ -2053,9 +2154,9 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-comprar-stock" class="main-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                        <h3 style="margin:0; font-size:19px; font-weight:600; color: #00D2FF;">🛒 Tienda de Cuentas</h3>
-                        <div style="background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.3); padding: 8px 16px; border-radius: 50px; font-size: 12px; font-weight: 600; color: #fff;">
-                            Dinero Disponible: <span style="color:#00D2FF;">${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}</span>
+                        <h3 style="margin:0; font-size:19px; font-weight:600; color: var(--accent);">🛒 Tienda de Cuentas</h3>
+                        <div style="background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.3); padding: 8px 16px; border-radius: 50px; font-size: 12px; font-weight: 600; color: #fff;">
+                            Dinero Disponible: <span style="color:var(--accent);">${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}</span>
                         </div>
                     </div>
                     
@@ -2065,7 +2166,7 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div id="main-mis-compras" class="main-card">
-                    <h3 style="margin:0 0 10px 0; font-size:19px; font-weight:600; color: #00D2FF;">🧾 Mis Compras</h3>
+                    <h3 style="margin:0 0 10px 0; font-size:19px; font-weight:600; color: var(--accent);">🧾 Mis Compras</h3>
                     <div class="table-wrapper">
                         <table class="table-modern">
                             <thead><tr><th>ID / Fecha</th><th style="text-align:center;">Paquete</th><th>Descuento</th><th>Cuentas Entregadas</th></tr></thead>
@@ -2085,7 +2186,7 @@ app.get('/dash', async (req, res) => {
                     let actualLocal = convertirLocal(actualMXN, usuarioActual.moneda);
 
                     return `<div>
-                        <label style="color:#00D2FF; font-size:11px; font-weight:600; display:block; margin-bottom:5px;">Paquete ${cant} Cuentas (Min: $${minLocal.toLocaleString('es-CO')} ${usuarioActual.moneda})</label>
+                        <label style="color:var(--accent); font-size:11px; font-weight:600; display:block; margin-bottom:5px;">Paquete ${cant} Cuentas (Min: $${minLocal.toLocaleString('es-CO')} ${usuarioActual.moneda})</label>
                         <input type="number" step="0.01" name="precio_${cant}" min="${minLocal}" value="${actualLocal}" class="input-classic" style="margin-bottom:0;" required>
                     </div>`;
                 }).join('');
@@ -2094,7 +2195,7 @@ app.get('/dash', async (req, res) => {
 
                 panelesCentroHtml += `
                 <div id="main-mi-tienda" class="main-card">
-                    <h3 style="margin:0 0 8px 0; font-size:19px; color:#00D2FF;">⚙️ Configurar Precios de Mi Tienda</h3>
+                    <h3 style="margin:0 0 8px 0; font-size:19px; color:var(--accent);">⚙️ Configurar Precios de Mi Tienda</h3>
                     <p style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">Establece los precios a los que le venderás a tus clientes en tu moneda (${usuarioActual.moneda}). El sistema impide colocar precios menores a lo que te cobra el Administrador.</p>
                     <form action="/subadmin/configurar-precios" method="POST">
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:18px;">${inputsPrecios}</div>
@@ -2103,9 +2204,9 @@ app.get('/dash', async (req, res) => {
                 </div>
                 
                 <div id="main-mi-stock" class="main-card">
-                    <h3 style="margin:0 0 15px 0; font-size:19px; color:#00D2FF;">📦 Cargar Mi Inventario Propio</h3>
-                    <div style="background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.25); padding: 15px; border-radius: 10px; text-align:center; margin-bottom:18px;">
-                        <strong style="color: #00D2FF; font-size:26px;">${stockDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:11px;">Disponibles en mi Tienda</small>
+                    <h3 style="margin:0 0 15px 0; font-size:19px; color:var(--accent);">📦 Cargar Mi Inventario Propio</h3>
+                    <div style="background: rgba(255, 215, 0, 0.08); border: 1px solid rgba(255, 215, 0, 0.25); padding: 15px; border-radius: 10px; text-align:center; margin-bottom:18px;">
+                        <strong style="color: var(--accent); font-size:26px;">${stockDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:11px;">Disponibles en mi Tienda</small>
                     </div>
                     <form action="/stock/cargar" method="POST">
                         <input type="hidden" name="plataforma" value="netflix">
@@ -2121,7 +2222,7 @@ app.get('/dash', async (req, res) => {
                 </div>
 
                 <div id="main-dinero-clientes" class="main-card">
-                    <h3 style="margin:0 0 8px 0; font-size:19px; color:#00D2FF;">💸 Asignar Dinero a Mis Clientes</h3>
+                    <h3 style="margin:0 0 8px 0; font-size:19px; color:var(--accent);">💸 Asignar Dinero a Mis Clientes</h3>
                     <p style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">Transfiere de tu saldo (${formatearDinero(usuarioActual.creditos, usuarioActual.moneda)}) a las cuentas de tus clientes.</p>
                     <form action="/subadmin/asignar-dinero" method="POST">
                         <select name="cliente_id" class="input-classic" required>
@@ -2165,7 +2266,7 @@ app.get('/dash', async (req, res) => {
                         if (correosDelUsuario.length > 0) {
                             listaCorreosHtml = correosDelUsuario.map(c => {
                                 let esBuscado = terminoBusqueda && c.email.toLowerCase().includes(terminoBusqueda);
-                                let estiloFondo = esBuscado ? "background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.4);" : "background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);";
+                                let estiloFondo = esBuscado ? "background: rgba(255, 215, 0, 0.2); border: 1px solid rgba(255, 215, 0, 0.4);" : "background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);";
                                 return `<div style="display:flex; align-items:center; justify-content:space-between; ${estiloFondo} padding:6px 10px; border-radius:6px; font-size:11px; margin-bottom:4px;">
                                     <span>${c.email}</span>
                                     <form action="/admin/eliminar-correo" method="POST" style="margin:0;"><input type="hidden" name="correo_id" value="${c.id}"><button type="submit" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✕</button></form>
@@ -2221,12 +2322,12 @@ app.get('/dash', async (req, res) => {
                         let clientesDirectos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
 
                         if (subadmins.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS SUBADMINISTRADORES</td></tr>`;
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255, 215, 0, 0.08); text-align: center; font-size: 11px; color: var(--accent); font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS SUBADMINISTRADORES</td></tr>`;
                             subadmins.forEach(sa => { tablaUsuariosHtml += renderRow(sa); });
                         }
 
                         if (clientesDirectos.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(0, 210, 255, 0.08); text-align: center; font-size: 11px; color: #00D2FF; font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS CLIENTES DIRECTOS Y PÚBLICOS</td></tr>`;
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255, 215, 0, 0.08); text-align: center; font-size: 11px; color: var(--accent); font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS CLIENTES DIRECTOS Y PÚBLICOS</td></tr>`;
                             clientesDirectos.forEach(c => { tablaUsuariosHtml += renderRow(c); });
                         }
                     } else {
@@ -2291,7 +2392,7 @@ app.get('/dash', async (req, res) => {
             <body>
                 <div class="top-header">
                     <div class="brand-logo">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(0,210,255,0.6));">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(255,215,0,0.6));">
                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                             <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                             <line x1="12" y1="22.08" x2="12" y2="12"></line>
@@ -2329,7 +2430,7 @@ app.get('/dash', async (req, res) => {
                         
                         ${(esAdminPrincipal || esSubAdmin) ? `
                         <div id="main-crear-user" class="main-card">
-                            <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color:#00D2FF;">👤 Crear Nuevo Usuario</h3>
+                            <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color:var(--accent);">👤 Crear Nuevo Usuario</h3>
                             <form action="/admin/crear" method="POST" onsubmit="
                                 const tel = this.telefono.value.replace(/\\s+/g, '');
                                 if(!/^\\+[1-9]\\d{7,14}$/.test(tel)) {
@@ -2352,7 +2453,7 @@ app.get('/dash', async (req, res) => {
                         </div>
 
                         <div id="main-usuarios" class="main-card">
-                            <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color:#00D2FF;">📧 Asignación de Correos</h3>
+                            <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color:var(--accent);">📧 Asignación de Correos</h3>
                             <form action="/admin/asignar-correo" method="POST">
                                 <select name="user_id" class="input-classic" required><option value="" disabled selected>Selecciona un usuario...</option>${clientesOpcionesHtml}</select>
                                 <textarea name="email" class="input-classic" placeholder="Pega los correos separados por espacio o salto de línea" rows="5" required></textarea>
@@ -2367,8 +2468,8 @@ app.get('/dash', async (req, res) => {
                             </p>
                             <form action="/admin/borrar-correos-masivo" method="POST" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(229, 9, 20, 0.35);">
                                 <div style="margin-bottom: 14px;">
-                                    <label style="color: #00D2FF; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar y seleccionar usuario:</label>
-                                    <input type="text" id="buscador-user-borrar" class="input-classic" placeholder="🔎 Escribe aquí para filtrar el nombre (ej: juan)..." oninput="filtrarSelectorUsuarios('buscador-user-borrar', 'select-user-borrar')" style="margin-bottom: 8px; border-color: rgba(0, 210, 255, 0.4);">
+                                    <label style="color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar y seleccionar usuario:</label>
+                                    <input type="text" id="buscador-user-borrar" class="input-classic" placeholder="🔎 Escribe aquí para filtrar el nombre (ej: juan)..." oninput="filtrarSelectorUsuarios('buscador-user-borrar', 'select-user-borrar')" style="margin-bottom: 8px; border-color: rgba(255, 215, 0, 0.4);">
                                     <select id="select-user-borrar" name="user_id" class="input-classic" style="margin-bottom:0;" required>
                                         <option value="" disabled selected>-- Selecciona al usuario --</option>
                                         ${clientesOpcionesHtml}
@@ -2384,7 +2485,7 @@ app.get('/dash', async (req, res) => {
 
                         <div id="main-base-datos" class="main-card">
                             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                                <h3 style="margin:0; font-size:19px; font-weight:600; color:#00D2FF;">🗄️ Base de Datos SyncBox</h3>
+                                <h3 style="margin:0; font-size:19px; font-weight:600; color:var(--accent);">🗄️ Base de Datos SyncBox</h3>
                                 <form action="/dash" method="GET" style="display:flex; gap:8px; margin:0;">
                                     <input type="text" name="buscar_dueno" value="${terminoBusqueda}" class="input-classic" placeholder="Buscar correo..." style="margin:0; padding: 9px 14px; width: 200px;">
                                     <button type="submit" class="btn-submit" style="padding: 9px 18px; width:auto;">Buscar</button>
@@ -2417,7 +2518,7 @@ app.get('/dash', async (req, res) => {
                                 <div class="menu-group-label">Inventario y Finanzas</div>
                                 <button class="menu-btn-item" data-tab="api-ghoulflix" onclick="openTab('api-ghoulflix')" style="color: #25d366;">🔌 Servidor de códigos</button>
                                 <button class="menu-btn-item" data-tab="stock-admin" onclick="openTab('stock-admin')">📦 Gestión de Stock</button>
-                                <button class="menu-btn-item" data-tab="asignacion-manual" onclick="openTab('asignacion-manual')" style="color: #00D2FF;">🎯 Asignación Manual</button>
+                                <button class="menu-btn-item" data-tab="asignacion-manual" onclick="openTab('asignacion-manual')" style="color: var(--accent);">🎯 Asignación Manual</button>
                                 <button class="menu-btn-item" data-tab="dinero-admin" onclick="openTab('dinero-admin')">💰 Asignar Dinero</button>
                                 <button class="menu-btn-item" data-tab="historial-compras" onclick="openTab('historial-compras')">🧾 Movimientos de Tienda</button>
                                 ` : ''}
@@ -2431,7 +2532,7 @@ app.get('/dash', async (req, res) => {
 
                                 ${(esSubAdmin || esCliente) ? `
                                 <div class="menu-group-label">Tienda Automática</div>
-                                <button class="menu-btn-item" data-tab="comprar-stock" onclick="openTab('comprar-stock')" style="color: #00D2FF;">🛒 Tienda de Cuentas</button>
+                                <button class="menu-btn-item" data-tab="comprar-stock" onclick="openTab('comprar-stock')" style="color: var(--accent);">🛒 Tienda de Cuentas</button>
                                 <button class="menu-btn-item" data-tab="mis-compras" onclick="openTab('mis-compras')">🧾 Mis Compras</button>
                                 ` : ''}
 
@@ -2455,6 +2556,7 @@ app.get('/dash', async (req, res) => {
                         </div>` : ''}
                     </div>
                 </div>
+                ${CHRISTMAS_EXTRAS}
             </body>
             </html>
             `);
@@ -2504,7 +2606,6 @@ function normalizarResultadoFuente(data, fuente, tipo) {
 }
 function extraerCodigoGmail(mail, tipo) {
     if (!mail) return { success: false };
-    // Los mensajes antiguos no se presentan como una búsqueda nueva.
     const received = new Date(mail.date).getTime();
     if (!Number.isFinite(received) || received < Date.now() - 5 * 60000 || received > Date.now() + 60000) return { success: false };
     const sender = mail.from && mail.from.value || [];
@@ -2568,7 +2669,6 @@ async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
         }
     };
     const tasks = [poll(0), poll(1)];
-    // Errors are observed even if the other provider finishes first.
     tasks.forEach(task => task.catch(() => resolveDone()));
     try { if (!controller.signal.aborted) await done; }
     finally {
@@ -2583,7 +2683,7 @@ async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
 function renderBusquedaCliente(email, tipo, etiqueta) {
     const payload = JSON.stringify({ email, code_type: tipo }).replace(/</g, '\\u003c');
     return `<main class="lookup-shell"><div class="lookup-top">BÚSQUEDA AUTOMÁTICA</div><h2>${escapeResultado(etiqueta)}</h2><p class="lookup-email">${escapeResultado(email)}</p><section id="lookup-progress"><div id="lookup-seconds">60 s</div><p id="lookup-status">Buscando en Gmail y el servidor de códigos…</p><p class="lookup-muted">La búsqueda se repite automáticamente. No necesitas pulsar otra vez.</p></section><div id="lookup-results" aria-live="polite"></div></main>
-    <style>.lookup-shell{box-sizing:border-box;max-width:850px;padding:28px;margin:20px auto;background:linear-gradient(135deg,#101d30,#0b1320);border:1px solid #2b4059;border-radius:22px;color:#edf6ff;font-family:Inter,sans-serif}.lookup-top{font-size:11px;color:#67e8f9;letter-spacing:2px}.lookup-shell h2{font-size:23px;margin:14px 0 8px}.lookup-email{font-size:13px;color:#a9bdd3;overflow-wrap:anywhere}#lookup-progress{text-align:center;padding:20px}#lookup-seconds{font-size:52px;font-weight:700;color:#9cffe2}.lookup-muted{font-size:12px;color:#91a7c0;line-height:1.7}.lookup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.lookup-card{padding:20px;border:1px solid #30465f;border-radius:14px;background:#101c2b;min-width:0}.lookup-card.found{border-color:#34d399;background:#102b2a}.lookup-card h3{font-size:15px;margin:0 0 14px}.lookup-code{font:700 35px monospace;letter-spacing:4px;color:#b1ffe6;padding:18px 0;user-select:all}.lookup-button{display:inline-block;margin:8px 8px 0 0;padding:11px 15px;border:1px solid #3c6079;border-radius:9px;background:#19364c;color:#eefbff;text-decoration:none;font:600 12px Inter,sans-serif;cursor:pointer}.lookup-error{padding:16px;background:#382126;border:1px solid #8a434c;border-radius:12px;color:#ffd8de;line-height:1.7}@media(max-width:600px){.lookup-grid{grid-template-columns:1fr}.lookup-shell{padding:18px;margin:10px}.lookup-code{font-size:29px}}</style>
+    <style>.lookup-shell{box-sizing:border-box;max-width:850px;padding:28px;margin:20px auto;background:linear-gradient(135deg,#101d30,#0b1320);border:1px solid #2b4059;border-radius:22px;color:#edf6ff;font-family:Inter,sans-serif}.lookup-top{font-size:11px;color:var(--accent);letter-spacing:2px}.lookup-shell h2{font-size:23px;margin:14px 0 8px}.lookup-email{font-size:13px;color:#a9bdd3;overflow-wrap:anywhere}#lookup-progress{text-align:center;padding:20px}#lookup-seconds{font-size:52px;font-weight:700;color:var(--accent)}.lookup-muted{font-size:12px;color:#91a7c0;line-height:1.7}.lookup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.lookup-card{padding:20px;border:1px solid #30465f;border-radius:14px;background:#101c2b;min-width:0}.lookup-card.found{border-color:#FFD700;background:rgba(255,215,0,0.1)}.lookup-card h3{font-size:15px;margin:0 0 14px}.lookup-code{font:700 35px monospace;letter-spacing:4px;color:#FFD700;padding:18px 0;user-select:all}.lookup-button{display:inline-block;margin:8px 8px 0 0;padding:11px 15px;border:1px solid #3c6079;border-radius:9px;background:#E50914;color:#fff;text-decoration:none;font:600 12px Inter,sans-serif;cursor:pointer}.lookup-error{padding:16px;background:#382126;border:1px solid #8a434c;border-radius:12px;color:#ffd8de;line-height:1.7}@media(max-width:600px){.lookup-grid{grid-template-columns:1fr}.lookup-shell{padding:18px;margin:10px}.lookup-code{font-size:29px}}</style>
     <script>
     (async function(){
         const requestBody=${payload};
@@ -2632,30 +2732,6 @@ function renderBusquedaCliente(email, tipo, etiqueta) {
     })();
     </script>`;
 }
-
-function renderEsperaAutomatica() {
-    return `<div id="lookup-wait" style="max-width:660px;margin:30px auto;padding:32px;border:1px solid #28465a;border-radius:20px;background:#101b2d;text-align:center;color:#e6f9ff;font-family:Inter,sans-serif"><div style="font-size:12px;color:#67e8f9;letter-spacing:2px">BÚSQUEDA AUTOMÁTICA</div><h2>Buscando tu código…</h2><div id="lookup-seconds" style="font-size:48px;font-weight:700;color:#9cffe2">60 s</div><p style="color:#a6b6cc;line-height:1.7">Revisando Gmail y el servidor de códigos.<br>No necesitas volver a pulsar el botón.</p></div><script>window.lookupStarted=Date.now();window.lookupClock=setInterval(function(){var left=Math.max(0,60-Math.floor((Date.now()-window.lookupStarted)/1000));var el=document.getElementById('lookup-seconds');if(el)el.textContent=left>0?left+' s':'Finalizando…';if(left===0)clearInterval(window.lookupClock);},250);</script>`;
-}
-function renderBusquedaCombinada(resultado, email, etiqueta, tiempo) {
-    const cards = resultado.sources.map(item => {
-        const content = item.success
-            ? (item.code ? `<div class="dual-code">${escapeResultado(item.code)}</div>` : '<p>Enlace de verificación disponible</p>') +
-              (item.link ? `<a class="dual-button" href="${escapeResultado(item.link)}" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a>` : '') +
-              `<button class="dual-button dual-copy" data-copy="${escapeResultado(item.code || item.link)}">Copiar ${item.code ? 'código' : 'enlace'}</button>`
-            : `<p class="dual-note">${escapeResultado(item.error)}</p>`;
-        return `<section class="dual-card ${item.success ? 'found' : ''}"><div class="dual-card-top"><strong>${item.source === 'Gmail' ? '✉ Gmail' : '◈ Servidor de códigos'}</strong><span class="dual-status">${item.success ? 'Encontrado' : item.status === 'stopped' ? 'Finalizada' : 'Sin resultado'}</span></div>${content}</section>`;
-    }).join('');
-    return `<style>
-    .dual-wrap{max-width:880px;margin:24px auto;padding:24px;box-sizing:border-box;background:linear-gradient(135deg,#101b2d,#0a101d);border:1px solid #26374d;border-radius:22px;color:#f1f5f9}
-    .dual-eyebrow{font-size:11px;letter-spacing:2px;color:#67e8f9;font-weight:700}.dual-wrap h2{font-size:25px;margin:12px 0}.dual-note{color:#a6b6cc;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
-    .dual-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}.dual-card{padding:22px;background:#101827;border:1px solid #2b3b51;border-radius:15px;min-width:0}.dual-card.found{border-color:#32c998;background:linear-gradient(145deg,#102b2a,#101827)}
-    .dual-card-top{display:flex;justify-content:space-between;align-items:center;gap:10px}.dual-status{font-size:10px;padding:6px 9px;border-radius:99px;background:#243249;color:#becbde}.found .dual-status{background:#164936;color:#87f7cc}
-    .dual-code{font:700 clamp(27px,5vw,42px) monospace;letter-spacing:5px;padding:26px 0;color:#b0fff0;user-select:all}.dual-button{border:1px solid #395068;background:#172b41;color:#e5faff;border-radius:9px;padding:11px 14px;cursor:pointer;text-decoration:none;display:inline-block;margin:6px 6px 0 0;font:600 12px Inter,sans-serif}
-    .dual-footer{margin-top:20px;color:#8296af;font-size:11px;line-height:1.7}@media(max-width:600px){.dual-grid{grid-template-columns:1fr}.dual-wrap{padding:18px;margin:10px}}
-    </style><main class="dual-wrap"><div class="dual-eyebrow">BÚSQUEDA COMBINADA · NETFLIX</div><h2>${resultado.success ? 'Tu resultado está disponible' : 'Todavía no hay un resultado válido'}</h2><p class="dual-note">${escapeResultado(etiqueta)}<br>${escapeResultado(email)}</p><div class="dual-grid">${cards}</div><div class="dual-footer">Búsqueda automática · ${(tiempo / 1000).toFixed(1)} s<br>Gmail: mensajes de los últimos 5 minutos. Servidor de códigos: resultado autorizado por su API; no garantiza que sea un código nuevo.</div></main>
-    <script>window.parent.postMessage('lookup-complete',location.origin);document.querySelectorAll('.dual-copy').forEach(function(button){button.addEventListener('click',async function(){try{await navigator.clipboard.writeText(button.dataset.copy);button.textContent='✓ Copiado';}catch(e){button.textContent='Selecciona y copia el resultado';}});});</script>`;
-}
-// END DUAL LOOKUP HELPERS
 
 async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, partes, accion, signal) {
     const passwordSeleccionado = CUENTAS_GMAIL_MAP[correoBuzon];
@@ -2745,7 +2821,7 @@ app.post('/buscar', async (req, res) => {
         
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.5); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 215, 0, 0.5); border-radius: 10px; }
 
         .magic-email-wrapper table, .magic-email-wrapper td, .magic-email-wrapper tr, .magic-email-wrapper body, .magic-email-wrapper div {
             background-color: transparent !important; background: transparent !important; border: none !important;
@@ -2762,8 +2838,8 @@ app.post('/buscar', async (req, res) => {
         .magic-email-wrapper h2, 
         .magic-email-wrapper h3, 
         .magic-email-wrapper strong {
-            color: #00D2FF !important; 
-            text-shadow: 0 0 8px rgba(0, 210, 255, 0.8), 0 0 15px rgba(0, 210, 255, 0.5) !important;
+            color: #FFD700 !important; 
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 15px rgba(255, 215, 0, 0.5) !important;
         }
         
         .magic-email-wrapper a {
@@ -2805,7 +2881,7 @@ app.post('/buscar', async (req, res) => {
             max-width: 520px;
             margin: 35px auto;
             background: rgba(10, 14, 22, 0.95);
-            border: 1px solid rgba(0, 210, 255, 0.35);
+            border: 1px solid rgba(255, 215, 0, 0.35);
             border-radius: 16px;
             padding: 30px;
             text-align: center;
@@ -2816,28 +2892,14 @@ app.post('/buscar', async (req, res) => {
             font-size: 40px;
             font-weight: 700;
             letter-spacing: 6px;
-            color: #00D2FF;
+            color: #FFD700;
             background: #000;
-            border: 1px solid rgba(0, 210, 255, 0.4);
+            border: 1px solid rgba(255, 215, 0, 0.4);
             padding: 18px 28px;
             border-radius: 12px;
             display: inline-block;
             margin: 18px 0;
             user-select: all;
-        }
-        .btn-copy-api {
-            background: #00D2FF;
-            color: #000;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 700;
-            cursor: pointer;
-            text-transform: uppercase;
-            font-size: 12px;
-            text-decoration: none;
-            display: inline-block;
-            margin-top: 10px;
         }
     </style>`;
 
@@ -2898,8 +2960,8 @@ app.post('/buscar', async (req, res) => {
 
         if (!resultadoExitoso) { 
             return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;">
-                <h2 style="color:#f8fafc; font-weight:300; text-shadow: 0 0 10px rgba(0, 210, 255, 0.6);">Mensaje no encontrado</h2>
-                <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#00D2FF;">${email_search}</strong></p>
+                <h2 style="color:#f8fafc; font-weight:300; text-shadow: 0 0 10px rgba(255, 215, 0, 0.6);">Mensaje no encontrado</h2>
+                <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#FFD700;">${email_search}</strong></p>
             </div>`); 
         }
 
@@ -2957,15 +3019,15 @@ app.post('/buscar', async (req, res) => {
             }
 
             let htmlRes = paisDetectado 
-                ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#00D2FF; text-shadow: 0 0 15px rgba(0, 210, 255, 0.8);">${paisDetectado}</div>` 
-                : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#00D2FF; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
+                ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#FFD700; text-shadow: 0 0 15px rgba(255, 215, 0, 0.8);">${paisDetectado}</div>` 
+                : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#FFD700; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
             return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
         }
 
         if (accion === 'ip') {
             const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#00D2FF; text-shadow: 0 0 10px rgba(0,210,255,0.6); margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
+            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.6); margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
             return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;">${ipContenido}</div></div>`);
         }
 
@@ -2979,7 +3041,7 @@ app.post('/buscar', async (req, res) => {
             </div>
         `);
 
-    } catch (err) { if (res.headersSent) { if (!res.destroyed) res.end('<p>La búsqueda se interrumpió. Vuelve a intentarlo.</p>'); return; } res.send(`${cssIframe}<h2 style="color:#00D2FF; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
+    } catch (err) { if (res.headersSent) { if (!res.destroyed) res.end('<p>La búsqueda se interrumpió. Vuelve a intentarlo.</p>'); return; } res.send(`${cssIframe}<h2 style="color:#FFD700; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
 });
 
 app.listen(10000, () => {
