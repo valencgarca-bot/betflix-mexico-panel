@@ -30,11 +30,10 @@ const CUENTAS_GMAIL_MAP = {
 
 // 📌 NÚMEROS OFICIALES DE NOTIFICACIÓN OBLIGATORIA EN COMPRAS
 const NUMERO_ADMIN_PRINCIPAL = '573012964169';
-const NUMERO_ASISTENTE = '573113092659'; // +57 311 3092659
+const NUMERO_ASISTENTE = '573113092659';
 
 // 📌 CONFIGURACIÓN BASE API GHOULFLIX
 const GHOULFLIX_BASE_URL = 'https://ghoulflix.com';
-// Credenciales privadas del servidor. Nunca servir este archivo como recurso estático.
 const GHOULFLIX_SERVER_LOGIN = Object.freeze({
     login_id: process.env.GHOULFLIX_LOGIN_ID || 'tridentbox',
     email: 'box@ghoulflix.com',
@@ -43,10 +42,23 @@ const GHOULFLIX_SERVER_LOGIN = Object.freeze({
 let ghoulflixLoginPending = null;
 let ghoulflixServerToken = '';
 
-
 const PLATAFORMAS = {
     'netflix': { nombre: 'Netflix', color: '#E50914', logo: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg', keyword_from: 'netflix' },
     'disney': { nombre: 'Disney+', color: '#ffffff', logo: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg', keyword_from: 'disneyplus' }
+};
+
+const PAISES_MAPA = {
+    'BR': { nombre: 'Brasil', bandera: '🇧🇷' },
+    'JP': { nombre: 'Japón', bandera: '🇯🇵' },
+    'US': { nombre: 'Estados Unidos', bandera: '🇺🇸' },
+    'CA': { nombre: 'Canadá', bandera: '🇨🇦' },
+    'MX': { nombre: 'México', bandera: '🇲🇽' },
+    'CO': { nombre: 'Colombia', bandera: '🇨🇴' },
+    'ES': { nombre: 'España', bandera: '🇪🇸' },
+    'AR': { nombre: 'Argentina', bandera: '🇦🇷' },
+    'CL': { nombre: 'Chile', bandera: '🇨🇱' },
+    'PE': { nombre: 'Perú', bandera: '🇵🇪' },
+    'OTRO': { nombre: 'Otro País', bandera: '🌐' }
 };
 
 // 📌 PRECIOS BASE DEL ADMINISTRADOR PRINCIPAL (ALMACENADOS ESTRICTAMENTE EN MXN)
@@ -65,14 +77,12 @@ const TASAS_CAMBIO = {
     'COP': 176
 };
 
-// 📌 Validador estricto: Verifica que el número tenga obligatoriamente + y código de país
 function validarTelefonoConCodigo(telefono) {
     if (!telefono) return false;
     const limpio = telefono.toString().replace(/\s+/g, '').trim();
     return /^\+[1-9]\d{7,14}$/.test(limpio);
 }
 
-// 📌 Función para normalizar teléfonos antiguos que ya estaban en base de datos
 function formatearTelefono(telefono) {
     if (!telefono) return null;
     let tel = telefono.toString().replace(/\s+/g, '').trim();
@@ -82,7 +92,6 @@ function formatearTelefono(telefono) {
     return '+52' + tel;
 }
 
-// Funciones Auxiliares para el manejo de Monedas
 function obtenerMonedaPorTelefono(telefono) {
     if (!telefono) return 'MXN';
     let tel = telefono.replace(/\s+/g, '');
@@ -118,7 +127,7 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ✅ ESTRUCTURA DE BASE DE DATOS
+// ✅ ESTRUCTURA DE BASE DE DATOS Y MIGRACIONES PERMANENTES
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), telefono TEXT)");
     db.run("ALTER TABLE usuarios ADD COLUMN telefono TEXT", (err) => {});
@@ -145,6 +154,8 @@ db.serialize(() => {
     db.run("ALTER TABLE stock_cuentas ADD COLUMN compra_id INTEGER", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN fecha_compra DATETIME", (err) => {});
     db.run("ALTER TABLE stock_cuentas ADD COLUMN password TEXT", (err) => {});
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN propietario_id INTEGER DEFAULT 1", (err) => {});
+    db.run("ALTER TABLE stock_cuentas ADD COLUMN pais TEXT DEFAULT 'US'", (err) => {});
 
     db.run("CREATE TABLE IF NOT EXISTS compras_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, cantidad INTEGER, creditos_usados REAL, saldo_anterior REAL, saldo_nuevo REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
     
@@ -153,25 +164,93 @@ db.serialize(() => {
 
     db.run("CREATE TABLE IF NOT EXISTS historial_asignaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, receptor_id INTEGER, admin_id INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), tipo_operacion TEXT DEFAULT 'Asignación manual', estado TEXT DEFAULT 'Asignada')");
 
-    // Tabla para guardar credenciales de conexión al servidor de códigos
     db.run("CREATE TABLE IF NOT EXISTS config_ghoulflix (id INTEGER PRIMARY KEY CHECK (id = 1), login_id TEXT, password TEXT, token TEXT, updated_at DATETIME DEFAULT (datetime('now', 'localtime')))");
     db.run("INSERT OR IGNORE INTO config_ghoulflix (id, login_id, password, token) VALUES (1, '', '', '')");
 
     db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por, moneda) VALUES ('admin', '14032021', 'Administrador', NULL, 'MXN')", (err) => {});
     db.run("UPDATE usuarios SET user = 'admin', pass = '14032021' WHERE user = 'dueño'", (err) => {});
 
-    // 🚀 ACTUALIZAR TODOS LOS TELÉFONOS EXISTENTES AGREGANDO +52 SI NO TIENEN EL +
     db.run("UPDATE usuarios SET telefono = '+' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) LIKE '52__________'", (err) => {});
     db.run("UPDATE usuarios SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
     db.run("UPDATE reservas SET telefono = '+52' || TRIM(telefono) WHERE telefono IS NOT NULL AND TRIM(telefono) != '' AND TRIM(telefono) NOT LIKE '+%'", (err) => {});
 
-    db.run("ALTER TABLE stock_cuentas ADD COLUMN propietario_id INTEGER DEFAULT 1", (err) => {});
     db.run("CREATE TABLE IF NOT EXISTS precios_subadmin (id INTEGER PRIMARY KEY AUTOINCREMENT, subadmin_id INTEGER, paquete INTEGER, precio REAL, UNIQUE(subadmin_id, paquete))");
     db.run("CREATE TABLE IF NOT EXISTS historial_dinero (id INTEGER PRIMARY KEY AUTOINCREMENT, emisor_id INTEGER, receptor_id INTEGER, monto REAL, fecha DATETIME DEFAULT (datetime('now', 'localtime')))");
+
+    // 🌟 TABLAS NUEVAS
+    db.run(`CREATE TABLE IF NOT EXISTS historial_creditos_operaciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        operador_id INTEGER,
+        cliente_id INTEGER,
+        tipo TEXT,
+        cantidad REAL,
+        saldo_anterior REAL,
+        saldo_nuevo REAL,
+        fecha DATETIME DEFAULT (datetime('now', 'localtime'))
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS asignaciones_bloques (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        asignador_id INTEGER,
+        cliente_id INTEGER,
+        cantidad INTEGER,
+        precio_total REAL,
+        precio_unitario REAL,
+        fecha_asignacion DATETIME DEFAULT (datetime('now', 'localtime')),
+        fecha_vencimiento DATETIME,
+        estado TEXT DEFAULT 'Activo'
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS cuentas_cliente_detalle (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bloque_id INTEGER,
+        cliente_id INTEGER,
+        email TEXT,
+        password TEXT,
+        pais TEXT DEFAULT 'US',
+        fecha_asignacion DATETIME DEFAULT (datetime('now', 'localtime')),
+        fecha_vencimiento DATETIME,
+        estado TEXT DEFAULT 'Activa',
+        es_reemplazo_de TEXT DEFAULT NULL,
+        reemplazada_por TEXT DEFAULT NULL,
+        fecha_reemplazo DATETIME DEFAULT NULL,
+        precio_unitario REAL DEFAULT 0
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS cuentas_caidas_registro (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        cliente_id INTEGER,
+        fecha_compra DATETIME,
+        fecha_reporte DATETIME DEFAULT (datetime('now', 'localtime')),
+        precio REAL,
+        pais TEXT DEFAULT 'US',
+        estado TEXT DEFAULT 'Pendiente',
+        reemplazo_email TEXT DEFAULT NULL,
+        fecha_reemplazo DATETIME DEFAULT NULL
+    )`);
 });
 
+// 🔄 VENCIMIENTO DE CUENTAS CADA 10 MINUTOS
+async function verificarVencimientoCuentas() {
+    try {
+        await dbRun(`
+            UPDATE cuentas_cliente_detalle 
+            SET estado = 'Vencida' 
+            WHERE estado = 'Activa' AND datetime(fecha_vencimiento) <= datetime('now', 'localtime')
+        `);
+        await dbRun(`
+            UPDATE asignaciones_bloques 
+            SET estado = 'Vencido' 
+            WHERE estado = 'Activo' AND datetime(fecha_vencimiento) <= datetime('now', 'localtime')
+        `);
+    } catch(e) {}
+}
+setInterval(verificarVencimientoCuentas, 10 * 60 * 1000);
+verificarVencimientoCuentas();
+
 // =========================================================================
-// 🌐 FUNCIONES DE CONEXIÓN A LA API DE GHOULFLIX (https://ghoulflix.com)
+// 🌐 API GHOULFLIX
 // =========================================================================
 function peticionHttpsJson(urlStr, method, headers, bodyObj, signal) {
     return new Promise((resolve, reject) => {
@@ -221,7 +300,6 @@ async function realizarLoginGhoulflixApi() {
             login_id: cfg.login_id,
             password: cfg.password
         });
-        console.log('[Servidor de códigos] Login HTTP:', resp.statusCode, '| autenticado:', !!(resp.data && resp.data.success && resp.data.token));
         if (resp.data && resp.data.success && resp.data.token) {
             ghoulflixServerToken = resp.data.token;
             return { success: true, token: resp.data.token };
@@ -249,9 +327,7 @@ async function consultarCodigoGhoulflixApi(email, code_type, signal) {
         token = loginRes.token;
     }
 
-    if (!token) {
-        return { success: false, code: null, link: null, response_time_ms: 0, error: 'Token o credenciales del servidor de códigos no configurados.' };
-    }
+    if (!token) return { success: false, code: null, link: null, response_time_ms: 0, error: 'Token o credenciales del servidor de códigos no configurados.' };
 
     try {
         let resp = await peticionHttpsJson(`${GHOULFLIX_BASE_URL}/api/customer/fetch-code`, 'POST', {
@@ -273,7 +349,6 @@ async function consultarCodigoGhoulflixApi(email, code_type, signal) {
             }
         }
 
-        console.log('[Servidor de códigos] Consulta HTTP:', resp.statusCode, '| resultado:', resp.data && resp.data.success && (resp.data.code || resp.data.link) ? 'disponible' : 'sin resultado');
         if ([401, 403, 422, 429].includes(resp.statusCode) || (resp.data && /authentication required|not assigned|not in your|access denied|suspended|disabled|account expired|too many requests|rate limit/i.test(resp.data.error || ''))) {
             return { success: false, source_error: true, terminal: true, error: traducirErrorCodigo(resp.data && resp.data.error, resp.statusCode) };
         }
@@ -284,7 +359,6 @@ async function consultarCodigoGhoulflixApi(email, code_type, signal) {
     }
 }
 
-// 🧹 FUNCIÓN DE PURGA INMEDIATA
 async function purgarUsuariosInactivos() {
     try {
         await dbRun(`
@@ -305,10 +379,10 @@ const CSS_MODERNO = `
         --text-main: #f8fafc;
         --text-muted: #94a3b8;
         --card-bg: rgba(12, 16, 24, 0.94);
-        --card-border: rgba(255, 215, 0, 0.25); /* Toque Navideño Dorado */
-        --accent: #FFD700; /* Dorado Navidad */
+        --card-border: rgba(255, 215, 0, 0.25);
+        --accent: #FFD700;
         --accent-hover: #FBBF24;
-        --btn-bg: rgba(229, 9, 20, 0.15); /* Fondo Botones Rojo Claro */
+        --btn-bg: rgba(229, 9, 20, 0.15);
         --shadow-elegant: 0 15px 40px rgba(0, 0, 0, 0.9);
         --blur-effect: blur(12px);
         --radius: 14px;
@@ -326,13 +400,10 @@ const CSS_MODERNO = `
         margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; min-height: 100vh; 
     }
     
-    /* EFECTOS NAVIDEÑOS CSS */
     .snowflake-anim {
-        position: absolute;
-        top: -30px;
-        color: rgba(255, 255, 255, 0.9);
+        position: absolute; top: -30px; color: rgba(255, 255, 255, 0.9);
         text-shadow: 0 0 8px rgba(255,255,255,0.8);
-        animation: fall linear infinite;
+        animation: fall linear infinite; pointer-events: none;
     }
     @keyframes fall {
         0% { transform: translateY(-20px) translateX(0px) rotate(0deg); opacity: 1; }
@@ -345,8 +416,7 @@ const CSS_MODERNO = `
     .light {
         width: 10px; height: 15px; border-radius: 50%;
         background: #ff0000; box-shadow: 0 5px 15px #ff0000;
-        animation: blink 1.5s infinite alternate;
-        margin: 0 5px;
+        animation: blink 1.5s infinite alternate; margin: 0 5px;
     }
     .light:nth-child(even) { background: #22c55e; box-shadow: 0 5px 15px #22c55e; animation-delay: 0.5s; }
     .light:nth-child(3n) { background: #FFD700; box-shadow: 0 5px 15px #FFD700; animation-delay: 1s; }
@@ -355,25 +425,39 @@ const CSS_MODERNO = `
         0% { opacity: 0.3; transform: scale(0.9); }
         100% { opacity: 1; transform: scale(1.2); }
     }
-    .santa-wrapper {
-        position: fixed; bottom: -10px; right: 20px; z-index: 10000;
+
+    /* 🎅 PAPÁ NOEL BAILANDO ANIMADO Y FLUIDO */
+    .santa-dancer-container {
+        position: fixed; bottom: 12px; right: 20px; z-index: 10000;
         display: flex; flex-direction: column; align-items: center;
-        pointer-events: none; animation: floatSanta 4s ease-in-out infinite;
+        pointer-events: none;
     }
-    .santa-sign {
-        background: #E50914; color: #fff; border: 2px solid #FFD700;
-        padding: 8px 16px; border-radius: 10px; font-weight: 800;
-        font-size: 14px; margin-bottom: -15px; z-index: 2;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.5); text-transform: uppercase;
-        letter-spacing: 1px; transform: rotate(-5deg); text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    .santa-dancing-avatar {
+        width: 110px; height: 110px;
+        animation: santaDance 2.4s ease-in-out infinite;
+        transform-origin: bottom center;
+        filter: drop-shadow(0 10px 18px rgba(0,0,0,0.85));
     }
-    .santa-img { width: 140px; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.6)); z-index: 1; }
-    @keyframes floatSanta {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-15px); }
+    .santa-tag {
+        background: linear-gradient(135deg, #E50914, #990000);
+        color: #fff; border: 2px solid #FFD700;
+        padding: 6px 14px; border-radius: 8px; font-weight: 800;
+        font-size: 11px; margin-bottom: -10px; z-index: 2;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.6); text-transform: uppercase;
+        animation: santaTagBob 2.4s ease-in-out infinite;
     }
-    @media (max-width: 768px) {
-        .santa-wrapper { right: 5px; bottom: -15px; transform: scale(0.85); }
+    @keyframes santaDance {
+        0% { transform: translateY(0) rotate(0deg) scale(1); }
+        15% { transform: translateY(-16px) rotate(-8deg) scale(1.04); }
+        30% { transform: translateY(0) rotate(6deg) scale(0.98); }
+        45% { transform: translateY(-18px) rotate(-6deg) scale(1.05); }
+        60% { transform: translateY(0) rotate(8deg) scale(0.97); }
+        75% { transform: translateY(-14px) rotate(-4deg) scale(1.02); }
+        100% { transform: translateY(0) rotate(0deg) scale(1); }
+    }
+    @keyframes santaTagBob {
+        0%, 100% { transform: rotate(-4deg); }
+        50% { transform: rotate(4deg); }
     }
 
     .top-header { 
@@ -384,9 +468,7 @@ const CSS_MODERNO = `
         display: flex; 
         justify-content: space-between; 
         align-items: center; 
-        position: sticky;
-        top: 0;
-        z-index: 50;
+        position: sticky; top: 0; z-index: 50;
     }
     .user-pill { 
         display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.03); 
@@ -412,7 +494,7 @@ const CSS_MODERNO = `
         gap: 22px; 
         padding: 25px 35px 40px 35px; 
         align-items: start; 
-        max-width: 1650px;
+        max-width: 1750px;
         margin: 0 auto;
     }
     .left-sidebar { display: flex; flex-direction: column; gap: 16px; }
@@ -456,12 +538,8 @@ const CSS_MODERNO = `
     .side-card h4 { margin: 0 0 12px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; display: flex; align-items: center; gap: 6px; }
     
     .menu-group-label {
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
-        color: var(--text-muted);
-        margin: 12px 0 4px 6px;
-        font-weight: 700;
+        font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted);
+        margin: 12px 0 4px 6px; font-weight: 700;
     }
     .menu-group-label:first-child { margin-top: 0; }
     
@@ -479,20 +557,10 @@ const CSS_MODERNO = `
     
     .menu-list { display: flex; flex-direction: column; gap: 4px; }
     .menu-btn-item { 
-        background: rgba(255, 255, 255, 0.02); 
-        border: 1px solid transparent; 
-        padding: 10px 12px; 
-        border-radius: 8px; 
-        font-size: 12px; 
-        font-weight: 500;
-        color: var(--text-main); 
-        cursor: pointer; 
-        text-align: left; 
-        transition: 0.2s; 
-        font-family: 'Inter', sans-serif;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        background: rgba(255, 255, 255, 0.02); border: 1px solid transparent; 
+        padding: 10px 12px; border-radius: 8px; font-size: 12px; font-weight: 500;
+        color: var(--text-main); cursor: pointer; text-align: left; transition: 0.2s; 
+        font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;
     }
     .menu-btn-item:hover { background: rgba(255, 215, 0, 0.12); border-color: rgba(255, 215, 0, 0.35); transform: translateX(3px); }
     .menu-btn-item.active-menu { background: rgba(255, 215, 0, 0.18); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -518,6 +586,10 @@ const CSS_MODERNO = `
     .badge-status { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; display: inline-block; }
     .badge-status.disp { background: rgba(37,211,102,0.15); color: #25d366; border: 1px solid #25d366; }
     .badge-status.vendida { background: rgba(229,9,20,0.15); color: #E50914; border: 1px solid #E50914; }
+    .badge-status.vencida { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
+    .badge-status.garantia { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid #3b82f6; }
+
+    .country-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(255,255,255,0.08); border-radius: 4px; font-size: 11px; }
 
     @media (max-width: 1100px) {
         .dashboard-grid { grid-template-columns: 1fr !important; padding: 15px !important; gap: 18px !important; }
@@ -554,9 +626,7 @@ const CSS_MODERNO = `
                 opt.style.display = 'none';
             }
         }
-        if (filtro && primerVisible) {
-            select.value = primerVisible.value;
-        }
+        if (filtro && primerVisible) select.value = primerVisible.value;
     }
 
     let lookupBusyUntil = 0;
@@ -627,15 +697,30 @@ const CSS_MODERNO = `
 </script>
 `;
 
-// SCRIPT GLOBAL NAVIDEÑO - Inserta Papá Noel, Nieve y Luces de Navidad optimizadas
 const CHRISTMAS_EXTRAS = `
-    <div class="santa-wrapper">
-        <div class="santa-sign">¡Feliz Navidad! 🎄</div>
-        <img src="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Santa%20claus/3D/santa_claus_3d.png" alt="Santa" class="santa-img">
+    <div class="santa-dancer-container">
+        <div class="santa-tag">🎄 ¡Feliz Navidad! 🎅</div>
+        <svg class="santa-dancing-avatar" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="60" cy="85" rx="34" ry="28" fill="#E50914" />
+            <rect x="26" y="80" width="68" height="10" fill="#111" rx="3" />
+            <rect x="52" y="77" width="16" height="16" fill="#FFD700" rx="3" />
+            <rect x="55" y="80" width="10" height="10" fill="#111" rx="2" />
+            <circle cx="60" cy="50" r="22" fill="#ffd1b3" />
+            <path d="M 40 54 Q 60 90 80 54 Q 60 70 40 54" fill="#ffffff" />
+            <ellipse cx="60" cy="56" rx="6" ry="4" fill="#e57373" />
+            <circle cx="52" cy="48" r="3" fill="#222" />
+            <circle cx="68" cy="48" r="3" fill="#222" />
+            <path d="M 38 42 Q 60 12 82 42 Z" fill="#E50914" />
+            <rect x="36" y="38" width="48" height="8" rx="4" fill="#ffffff" />
+            <circle cx="78" cy="18" r="7" fill="#ffffff" />
+            <circle cx="28" cy="98" r="10" fill="#111" />
+            <circle cx="92" cy="98" r="10" fill="#111" />
+            <circle cx="36" cy="110" r="8" fill="#111" />
+            <circle cx="84" cy="110" r="8" fill="#111" />
+        </svg>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Nieve Animada Optimizada
             const snowContainer = document.createElement('div');
             snowContainer.style.position = 'fixed';
             snowContainer.style.top = '0';
@@ -659,7 +744,6 @@ const CHRISTMAS_EXTRAS = `
                 snowContainer.appendChild(flake);
             }
 
-            // Luces de Navidad Intermitentes Superiores
             const lightsContainer = document.createElement('div');
             lightsContainer.className = 'lights-container';
             for(let i=0; i<40; i++) {
@@ -673,7 +757,7 @@ const CHRISTMAS_EXTRAS = `
 `;
 
 // =========================================================================
-// 🔑 ENDPOINTS DE API OFICIAL (/api/auth/login y /api/customer/fetch-code)
+// 🔑 ENDPOINTS DE API OFICIAL
 // =========================================================================
 app.post('/api/auth/login', async (req, res) => {
     const login_id = (req.body.login_id || '').toString().trim();
@@ -712,16 +796,12 @@ app.post('/api/customer/fetch-code', async (req, res) => {
 
     if (!email || !code_type || typeof email !== 'string' || !validTypes.includes(code_type)) {
         return res.status(422).json({
-            success: false,
-            code: null,
-            link: null,
-            response_time_ms: Date.now() - startMs,
+            success: false, code: null, link: null, response_time_ms: Date.now() - startMs,
             error: 'HTTP 422: Check required JSON fields (email, code_type) and their types.'
         });
     }
 
     try {
-        // Prioridad: Cookie de sesión activa primero, luego Bearer Token (según especificación)
         let currentUser = null;
         if (req.session && req.session.uid) {
             currentUser = await dbGet("SELECT * FROM usuarios WHERE id = ?", [req.session.uid]);
@@ -730,18 +810,13 @@ app.post('/api/customer/fetch-code', async (req, res) => {
             const authHeader = req.headers['authorization'] || '';
             if (authHeader.startsWith('Bearer ')) {
                 const token = authHeader.slice(7).trim();
-                if (token) {
-                    currentUser = await dbGet("SELECT * FROM usuarios WHERE api_token = ?", [token]);
-                }
+                if (token) currentUser = await dbGet("SELECT * FROM usuarios WHERE api_token = ?", [token]);
             }
         }
 
         if (!currentUser) {
             return res.status(401).json({
-                success: false,
-                code: null,
-                link: null,
-                response_time_ms: Date.now() - startMs,
+                success: false, code: null, link: null, response_time_ms: Date.now() - startMs,
                 error: 'Authentication required. Please sign in to fetch codes.'
             });
         }
@@ -750,15 +825,21 @@ app.post('/api/customer/fetch-code', async (req, res) => {
         const esAdmin = (currentUser.rol === 'Administrador' || currentUser.user === 'admin' || currentUser.user === 'ruben');
 
         if (!esAdmin && !['Cliente', 'Subadministrador'].includes(currentUser.rol)) return res.status(403).json({ success: false, error: 'Perfil no autorizado.' });
+        
         if (!esAdmin) {
             if (currentUser.rol === 'Cliente') {
+                const cuentaDetalle = await dbGet("SELECT estado, precio_unitario FROM cuentas_cliente_detalle WHERE cliente_id = ? AND email = ? ORDER BY id DESC LIMIT 1", [currentUser.id, correoLimpio]);
+                if (cuentaDetalle && cuentaDetalle.estado === 'Vencida') {
+                    return res.status(403).json({
+                        success: false, code: null, link: null, response_time_ms: Date.now() - startMs,
+                        error: `⚠️ CUENTA VENCIDA. Debes renovarla pagando ${formatearDinero(cuentaDetalle.precio_unitario, currentUser.moneda)} para volver a usarla.`
+                    });
+                }
+
                 const asignado = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [currentUser.id, correoLimpio]);
                 if (!asignado) {
                     return res.status(403).json({
-                        success: false,
-                        code: null,
-                        link: null,
-                        response_time_ms: Date.now() - startMs,
+                        success: false, code: null, link: null, response_time_ms: Date.now() - startMs,
                         error: 'Not assigned to your profile.'
                     });
                 }
@@ -771,10 +852,7 @@ app.post('/api/customer/fetch-code', async (req, res) => {
                 const enStockPropio = await dbGet("SELECT id FROM stock_cuentas WHERE email = ? AND propietario_id = ?", [correoLimpio, currentUser.id]);
                 if (!enPool && !enStockPropio) {
                     return res.status(403).json({
-                        success: false,
-                        code: null,
-                        link: null,
-                        response_time_ms: Date.now() - startMs,
+                        success: false, code: null, link: null, response_time_ms: Date.now() - startMs,
                         error: 'Not in your subadmin pool.'
                     });
                 }
@@ -802,16 +880,12 @@ app.post('/api/customer/fetch-code', async (req, res) => {
         if (resultado.success) {
             dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [currentUser.user, correoLimpio]).catch(() => {});
         }
-        console.log('[Busqueda] Consulta finalizada:', resultado.success ? 'resultado disponible' : 'sin resultado');
         res.setHeader('Cache-Control', 'no-store');
         return res.json({ ...resultado, response_time_ms: Date.now() - startMs });
 
     } catch (err) {
         return res.status(500).json({
-            success: false,
-            code: null,
-            link: null,
-            response_time_ms: Date.now() - startMs,
+            success: false, code: null, link: null, response_time_ms: Date.now() - startMs,
             error: 'Internal server error.'
         });
     }
@@ -830,7 +904,6 @@ app.use(async (req, res, next) => {
             }
             next();
         } catch (err) { 
-            console.error(err);
             return res.send("<script>alert('Error Interno de Sesión'); window.location='/';</script>");
         }
     } else { return res.redirect('/'); }
@@ -852,7 +925,7 @@ app.get('/', (req, res) => {
 
     let mensajeBienvenida = `
         <div style="text-align: center; margin-bottom: 25px;">
-            <h3 style="color: var(--accent); margin: 0 0 5px 0; font-size: 18px; font-weight: 600;">¡Bienvenido a SyncBox!</h3>
+            <h3 style="color: var(--accent); margin: 0 0 5px 0; font-size: 18px; font-weight: 600;">¡Bienvenido a SyncBox! 🎄</h3>
             <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.5;">Somos nuevos en el mercado pero con las mejores cuentas.</p>
         </div>
     `;
@@ -872,7 +945,7 @@ app.get('/', (req, res) => {
             ">
                 <div class="input-group"><input type="text" name="user" placeholder="Elige tu Usuario" required></div>
                 <div class="input-group">
-                    <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de tu país (Ej: +52... o +57...)" required>
+                    <input type="tel" name="telefono" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de tu país" required>
                     <small style="display:block; text-align:left; color:var(--accent); font-size:11px; margin-top:5px;">* Obligatorio poner el <b>+</b> y código de país (Ej: +52 o +57)</small>
                 </div>
                 <div class="input-group"><input type="password" name="pass" placeholder="Elige tu Contraseña" required></div>
@@ -898,7 +971,7 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Acceso - SyncBox</title>
+        <title>Acceso Navideño - SyncBox</title>
         ${CSS_MODERNO}
         <style>
             body { display: flex; justify-content: center; align-items: center; }
@@ -913,7 +986,7 @@ app.get('/', (req, res) => {
         <div class="login-box">
             ${logosReconocidos}
             ${contenidoForm}
-            <div class="help-text">Panel cifrado. Conexión segura.</div>
+            <div class="help-text">Panel seguro y cifrado.</div>
         </div>
         ${CHRISTMAS_EXTRAS}
     </body>
@@ -926,12 +999,11 @@ app.post('/registrar-cliente', async (req, res) => {
     const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
     if (!validarTelefonoConCodigo(telLimpio)) {
-        return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567). No se permite registrar sin código de país.'); window.location='/?mode=registro';</script>");
+        return res.send("<script>alert('⛔ ERROR OBLIGATORIO: Debes colocar el signo + seguido del código de tu país (Ejemplo: +521234567890 o +573001234567).'); window.location='/?mode=registro';</script>");
     }
 
     try {
         const monedaDetectada = obtenerMonedaPorTelefono(telLimpio);
-
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, 'Cliente', NULL, ?, ?)", [user.trim(), pass, telLimpio, monedaDetectada]);
         
         const fechaObj = new Date();
@@ -946,7 +1018,7 @@ app.post('/registrar-cliente', async (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Redirigiendo a WhatsApp...</title>
+            <title>Registro Exitoso</title>
             ${CSS_MODERNO}
             <style>
                 body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
@@ -957,11 +1029,9 @@ app.post('/registrar-cliente', async (req, res) => {
         </head>
         <body>
             <h2>✅ ¡Registro Exitoso!</h2>
-            <p>Se ha creado tu cuenta. Haz clic abajo para enviar tus datos por WhatsApp y activar tu acceso.</p>
+            <p>Se ha creado tu cuenta. Haz clic abajo para confirmar por WhatsApp.</p>
             <a href="${linkRedireccion}" class="btn">Confirmar por WhatsApp</a>
-            <script>
-                window.location.replace('${linkRedireccion}');
-            </script>
+            <script>window.location.replace('${linkRedireccion}');</script>
             ${CHRISTMAS_EXTRAS}
         </body>
         </html>
@@ -1000,40 +1070,299 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-// Ruta para guardar configuración del servidor de códigos API desde el panel de Admin
+// =========================================================================
+// 💰 MEJORA 2: GESTIÓN DE CRÉDITOS
+// =========================================================================
+app.post('/admin/gestionar-creditos', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { cliente_id, accion_credito, cantidad } = req.body;
+    const monto = parseFloat(cantidad);
+
+    if (!cliente_id || !monto || monto <= 0) {
+        return res.send("<script>alert('⛔ Debes seleccionar un usuario y una cantidad válida.'); window.location='/dash';</script>");
+    }
+
+    try {
+        const operador = await dbGet("SELECT id, user, rol, creditos, moneda FROM usuarios WHERE id = ?", [req.session.uid]);
+        const cliente = await dbGet("SELECT id, user, creditos, moneda, creado_por FROM usuarios WHERE id = ?", [cliente_id]);
+
+        if (!cliente) return res.send("<script>alert('Usuario no encontrado.'); window.location='/dash';</script>");
+
+        if (req.session.rol === 'Subadministrador' && cliente.creado_por !== req.session.uid) {
+            return res.send("<script>alert('⛔ No tienes permiso para editar créditos de este usuario.'); window.location='/dash';</script>");
+        }
+
+        const montoMXN = convertirAMXN(monto, operador.moneda);
+        let nuevoSaldoMXN = cliente.creditos;
+
+        if (accion_credito === 'AGREGAR') {
+            if (req.session.rol === 'Subadministrador' && operador.creditos < montoMXN) {
+                return res.send("<script>alert('⛔ No tienes saldo suficiente en tu cuenta para asignar.'); window.location='/dash';</script>");
+            }
+            if (req.session.rol === 'Subadministrador') {
+                await dbRun("UPDATE usuarios SET creditos = creditos - ? WHERE id = ?", [montoMXN, operador.id]);
+            }
+            nuevoSaldoMXN += montoMXN;
+        } else if (accion_credito === 'QUITAR') {
+            nuevoSaldoMXN = Math.max(0, cliente.creditos - montoMXN);
+            if (req.session.rol === 'Subadministrador') {
+                await dbRun("UPDATE usuarios SET creditos = creditos + ? WHERE id = ?", [montoMXN, operador.id]);
+            }
+        }
+
+        await dbRun("UPDATE usuarios SET creditos = ? WHERE id = ?", [nuevoSaldoMXN, cliente.id]);
+
+        await dbRun(`INSERT INTO historial_creditos_operaciones (operador_id, cliente_id, tipo, cantidad, saldo_anterior, saldo_nuevo) 
+                    VALUES (?, ?, ?, ?, ?, ?)`, 
+                    [operador.id, cliente.id, accion_credito, montoMXN, cliente.creditos, nuevoSaldoMXN]);
+
+        res.send(`<script>alert('✅ Créditos actualizados exitosamente.\\nUsuario: ${cliente.user}\\nOperación: ${accion_credito}\\nNuevo Saldo: ${formatearDinero(nuevoSaldoMXN, cliente.moneda)}'); window.location='/dash';</script>`);
+
+    } catch (e) {
+        console.error(e);
+        res.send("<script>alert('Error al gestionar créditos.'); window.location='/dash';</script>");
+    }
+});
+
+// =========================================================================
+// 📦 MEJORA 3, 4 Y 12: ASIGNACIÓN DE BLOQUES A CLIENTES (ADMIN Y SUBADMIN)
+// =========================================================================
+app.post('/admin/asignar-bloque-cliente', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { cliente_id, correos_bloque, precio_total, pais_cuenta } = req.body;
+
+    if (!cliente_id || !correos_bloque) {
+        return res.send("<script>alert('⛔ Debes seleccionar el cliente y los correos a asignar.'); window.location='/dash';</script>");
+    }
+
+    try {
+        const cliente = await dbGet("SELECT id, user, creado_por, moneda FROM usuarios WHERE id = ?", [cliente_id]);
+        if (!cliente) return res.send("<script>alert('Cliente no encontrado.'); window.location='/dash';</script>");
+
+        if (req.session.rol === 'Subadministrador' && cliente.creado_por !== req.session.uid) {
+            return res.send("<script>alert('⛔ Solo puedes asignar cuentas a tus propios clientes.'); window.location='/dash';</script>");
+        }
+
+        const lineas = correos_bloque.split(/[\n\r,]+/).filter(l => l.trim() !== '');
+        let cuentasProcesar = [];
+
+        for (let l of lineas) {
+            let match = l.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)(?:[\s:;|/,]*(.*))?/);
+            if (match) {
+                cuentasProcesar.push({ email: match[1].toLowerCase().trim(), pass: match[2] ? match[2].trim() : '' });
+            }
+        }
+
+        if (cuentasProcesar.length === 0) {
+            return res.send("<script>alert('⛔ No se detectaron correos válidos.'); window.location='/dash';</script>");
+        }
+
+        const totalCuentas = cuentasProcesar.length;
+        const pTotal = parseFloat(precio_total) || 0;
+        const pUnitario = totalCuentas > 0 ? (pTotal / totalCuentas) : 0;
+        const paisFinal = pais_cuenta || 'US';
+
+        if (req.session.rol === 'Subadministrador') {
+            for (let c of cuentasProcesar) {
+                const enStock = await dbGet("SELECT id FROM stock_cuentas WHERE email = ? AND propietario_id = ?", [c.email, req.session.uid]);
+                const asignadaAMi = await dbGet("SELECT id FROM correos WHERE email = ? AND user_id = ?", [c.email, req.session.uid]);
+                if (!enStock && !asignadaAMi) {
+                    return res.send(`<script>alert('⛔ La cuenta ${c.email} no te pertenece.'); window.location='/dash';</script>`);
+                }
+            }
+        }
+
+        const fechaActual = new Date();
+        const fechaVence = new Date(fechaActual.getTime() + (30 * 24 * 60 * 60 * 1000));
+        const fechaVenceSql = fechaVence.toISOString().replace('T', ' ').substring(0, 19);
+
+        const bloqueRes = await dbRun(`
+            INSERT INTO asignaciones_bloques (asignador_id, cliente_id, cantidad, precio_total, precio_unitario, fecha_vencimiento, estado)
+            VALUES (?, ?, ?, ?, ?, ?, 'Activo')
+        `, [req.session.uid, cliente.id, totalCuentas, pTotal, pUnitario, fechaVenceSql]);
+
+        const bloqueId = bloqueRes.lastID;
+
+        for (let c of cuentasProcesar) {
+            await dbRun(`
+                INSERT INTO cuentas_cliente_detalle (bloque_id, cliente_id, email, password, pais, fecha_vencimiento, estado, precio_unitario)
+                VALUES (?, ?, ?, ?, ?, ?, 'Activa', ?)
+            `, [bloqueId, cliente.id, c.email, c.pass, paisFinal, fechaVenceSql, pUnitario]);
+
+            const yaEnCorreos = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [cliente.id, c.email]);
+            if (!yaEnCorreos) {
+                await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [c.email, cliente.id]);
+            }
+
+            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, pais = ? WHERE email = ?", [cliente.id, paisFinal, c.email]);
+        }
+
+        res.send(`<script>alert('✅ Bloque de ${totalCuentas} cuentas asignado a @${cliente.user}.\\nVence el: ${fechaVenceSql}'); window.location='/dash';</script>`);
+
+    } catch (e) {
+        console.error(e);
+        res.send("<script>alert('Error al asignar el bloque de cuentas.'); window.location='/dash';</script>");
+    }
+});
+
+// =========================================================================
+// 🔄 MEJORA 4: CONFIRMAR RENOVACIÓN
+// =========================================================================
+app.post('/admin/renovar-cuentas', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { cliente_id, bloque_id } = req.body;
+
+    try {
+        const fechaNueva = new Date();
+        const nuevaFechaVence = new Date(fechaNueva.getTime() + (30 * 24 * 60 * 60 * 1000)).toISOString().replace('T', ' ').substring(0, 19);
+
+        if (bloque_id) {
+            await dbRun("UPDATE asignaciones_bloques SET estado = 'Activo', fecha_vencimiento = ? WHERE id = ?", [nuevaFechaVence, bloque_id]);
+            await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Activa', fecha_vencimiento = ? WHERE bloque_id = ?", [nuevaFechaVence, bloque_id]);
+        } else if (cliente_id) {
+            await dbRun("UPDATE asignaciones_bloques SET estado = 'Activo', fecha_vencimiento = ? WHERE cliente_id = ?", [nuevaFechaVence, cliente_id]);
+            await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Activa', fecha_vencimiento = ? WHERE cliente_id = ?", [nuevaFechaVence, cliente_id]);
+        }
+
+        res.send("<script>alert('✅ CUENTAS RENOVADAS. Servicio habilitado por 1 mes más.'); window.location='/dash';</script>");
+    } catch (e) {
+        console.error(e);
+        res.send("<script>alert('Error al renovar cuentas.'); window.location='/dash';</script>");
+    }
+});
+
+// =========================================================================
+// 🔴 MEJORA 5: REPORTE DE CUENTA CAÍDA
+// =========================================================================
+app.post('/admin/reportar-cuenta-caida', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { email_caida } = req.body;
+    const correoLimpio = (email_caida || '').trim().toLowerCase();
+
+    try {
+        const cuenta = await dbGet(`
+            SELECT ccd.*, u.user as cliente_nombre 
+            FROM cuentas_cliente_detalle ccd 
+            JOIN usuarios u ON ccd.cliente_id = u.id 
+            WHERE LOWER(ccd.email) = ? 
+            ORDER BY ccd.id DESC LIMIT 1
+        `, [correoLimpio]);
+
+        const fechaCompra = cuenta ? cuenta.fecha_asignacion : new Date().toISOString();
+        const precio = cuenta ? cuenta.precio_unitario : 0;
+        const clienteId = cuenta ? cuenta.cliente_id : null;
+        const pais = cuenta ? cuenta.pais : 'US';
+
+        await dbRun(`
+            INSERT INTO cuentas_caidas_registro (email, cliente_id, fecha_compra, precio, pais, estado)
+            VALUES (?, ?, ?, ?, ?, 'Pendiente')
+        `, [correoLimpio, clienteId, fechaCompra, precio, pais]);
+
+        if (cuenta) {
+            await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Caida' WHERE id = ?", [cuenta.id]);
+        }
+        await dbRun("UPDATE stock_cuentas SET estado = 'Caida' WHERE LOWER(email) = ?", [correoLimpio]);
+
+        res.send("<script>alert('🔴 Cuenta registrada en CUENTAS CAÍDAS.'); window.location='/dash';</script>");
+    } catch (e) {
+        console.error(e);
+        res.send("<script>alert('Error al reportar cuenta caída.'); window.location='/dash';</script>");
+    }
+});
+
+// =========================================================================
+// 🔄 MEJORA 6 Y 7: CAMBIO POR GARANTÍA
+// =========================================================================
+app.post('/admin/cambiar-por-garantia', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { caida_id, nueva_cuenta_email } = req.body;
+    const nuevoEmail = (nueva_cuenta_email || '').trim().toLowerCase();
+
+    try {
+        const caida = await dbGet("SELECT * FROM cuentas_caidas_registro WHERE id = ?", [caida_id]);
+        if (!caida) return res.send("<script>alert('Registro no encontrado.'); window.location='/dash';</script>");
+
+        const fechaReemplazo = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+        await dbRun(`
+            UPDATE cuentas_caidas_registro 
+            SET estado = 'Reemplazada', reemplazo_email = ?, fecha_reemplazo = ? 
+            WHERE id = ?
+        `, [nuevoEmail, fechaReemplazo, caida.id]);
+
+        if (caida.cliente_id) {
+            const detalleOriginal = await dbGet("SELECT * FROM cuentas_cliente_detalle WHERE email = ? AND cliente_id = ? ORDER BY id DESC LIMIT 1", [caida.email, caida.cliente_id]);
+            
+            const bloqueId = detalleOriginal ? detalleOriginal.bloque_id : null;
+            const fechaVence = detalleOriginal ? detalleOriginal.fecha_vencimiento : null;
+            const paisConservado = caida.pais || (detalleOriginal ? detalleOriginal.pais : 'US');
+
+            await dbRun(`
+                INSERT INTO cuentas_cliente_detalle (bloque_id, cliente_id, email, password, pais, fecha_asignacion, fecha_vencimiento, estado, es_reemplazo_de, precio_unitario)
+                VALUES (?, ?, ?, '', ?, ?, ?, 'Activa', ?, ?)
+            `, [bloqueId, caida.cliente_id, nuevoEmail, paisConservado, caida.fecha_compra, fechaVence, caida.email, caida.precio]);
+
+            if (detalleOriginal) {
+                await dbRun("UPDATE cuentas_cliente_detalle SET reemplazada_por = ?, fecha_reemplazo = ? WHERE id = ?", [nuevoEmail, fechaReemplazo, detalleOriginal.id]);
+            }
+
+            await dbRun("DELETE FROM correos WHERE email = ? AND user_id = ?", [caida.email, caida.cliente_id]);
+            await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [nuevoEmail, caida.cliente_id]);
+        }
+
+        await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ? WHERE email = ?", [caida.cliente_id, nuevoEmail]);
+
+        res.send("<script>alert('✅ CAMBIO POR GARANTÍA EXITOSO.\\nLa cuenta nueva fue vinculada y conservó la fecha original de compra.'); window.location='/dash';</script>");
+    } catch (e) {
+        console.error(e);
+        res.send("<script>alert('Error al ejecutar cambio por garantía.'); window.location='/dash';</script>");
+    }
+});
+
+// =========================================================================
+// 🌎 MEJORA 12: CAMBIAR MANUALMENTE EL PAÍS DE UNA CUENTA
+// =========================================================================
+app.post('/admin/cambiar-pais-cuenta', async (req, res) => {
+    if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
+    const { email_cuenta, nuevo_pais } = req.body;
+    const correoLimpio = (email_cuenta || '').trim().toLowerCase();
+
+    try {
+        await dbRun("UPDATE stock_cuentas SET pais = ? WHERE LOWER(email) = ?", [nuevo_pais, correoLimpio]);
+        await dbRun("UPDATE cuentas_cliente_detalle SET pais = ? WHERE LOWER(email) = ?", [nuevo_pais, correoLimpio]);
+        await dbRun("UPDATE cuentas_caidas_registro SET pais = ? WHERE LOWER(email) = ?", [nuevo_pais, correoLimpio]);
+
+        res.send(`<script>alert('✅ País actualizado a ${PAISES_MAPA[nuevo_pais]?.bandera || ''} ${PAISES_MAPA[nuevo_pais]?.nombre || nuevo_pais} para ${correoLimpio}.'); window.location='/dash';</script>`);
+    } catch (e) {
+        console.error(e);
+        res.send("<script>alert('Error al actualizar el país.'); window.location='/dash';</script>");
+    }
+});
+
 app.post('/admin/config-ghoulflix', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { login_id, password, token_manual } = req.body;
     try {
         await dbRun("UPDATE config_ghoulflix SET login_id = ?, password = ?, token = ?, updated_at = datetime('now', 'localtime') WHERE id = 1", [
-            (login_id || '').trim(),
-            (password || '').trim(),
-            (token_manual || '').trim()
+            (login_id || '').trim(), (password || '').trim(), (token_manual || '').trim()
         ]);
-
         if (login_id && password && !token_manual) {
             const loginRes = await loginEnGhoulflixApi();
-            if (loginRes.success) {
-                return res.send("<script>alert('✅ Conectado exitosamente al servidor de códigos. Token obtenido y guardado.'); window.location='/dash';</script>");
-            } else {
-                return res.send(`<script>alert('⚠️ Credenciales guardadas, pero el servidor respondió: ${loginRes.error}'); window.location='/dash';</script>`);
-            }
+            if (loginRes.success) return res.send("<script>alert('✅ Conectado exitosamente al servidor de códigos.'); window.location='/dash';</script>");
         }
-        res.send("<script>alert('✅ Configuración de API de códigos actualizada correctamente.'); window.location='/dash';</script>");
-    } catch (e) {
-        res.redirect('/dash');
-    }
+        res.send("<script>alert('✅ Configuración de API actualizada.'); window.location='/dash';</script>");
+    } catch (e) { res.redirect('/dash'); }
 });
 
 app.post('/bot/reservar', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     const telLimpio = (req.body.telefono || '').toString().replace(/\s+/g, '').trim();
     if (!validarTelefonoConCodigo(telLimpio)) {
-        return res.send("<script>alert('⛔ Debes colocar el signo + y el código de tu país en el número de WhatsApp (Ej: +52... o +57...).'); window.location='/dash';</script>");
+        return res.send("<script>alert('⛔ Debes colocar el signo + y el código de país.'); window.location='/dash';</script>");
     }
     try {
         await dbRun("INSERT INTO reservas (user_id, cantidad, telefono) VALUES (?, ?, ?)", [req.session.uid, req.body.cantidad, telLimpio]);
-        res.send("<script>alert('🛒 Reserva enviada exitosamente. El administrador la revisará pronto.'); window.location='/dash';</script>");
+        res.send("<script>alert('🛒 Reserva enviada exitosamente.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -1041,7 +1370,7 @@ app.post('/bot/garantia', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
         await dbRun("INSERT INTO garantias (user_id, plataforma, motivo, detalles) VALUES (?, ?, ?, ?)", [req.session.uid, req.body.plataforma, req.body.motivo, req.body.detalles]);
-        res.send("<script>alert('🚨 Garantía reportada en sistema. Mantente atento para recibir el reemplazo.'); window.location='/dash';</script>");
+        res.send("<script>alert('🚨 Garantía reportada en sistema.'); window.location='/dash';</script>");
     } catch(err) { res.redirect('/dash'); }
 });
 
@@ -1075,12 +1404,11 @@ app.post('/admin/crear', async (req, res) => {
     const telLimpio = (telefono || '').toString().replace(/\s+/g, '').trim();
 
     if (!validarTelefonoConCodigo(telLimpio)) {
-        return res.send("<script>alert('⛔ OBLIGATORIO: Debes ingresar el número con el signo + y el código del país (Ej: +52... o +57...).'); window.location='/dash';</script>");
+        return res.send("<script>alert('⛔ Debes ingresar el número con + y código de país.'); window.location='/dash';</script>");
     }
 
     try {
         const monedaDetectada = obtenerMonedaPorTelefono(telLimpio);
-
         await dbRun("INSERT INTO usuarios (user, pass, rol, creado_por, telefono, moneda) VALUES (?, ?, ?, ?, ?, ?)", [n.trim(), c.trim(), r, req.session.uid, telLimpio, monedaDetectada]);
         res.redirect('/dash');
     } catch(err) {
@@ -1154,7 +1482,6 @@ app.post('/admin/asignar-correo', async (req, res) => {
     }
 });
 
-// 🗑️ BORRAR CORREOS MASIVAMENTE DE UN USUARIO ESPECÍFICO
 app.post('/admin/borrar-correos-masivo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { user_id, correos_borrar } = req.body;
@@ -1213,12 +1540,10 @@ app.post('/admin/borrar-correos-masivo', async (req, res) => {
     }
 });
 
-// 🔎 NUEVO: RUTA PARA BUSCAR Y AUDITAR CORREOS GLOBALMENTE
 app.post('/admin/auditar-cuentas', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.status(403).send('No autorizado.');
     const { correos_auditar } = req.body;
     
-    // Extraer correos
     const coincidencias = String(correos_auditar).match(/[a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/g) || [];
     const correosUnicos = [...new Set(coincidencias.map(e => e.trim().toLowerCase()))];
 
@@ -1243,7 +1568,6 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
             cuentasPermitidas = encontradas.filter(c => c.user_id === req.session.uid || c.creado_por === req.session.uid);
         }
 
-        // Construir la interfaz de respuesta
         let html = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -1259,10 +1583,7 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
         `;
 
         if (cuentasPermitidas.length > 0) {
-            // Se envía un array de correos para que la ruta de limpieza los procese
             const emailsAEliminar = cuentasPermitidas.map(c => c.email);
-            
-            // Re-escapar la data JSON para inyectarla segura en el HTML
             const jsonSeguro = JSON.stringify(emailsAEliminar).replace(/"/g, '&quot;');
 
             html += `
@@ -1286,12 +1607,10 @@ app.post('/admin/auditar-cuentas', async (req, res) => {
 
         res.send(html);
     } catch (e) {
-        console.error(e);
         res.send(`<p style="color:#E50914;">Error interno al procesar la auditoría.</p>`);
     }
 });
 
-// 🗑️ NUEVO: EJECUTAR LIMPIEZA GLOBAL DESDE LA AUDITORÍA
 app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     
@@ -1301,7 +1620,6 @@ app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
 
         let eliminados = 0;
         for (let email of emails) {
-            // Validar asignación real al momento de borrar
             const asig = await dbGet(`
                 SELECT c.id, c.user_id, u.creado_por 
                 FROM correos c JOIN usuarios u ON c.user_id = u.id 
@@ -1313,8 +1631,6 @@ app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
                 
                 if (permitido) {
                     await dbRun("DELETE FROM correos WHERE id = ?", [asig.id]);
-                    
-                    // Liberar stock para que vuelva a estar 'Disponible' si ya no tiene dueños
                     const sigueAsignadoAOtro = await dbGet("SELECT id FROM correos WHERE LOWER(email) = ?", [email]);
                     if (!sigueAsignadoAOtro) {
                         await dbRun(
@@ -1328,11 +1644,9 @@ app.post('/admin/ejecutar-limpieza-global', async (req, res) => {
         }
         res.send(`<script>alert('✅ Limpieza Global exitosa. Se eliminaron ${eliminados} cuentas de los usuarios.'); window.location='/dash';</script>`);
     } catch(e) {
-        console.error(e);
         res.send("<script>alert('Error al ejecutar la limpieza global masiva.'); window.location='/dash';</script>");
     }
 });
-
 
 app.post('/admin/eliminar-correo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
@@ -1346,9 +1660,7 @@ app.post('/admin/eliminar-correo', async (req, res) => {
             }
         }
         res.redirect('/dash');
-    } catch(err) {
-        res.redirect('/dash');
-    }
+    } catch(err) { res.redirect('/dash'); }
 });
 
 app.post('/admin/eliminar-usuario', async (req, res) => {
@@ -1365,16 +1677,14 @@ app.post('/admin/eliminar-usuario', async (req, res) => {
             }
         }
         res.redirect('/dash');
-    } catch(err) {
-        res.redirect('/dash');
-    }
+    } catch(err) { res.redirect('/dash'); }
 });
 
-// 🚀 CARGA DE STOCK DINÁMICA (ADMIN Y SUBADMIN)
 app.post('/stock/cargar', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
-    const { correos_stock, plataforma } = req.body;
+    const { correos_stock, plataforma, pais } = req.body;
     const lineas = correos_stock.split(/[\n\r]+/).filter(l => l.trim() !== '');
+    const paisFinal = pais || 'US';
     
     let duplicadas = 0;
     let agregadas = 0;
@@ -1391,16 +1701,15 @@ app.post('/stock/cargar', async (req, res) => {
                 
                 if(existsStock || existsCorreos) { duplicadas++; } 
                 else {
-                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password, propietario_id) VALUES (?, ?, ?, ?)", [plataforma, e, p, req.session.uid]);
+                    await dbRun("INSERT INTO stock_cuentas (plataforma, email, password, propietario_id, pais) VALUES (?, ?, ?, ?, ?)", [plataforma, e, p, req.session.uid, paisFinal]);
                     agregadas++;
                 }
             }
         }
-        res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas a tu stock.\\n⚠️ Duplicadas ignoradas: ${duplicadas}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('✅ Se agregaron ${agregadas} cuentas a tu stock (${PAISES_MAPA[paisFinal]?.bandera || ''} ${PAISES_MAPA[paisFinal]?.nombre || paisFinal}).\\n⚠️ Duplicadas ignoradas: ${duplicadas}'); window.location='/dash';</script>`);
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🗑️ ELIMINAR STOCK ESPECÍFICO MASIVAMENTE (ADMIN Y SUBADMIN)
 app.post('/stock/eliminar-masivo', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { correos_eliminar } = req.body;
@@ -1425,19 +1734,17 @@ app.post('/stock/eliminar-masivo', async (req, res) => {
                 noEncontrados++;
             }
         }
-        res.send(`<script>alert('🗑️ Proceso de limpieza de stock completado:\\n\\n✅ Cuentas eliminadas de tu inventario: ${eliminados}\\n⚠️ Cuentas no encontradas o que ya no te pertenecen: ${noEncontrados}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('🗑️ Proceso completado:\\n\\n✅ Cuentas eliminadas: ${eliminados}\\n⚠️ No encontradas o de otro dueño: ${noEncontrados}'); window.location='/dash';</script>`);
     } catch (e) {
-        console.error(e);
         res.redirect('/dash');
     }
 });
-
 
 app.post('/admin/vaciar-stock-disponible', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     try {
         await dbRun("DELETE FROM stock_cuentas WHERE estado = 'Disponible'");
-        res.send("<script>alert('✅ Todo el stock NO VENDIDO (Disponible) ha sido eliminado correctamente.'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ Todo el stock NO VENDIDO ha sido eliminado correctamente.'); window.location='/dash';</script>");
     } catch(e) { res.redirect('/dash'); }
 });
 
@@ -1445,11 +1752,10 @@ app.post('/admin/vaciar-stock-vendido', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     try {
         await dbRun("DELETE FROM stock_cuentas WHERE estado IN ('Vendida', 'Asignada')");
-        res.send("<script>alert('✅ Todo el stock VENDIDO y ASIGNADO ha sido eliminado de la tabla principal. (Los clientes conservan sus accesos)'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ Todo el stock VENDIDO y ASIGNADO ha sido eliminado de la lista principal.'); window.location='/dash';</script>");
     } catch(e) { res.redirect('/dash'); }
 });
 
-// 🚀 ASIGNACIÓN DE DINERO POR PARTE DEL ADMIN (CONVIERTE A MXN)
 app.post('/admin/asignar-dinero', async (req, res) => {
     if (req.session.rol !== 'Administrador') return res.redirect('/dash');
     const { subadmin_id, cantidad } = req.body;
@@ -1521,7 +1827,6 @@ app.post('/admin/asignar-manual', async (req, res) => {
     try {
         for (let mail of lista) {
             let email = mail.trim().toLowerCase();
-            
             const cuenta = await dbGet("SELECT id, email FROM stock_cuentas WHERE email = ? AND estado = 'Disponible'", [email]);
             
             if (!cuenta) {
@@ -1558,7 +1863,6 @@ app.post('/admin/asignar-manual', async (req, res) => {
     }
 });
 
-// 🚀 SUBADMIN: CONFIGURAR PRECIOS DE SU TIENDA
 app.post('/subadmin/configurar-precios', async (req, res) => {
     if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     try {
@@ -1579,7 +1883,6 @@ app.post('/subadmin/configurar-precios', async (req, res) => {
     }
 });
 
-// 🚀 SUBADMIN: ASIGNAR DINERO A SUS CLIENTES
 app.post('/subadmin/asignar-dinero', async (req, res) => {
     if (req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { cliente_id, cantidad } = req.body;
@@ -1611,7 +1914,6 @@ app.post('/subadmin/asignar-dinero', async (req, res) => {
     }
 });
 
-// 🚀 SISTEMA DE COMPRA MULTINIVEL CON NOTIFICACIÓN OBLIGATORIA (ADMIN + ASISTENTE)
 app.post('/tienda/comprar', async (req, res) => {
     if (req.session.rol !== 'Subadministrador' && req.session.rol !== 'Cliente') return res.redirect('/dash');
     const paquete = parseInt(req.body.paquete);
@@ -1619,7 +1921,6 @@ app.post('/tienda/comprar', async (req, res) => {
     try {
         const comprador = await dbGet("SELECT id, user, telefono, creditos, creado_por, moneda FROM usuarios WHERE id = ?", [req.session.uid]);
         const esSubAdmin = req.session.rol === 'Subadministrador';
-        
         const proveedor_id = esSubAdmin ? 1 : (comprador.creado_por || 1);
         
         let costoMXN = PRECIOS_BASE[paquete];
@@ -1632,7 +1933,7 @@ app.post('/tienda/comprar', async (req, res) => {
 
         if (comprador.creditos < costoMXN) return res.send("<script>alert('Dinero insuficiente en tu balance.'); window.location='/dash';</script>");
 
-        const disponibles = await dbAll("SELECT id, email, password FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' AND propietario_id = ? LIMIT ?", [proveedor_id, paquete]);
+        const disponibles = await dbAll("SELECT id, email, password, pais FROM stock_cuentas WHERE estado = 'Disponible' AND plataforma = 'netflix' AND propietario_id = ? LIMIT ?", [proveedor_id, paquete]);
         
         if (disponibles.length < paquete) return res.send("<script>alert('El proveedor no tiene stock suficiente en este momento.'); window.location='/dash';</script>");
 
@@ -1642,11 +1943,15 @@ app.post('/tienda/comprar', async (req, res) => {
         const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costoMXN, comprador.creditos, nuevoSaldoMXN]);
         const compraId = compraInfo.lastID;
 
+        const fechaVence = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+        const bloqueInfo = await dbRun("INSERT INTO asignaciones_bloques (asignador_id, cliente_id, cantidad, precio_total, precio_unitario, fecha_vencimiento, estado) VALUES (?, ?, ?, ?, ?, ?, 'Activo')", [proveedor_id, comprador.id, paquete, costoMXN, (costoMXN/paquete), fechaVence]);
+
         let correosEntregados = [];
         for (let cuenta of disponibles) {
             await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
             await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta, password_cuenta) VALUES (?, ?, ?, ?)", [compraId, cuenta.id, cuenta.email, cuenta.password]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
+            await dbRun("INSERT INTO cuentas_cliente_detalle (bloque_id, cliente_id, email, password, pais, fecha_vencimiento, estado, precio_unitario) VALUES (?, ?, ?, ?, ?, ?, 'Activa', ?)", [bloqueInfo.lastID, comprador.id, cuenta.email, cuenta.password, cuenta.pais || 'US', fechaVence, (costoMXN/paquete)]);
             correosEntregados.push(`${cuenta.email} : ${cuenta.password || 'Sin clave'}`);
         }
 
@@ -1687,7 +1992,7 @@ app.post('/tienda/comprar', async (req, res) => {
                 <div class="status-badge">⚠️ PASO OBLIGATORIO DE SEGURIDAD</div>
                 <h2 style="color:#25d366; margin: 5px 0 10px 0;">✅ Compra Procesada (${costoCompradorText})</h2>
                 <p style="color:#cbd5e1; font-size:13px; line-height:1.5; margin-bottom:20px;">
-                    Para liberar y visualizar tus cuentas en el panel, es <b>estrictamente obligatorio</b> enviar el comprobante de entrega por WhatsApp al Administrador y al Asistente:
+                    Para liberar tus cuentas en el panel, debes enviar el comprobante por WhatsApp:
                 </p>
 
                 <a href="${linkAdmin}" target="_blank" id="btnPaso1" onclick="marcarPaso1()" class="step-btn btn-wa-1">
@@ -1715,7 +2020,7 @@ app.post('/tienda/comprar', async (req, res) => {
                 function marcarPaso1() {
                     paso1OK = true;
                     const b1 = document.getElementById('btnPaso1');
-                    b1.innerHTML = '✅ 1️⃣ Enviado al Administrador (Click para reenviar)';
+                    b1.innerHTML = '✅ 1️⃣ Enviado al Administrador';
                     b1.style.opacity = '0.85';
                     verificarDesbloqueo();
                 }
@@ -1723,7 +2028,7 @@ app.post('/tienda/comprar', async (req, res) => {
                 function marcarPaso2() {
                     paso2OK = true;
                     const b2 = document.getElementById('btnPaso2');
-                    b2.innerHTML = '✅ 2️⃣ Enviado al Asistente (Click para reenviar)';
+                    b2.innerHTML = '✅ 2️⃣ Enviado al Asistente';
                     b2.style.opacity = '0.85';
                     verificarDesbloqueo();
                 }
@@ -1741,7 +2046,7 @@ app.post('/tienda/comprar', async (req, res) => {
                     if (paso1OK && paso2OK) {
                         window.location.href = '/dash';
                     } else {
-                        alert('⛔ Debes enviar obligatoriamente el mensaje al Administrador y al Asistente antes de continuar.');
+                        alert('⛔ Debes enviar obligatoriamente el mensaje.');
                     }
                 }
             </script>
@@ -1753,6 +2058,9 @@ app.post('/tienda/comprar', async (req, res) => {
     }
 });
 
+// =========================================================================
+// 🖥️ DASHBOARD COMPLETO CONSERVANDO CADA SECCIÓN ORIGINAL
+// =========================================================================
 app.get('/dash', async (req, res) => {
     const esAdminPrincipal = (req.session.user === 'admin' || req.session.user === 'ruben');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
@@ -1762,7 +2070,12 @@ app.get('/dash', async (req, res) => {
         try {
             const usuarioActual = await dbGet("SELECT * FROM usuarios WHERE id = ?", [req.session.uid]);
             let misCorreos = [];
-            if (esCliente || esSubAdmin) { misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]); }
+            let misCuentasVencidas = [];
+
+            if (esCliente || esSubAdmin) {
+                misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]);
+                misCuentasVencidas = await dbAll("SELECT * FROM cuentas_cliente_detalle WHERE cliente_id = ? AND estado = 'Vencida'", [req.session.uid]);
+            }
 
             let query = esAdminPrincipal 
                 ? "SELECT * FROM usuarios WHERE creado_por IS NULL OR creado_por = ? OR id = ?" 
@@ -1780,10 +2093,38 @@ app.get('/dash', async (req, res) => {
             const stockVend = await dbGet("SELECT COUNT(*) as count FROM stock_cuentas WHERE (estado = 'Vendida' OR estado = 'Asignada') AND propietario_id = ?", [proveedor_inventario]);
             
             const historialAsignaciones = await dbAll("SELECT h.*, u.user as receptor, a.user as admin FROM historial_asignaciones h JOIN usuarios u ON h.receptor_id = u.id JOIN usuarios a ON h.admin_id = a.id ORDER BY h.id DESC");
-
             const historialCompras = await dbAll(`SELECT c.*, u.user as comprador, u.moneda FROM compras_stock c JOIN usuarios u ON c.subadmin_id = u.id ORDER BY c.id DESC`);
             const detallesComprasDB = await dbAll("SELECT * FROM detalles_compras");
-            const cfgGhoulflix = await dbGet("SELECT * FROM config_ghoulflix WHERE id = 1");
+
+            // Nuevos datos para mejoras
+            const cuentasCaidas = await dbAll(`SELECT cc.*, u.user as cliente_nombre, u.moneda FROM cuentas_caidas_registro cc LEFT JOIN usuarios u ON cc.cliente_id = u.id ORDER BY cc.id DESC`);
+            const asignacionesClientes = await dbAll(`SELECT ccd.*, u.user as cliente_nombre, u.telefono as cliente_telefono, u.moneda FROM cuentas_cliente_detalle ccd JOIN usuarios u ON ccd.cliente_id = u.id ORDER BY ccd.id DESC`);
+            const historialCreditos = await dbAll(`SELECT hc.*, op.user as operador_nombre, cl.user as cliente_nombre, cl.moneda FROM historial_creditos_operaciones hc JOIN usuarios op ON hc.operador_id = op.id JOIN usuarios cl ON hc.cliente_id = cl.id ORDER BY hc.id DESC LIMIT 40`);
+
+            const cuentasPorPais = await dbAll(`
+                SELECT pais, 
+                       COUNT(*) as total,
+                       SUM(CASE WHEN estado = 'Disponible' THEN 1 ELSE 0 END) as disp,
+                       SUM(CASE WHEN estado IN ('Vendida', 'Asignada') THEN 1 ELSE 0 END) as vend,
+                       SUM(CASE WHEN estado = 'Caida' THEN 1 ELSE 0 END) as caidas
+                FROM stock_cuentas
+                GROUP BY pais
+            `);
+
+            let resumenPaisesHtml = "";
+            Object.keys(PAISES_MAPA).forEach(k => {
+                let data = cuentasPorPais.find(c => c.pais === k) || { total: 0, disp: 0, vend: 0, caidas: 0 };
+                resumenPaisesHtml += `
+                    <div style="background:#000; border:1px solid var(--card-border); border-radius:10px; padding:15px; text-align:center;">
+                        <div style="font-size:28px;">${PAISES_MAPA[k].bandera}</div>
+                        <div style="font-weight:700; color:#fff; font-size:13px; margin:4px 0;">${PAISES_MAPA[k].nombre}</div>
+                        <div style="color:var(--accent); font-size:18px; font-weight:800;">${data.total} cuentas</div>
+                        <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">
+                            Libres: <b style="color:#25d366;">${data.disp}</b> | Vendidas: <b style="color:#E50914;">${data.vend}</b> | Caídas: <b style="color:#ff7300;">${data.caidas}</b>
+                        </div>
+                    </div>
+                `;
+            });
 
             let actividadesHtml = "";
             if (registros.length > 0) {
@@ -1813,9 +2154,20 @@ app.get('/dash', async (req, res) => {
             let panelesCentroHtml = "";
             let panelesIzquierdosHtml = "";
 
+            let avisoVencimientoCliente = "";
+            if (esCliente && misCuentasVencidas.length > 0) {
+                let totalRenovar = misCuentasVencidas.reduce((acc, curr) => acc + (curr.precio_unitario || 0), 0);
+                avisoVencimientoCliente = `
+                    <div style="background: rgba(229, 9, 20, 0.2); border: 2px solid #E50914; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+                        <h3 style="color:#E50914; margin:0 0 6px 0;">⚠️ TIENES ${misCuentasVencidas.length} CUENTA(S) VENCIDA(S)</h3>
+                        <p style="font-size:13px; margin:0 0 10px 0; color:#fff;">Tus cuentas cumplieron el mes y han sido bloqueadas. Para reactivarlas debes renovar.</p>
+                        <div style="font-size:15px; font-weight:700; color:var(--accent);">Total a pagar para renovar: ${formatearDinero(totalRenovar, usuarioActual.moneda)}</div>
+                    </div>
+                `;
+            }
+
             Object.keys(PLATAFORMAS).forEach(key => {
                 let plat = PLATAFORMAS[key];
-                
                 let controlesIzquierda = `
                     <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 8px;">
                         <p style="margin: 0; color: #cbd5e1; font-size: 11px; line-height: 1.5;">
@@ -1854,16 +2206,6 @@ app.get('/dash', async (req, res) => {
                     `;
                 }
 
-                if (esSubAdmin) {
-                    controlesIzquierda += `
-                    <button onclick="toggleSubForm('soporte-${key}')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.12); border-color: rgba(255, 115, 0, 0.5); margin-top: 10px;">🛠️ Pedir Soporte (SubAdmin)</button>
-                    <div id="soporte-${key}" class="sub-form" style="border-color: #ff7300;">
-                        <p style="font-size: 11px; margin-bottom: 10px;">Comunícate directo con el jefe por pagos o ayudas técnicas.</p>
-                        <textarea class="input-classic" rows="2" placeholder="Describe el problema..."></textarea>
-                        <button type="button" class="btn-submit" style="background: #ff7300; color: #fff;" onclick="alert('Ticket de soporte enviado.')">Enviar Ticket</button>
-                    </div>`;
-                }
-
                 panelesIzquierdosHtml += `
                 <div id="action-${key}" class="action-panel">
                     <h4 style="margin:0 0 6px 0; font-size:11px; color:var(--accent); text-transform:uppercase; letter-spacing:1px;">⚡ Opciones ${plat.nombre}</h4>
@@ -1872,12 +2214,13 @@ app.get('/dash', async (req, res) => {
 
                 let avisoSinCorreo = "";
                 if ((esCliente || esSubAdmin) && misCorreos.length === 0) {
-                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.18); border: 1px solid #E50914; padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas. Comunícate mediante los botones de contacto (Tu cuenta se eliminará en 24h si no se asigna).</div>`;
+                    avisoSinCorreo = `<div style="background: rgba(229,9,20,0.18); border: 1px solid #E50914; padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; font-size: 12px; color: #f8fafc;">⚠️ Aún no tienes cuentas asignadas. Comunícate con tu proveedor.</div>`;
                 }
 
                 panelesCentroHtml += `
                 <div id="main-${key}" class="main-card">
                     ${avisoSinCorreo}
+                    ${avisoVencimientoCliente}
                     <div style="display:flex; align-items:center; gap:15px; margin-bottom:12px;">
                         <div style="background:#000000; padding:10px 16px; border-radius:10px; border:1px solid var(--card-border);">
                             <img src="${plat.logo}" alt="${plat.nombre}" style="display:block; height:24px; width:auto; max-width:100px; object-fit:contain;">
@@ -1898,6 +2241,8 @@ app.get('/dash', async (req, res) => {
                 const totalCuentas = correos.filter(c => c.user_id === u.id).length;
                 return `<option value="${u.id}">${u.user} (${u.rol} - ${totalCuentas} correos)</option>`;
             }).join('');
+
+            let opcionesPaisesHtml = Object.keys(PAISES_MAPA).map(k => `<option value="${k}">${PAISES_MAPA[k].bandera} ${PAISES_MAPA[k].nombre}</option>`).join('');
 
             if (esAdminPrincipal) {
                 panelesIzquierdosHtml += `
@@ -1935,14 +2280,12 @@ app.get('/dash', async (req, res) => {
                 } else {
                     historialAsignaciones.forEach(h => {
                         let fechaObj = new Date(h.fecha);
-                        let fechaFormatted = fechaObj.toLocaleDateString('es-CO');
-                        let horaFormatted = fechaObj.toLocaleTimeString('es-CO');
                         historialAsigRows += `
                         <tr>
                             <td style="font-family:monospace; color:#E50914; font-weight:600;">${h.email}</td>
                             <td><span style="color:var(--accent); font-weight:600;">@${h.receptor}</span></td>
                             <td><span style="color:var(--text-muted);">@${h.admin}</span></td>
-                            <td><small style="color:#fff;">${fechaFormatted} ${horaFormatted}</small></td>
+                            <td><small style="color:#fff;">${fechaObj.toLocaleDateString('es-CO')} ${fechaObj.toLocaleTimeString('es-CO')}</small></td>
                             <td><span style="color:#00D2FF; font-size:11px;">${h.tipo_operacion}</span></td>
                             <td><span class="badge-status disp">${h.estado}</span></td>
                         </tr>`;
@@ -1996,30 +2339,35 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-api-ghoulflix" class="main-card">
                     <h3 style="color:var(--accent);">◈ Servidor de códigos + ✉ Gmail</h3>
-                    <p style="color:var(--text-muted);font-size:13px;line-height:1.7;">La búsqueda combinada usa la conexión privada configurada en el servidor. No necesitas introducir ni compartir el token aquí. Las credenciales se modifican únicamente en el archivo privado o mediante variables de entorno.</p>
+                    <p style="color:var(--text-muted);font-size:13px;line-height:1.7;">La búsqueda combinada usa la conexión privada configurada en el servidor. No necesitas introducir ni compartir el token aquí.</p>
                 </div>
 
                 <div id="main-stock-admin" class="main-card">
                     <h3 style="margin:0 0 18px 0; font-size:19px; font-weight:600; color: var(--accent);">📦 Cargar Stock y Ver Historial</h3>
                     <form action="/stock/cargar" method="POST">
-                        <select name="plataforma" class="input-classic" required>
-                            <option value="netflix">Netflix</option>
-                        </select>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                            <select name="plataforma" class="input-classic" required>
+                                <option value="netflix">Netflix</option>
+                            </select>
+                            <select name="pais" class="input-classic">
+                                ${opcionesPaisesHtml}
+                            </select>
+                        </div>
                         <textarea name="correos_stock" class="input-classic" placeholder="correo1@gmail.com:clave123&#10;cuenta2@hotmail.com:pass456..." rows="5" required></textarea>
                         <button type="submit" class="btn-submit">Ingresar al Inventario Seguro</button>
                     </form>
 
                     <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas del Stock</h4>
                     <form action="/stock/eliminar-masivo" method="POST">
-                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error para borrarlos de tu inventario (correo1@gmail.com&#10;correo2@hotmail.com...)" rows="3" required></textarea>
+                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error para borrarlos de tu inventario..." rows="3" required></textarea>
                         <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas específicas de tu inventario?');">Borrar Cuentas Ingresadas</button>
                     </form>
 
                     <div style="margin-top: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
-                        <form action="/admin/vaciar-stock-disponible" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK DISPONIBLE (No Vendido)? Esta acción no se puede deshacer.');">
+                        <form action="/admin/vaciar-stock-disponible" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK DISPONIBLE?');">
                             <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar TODO Stock NO Vendido</button>
                         </form>
-                        <form action="/admin/vaciar-stock-vendido" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK VENDIDO/ASIGNADO? Esto limpiará la lista visual pero los clientes conservarán sus correos.');">
+                        <form action="/admin/vaciar-stock-vendido" method="POST" style="flex: 1; min-width: 200px;" onsubmit="return confirm('¿Seguro que deseas ELIMINAR TODO EL STOCK VENDIDO/ASIGNADO?');">
                             <button type="submit" class="action-btn-pill" style="background: rgba(229, 9, 20, 0.12); border-color: #E50914; color: #E50914;">🗑️ Borrar TODO Stock Vendido</button>
                         </form>
                     </div>
@@ -2035,9 +2383,8 @@ app.get('/dash', async (req, res) => {
                 <div id="main-asignacion-manual" class="main-card">
                     <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color: var(--accent);">🎯 Asignación Manual Masiva</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
-                        Pega todas las cuentas que quieras asignar a la vez. El sistema verificará que estén disponibles en el stock, las asignará al cliente y las descontará automáticamente del inventario.
+                        Pega todas las cuentas que quieras asignar a la vez del stock al usuario receptor.
                     </p>
-                    
                     <form action="/admin/asignar-manual" method="POST" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid var(--card-border);">
                         <div style="margin-bottom: 15px;">
                             <label style="color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Seleccionar Usuario receptor (Cliente / Subadmin):</label>
@@ -2048,11 +2395,11 @@ app.get('/dash', async (req, res) => {
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <label style="color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock (separadas por espacio o salto de línea):</label>
-                            <textarea name="correos_asignar" class="input-classic" style="margin-bottom:0;" placeholder="cuenta1@gmail.com&#10;cuenta2@gmail.com&#10;cuenta3@gmail.com..." rows="5" required></textarea>
+                            <label style="color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pegar cuentas del stock:</label>
+                            <textarea name="correos_asignar" class="input-classic" style="margin-bottom:0;" placeholder="cuenta1@gmail.com&#10;cuenta2@gmail.com..." rows="5" required></textarea>
                         </div>
                         
-                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas al usuario seleccionado? Las cuentas se eliminarán de tu inventario disponible.');">Asignar Cuentas al Cliente</button>
+                        <button type="submit" class="btn-submit" onclick="return confirm('¿Confirmas la asignación masiva de estas cuentas?');">Asignar Cuentas al Cliente</button>
                     </form>
 
                     <div style="margin-top: 25px;">
@@ -2061,17 +2408,10 @@ app.get('/dash', async (req, res) => {
                             <table class="table-modern">
                                 <thead>
                                     <tr>
-                                        <th>Cuenta</th>
-                                        <th>Usuario Receptor</th>
-                                        <th>Administrador</th>
-                                        <th>Fecha y Hora</th>
-                                        <th>Tipo</th>
-                                        <th>Estado</th>
+                                        <th>Cuenta</th><th>Usuario Receptor</th><th>Administrador</th><th>Fecha y Hora</th><th>Tipo</th><th>Estado</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${historialAsigRows}
-                                </tbody>
+                                <tbody>${historialAsigRows}</tbody>
                             </table>
                         </div>
                     </div>
@@ -2085,7 +2425,7 @@ app.get('/dash', async (req, res) => {
                             ${subadminsOpcionesHtml}
                         </select>
                         <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Cantidad de Dinero a Asignar (Ej: 1000)" required>
-                        <p style="font-size:11px; color:var(--text-muted); margin-top:-4px; margin-bottom:15px;">* El valor que ingreses corresponde a tu moneda local o la base (MXN).</p>
+                        <p style="font-size:11px; color:var(--text-muted); margin-top:-4px; margin-bottom:15px;">* El valor ingresado corresponde a tu moneda local o base (MXN).</p>
                         <button type="submit" class="btn-submit">Actualizar Saldo y Notificar por WhatsApp</button>
                     </form>
                 </div>
@@ -2102,12 +2442,11 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            // 🎯 TIENDA DE CUENTAS VISIBLE PARA CLIENTES Y SUBADMINISTRADORES
             if (esSubAdmin || esCliente) {
                 panelesIzquierdosHtml += `
                 <div id="action-comprar-stock" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🛒 Tienda de Cuentas</h4>
-                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Compra cuentas de Netflix de forma instantánea usando tu dinero disponible.</p>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Compra cuentas de Netflix usando tu dinero disponible.</p>
                 </div>
                 <div id="action-mis-compras" class="action-panel">
                     <h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🧾 Mi Inventario</h4>
@@ -2140,13 +2479,13 @@ app.get('/dash', async (req, res) => {
                 });
 
                 let tarjetasTienda = paquetesNetflix.map(p => `
-                    <div style="background: #000; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px; text-align: center; transition: 0.25s;" onmouseover="this.style.borderColor='var(--accent)';" onmouseout="this.style.borderColor='var(--card-border)';">
+                    <div style="background: #000; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px; text-align: center; transition: 0.25s;">
                         <img src="${PLATAFORMAS['netflix'].logo}" height="28" style="margin-bottom: 12px; filter: drop-shadow(0 0 8px rgba(229,9,20,0.5));">
                         <h2 style="margin: 0 0 5px 0; color: #fff; font-size: 20px;">${p.cant} Cuenta${p.cant > 1 ? 's' : ''}</h2>
                         <p style="color: var(--accent); font-weight: 700; font-size: 17px; margin: 0 0 16px 0;">${formatearDinero(p.costo, usuarioActual.moneda)}</p>
                         <form action="/tienda/comprar" method="POST" style="margin:0;">
                             <input type="hidden" name="paquete" value="${p.cant}">
-                            <button type="submit" class="btn-submit" style="font-size: 11px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta${p.cant > 1 ? 's' : ''} por ${formatearDinero(p.costo, usuarioActual.moneda)}? Las cuentas se asignarán a tu panel automáticamente.');">Comprar Ahora</button>
+                            <button type="submit" class="btn-submit" style="font-size: 11px;" onclick="return confirm('¿Seguro que deseas comprar ${p.cant} cuenta(s)?');">Comprar Ahora</button>
                         </form>
                     </div>
                 `).join('');
@@ -2177,7 +2516,6 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
-            // 🚀 PANELES EXCLUSIVOS PARA SUBADMINISTRADORES
             if (esSubAdmin) {
                 const misPrecios = await dbAll("SELECT paquete, precio FROM precios_subadmin WHERE subadmin_id = ?", [req.session.uid]);
                 let inputsPrecios = [1, 2, 3, 4, 5, 10].map(cant => {
@@ -2196,7 +2534,7 @@ app.get('/dash', async (req, res) => {
                 panelesCentroHtml += `
                 <div id="main-mi-tienda" class="main-card">
                     <h3 style="margin:0 0 8px 0; font-size:19px; color:var(--accent);">⚙️ Configurar Precios de Mi Tienda</h3>
-                    <p style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">Establece los precios a los que le venderás a tus clientes en tu moneda (${usuarioActual.moneda}). El sistema impide colocar precios menores a lo que te cobra el Administrador.</p>
+                    <p style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">Establece los precios para tus clientes en ${usuarioActual.moneda}.</p>
                     <form action="/subadmin/configurar-precios" method="POST">
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:18px;">${inputsPrecios}</div>
                         <button type="submit" class="btn-submit">Guardar Precios de Venta</button>
@@ -2205,19 +2543,17 @@ app.get('/dash', async (req, res) => {
                 
                 <div id="main-mi-stock" class="main-card">
                     <h3 style="margin:0 0 15px 0; font-size:19px; color:var(--accent);">📦 Cargar Mi Inventario Propio</h3>
-                    <div style="background: rgba(255, 215, 0, 0.08); border: 1px solid rgba(255, 215, 0, 0.25); padding: 15px; border-radius: 10px; text-align:center; margin-bottom:18px;">
-                        <strong style="color: var(--accent); font-size:26px;">${stockDisp.count}</strong><br><small style="color:var(--text-muted); text-transform:uppercase; font-size:11px;">Disponibles en mi Tienda</small>
-                    </div>
                     <form action="/stock/cargar" method="POST">
                         <input type="hidden" name="plataforma" value="netflix">
+                        <select name="pais" class="input-classic" style="margin-bottom:10px;">${opcionesPaisesHtml}</select>
                         <textarea name="correos_stock" class="input-classic" placeholder="correo@gmail.com:clave123..." rows="5" required></textarea>
                         <button type="submit" class="btn-submit">Subir Cuentas a mi Inventario</button>
                     </form>
 
                     <h4 style="margin:25px 0 10px 0; font-size:15px; font-weight:600; color: #E50914;">🗑️ Borrar Cuentas Específicas de mi Stock</h4>
                     <form action="/stock/eliminar-masivo" method="POST">
-                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos que subiste por error (correo1@gmail.com&#10;correo2@hotmail.com...)" rows="3" required></textarea>
-                        <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas de tu inventario?');">Borrar Cuentas Ingresadas</button>
+                        <textarea name="correos_eliminar" class="input-classic" placeholder="Pega aquí los correos a eliminar..." rows="3" required></textarea>
+                        <button type="submit" class="btn-submit" style="background: rgba(229, 9, 20, 0.12); border: 1px solid #E50914; color: #E50914;" onclick="return confirm('¿Seguro que deseas eliminar estas cuentas?');">Borrar Cuentas Ingresadas</button>
                     </form>
                 </div>
 
@@ -2229,24 +2565,24 @@ app.get('/dash', async (req, res) => {
                             <option value="" disabled selected>Selecciona a tu cliente...</option>
                             ${misClientesOptions}
                         </select>
-                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Monto a transferir en tu moneda (${usuarioActual.moneda})" required>
+                        <input type="number" step="0.01" name="cantidad" class="input-classic" placeholder="Monto a transferir (${usuarioActual.moneda})" required>
                         <button type="submit" class="btn-submit">Transferir Dinero</button>
                     </form>
                 </div>`;
                 
                 panelesIzquierdosHtml += `
-                <div id="action-mi-tienda" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">⚙️ Administración Tienda</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Controla tus márgenes de ganancia por paquete.</p></div>
-                <div id="action-mi-stock" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Inventario Privado</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Gestiona las cuentas que vendes directamente a tus clientes.</p></div>
-                <div id="action-dinero-clientes" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">💸 Billetera</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Reparte tu saldo entre tus clientes registrados.</p></div>
+                <div id="action-mi-tienda" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">⚙️ Administración Tienda</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Márgenes por paquete.</p></div>
+                <div id="action-mi-stock" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📦 Inventario Privado</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Cuentas directas.</p></div>
+                <div id="action-dinero-clientes" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">💸 Billetera</h4><p style="font-size:12px; color:#cbd5e1; margin-top:6px;">Transferencias a clientes.</p></div>
                 `;
             }
 
             panelesIzquierdosHtml += `
-            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea nuevas cuentas de clientes o subadministradores para darles acceso al panel SyncBox.</p></div>
-            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula los correos de las plataformas al perfil de un cliente.</p></div>
-            <div id="action-borrar-correos-masivo" class="action-panel"><h4 style="margin:0; font-size:11px; color:#E50914; text-transform:uppercase;">🗑️ Borrado Masivo</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Busca a un usuario (ej. Juan), pega sin límite los correos que no eran para él y bórralos de su perfil en un solo clic.</p></div>
-            <div id="action-auditoria-global" class="action-panel"><h4 style="margin:0; font-size:11px; color:#ff7300; text-transform:uppercase;">🔎 Limpieza Global</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Pega una lista de correos mezclados. El sistema detectará quiénes son los dueños y te permitirá borrarlos todos de una vez.</p></div>
-            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra tus usuarios directos y registros públicos.</p></div>
+            <div id="action-crear-user" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">👤 Crear Usuario</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Crea nuevas cuentas de clientes o subadministradores.</p></div>
+            <div id="action-usuarios" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">📧 Asignar Correos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Vincula los correos al perfil de un cliente.</p></div>
+            <div id="action-borrar-correos-masivo" class="action-panel"><h4 style="margin:0; font-size:11px; color:#E50914; text-transform:uppercase;">🗑️ Borrado Masivo</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Pega sin límite correos de un usuario y quítalos en un clic.</p></div>
+            <div id="action-auditoria-global" class="action-panel"><h4 style="margin:0; font-size:11px; color:#ff7300; text-transform:uppercase;">🔎 Limpieza Global</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Detecta dueños de cuentas mezcladas y elimínalas.</p></div>
+            <div id="action-base-datos" class="action-panel"><h4 style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase;">🗄️ Base de Datos</h4><p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin-top:6px;">Consulta y administra usuarios directos.</p></div>
             `;
             
             let tablaUsuariosHtml = "";
@@ -2311,7 +2647,7 @@ app.get('/dash', async (req, res) => {
                             <td style="text-align: center;">
                                 <form action="/admin/eliminar-usuario" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar a este usuario?');" style="margin:0;">
                                     <input type="hidden" name="user_id" value="${u.id}">
-                                    <button type="submit" style="background: rgba(229,9,20,0.12); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#E50914'; this.style.color='#fff';" onmouseout="this.style.background='rgba(229,9,20,0.12)'; this.style.color='#E50914';">Eliminar</button>
+                                    <button type="submit" style="background: rgba(229,9,20,0.12); border:1px solid #E50914; color:#E50914; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer;">Eliminar</button>
                                 </form>
                             </td>
                         </tr>`;
@@ -2322,12 +2658,12 @@ app.get('/dash', async (req, res) => {
                         let clientesDirectos = usuariosVisibles.filter(u => u.rol !== 'Subadministrador');
 
                         if (subadmins.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255, 215, 0, 0.08); text-align: center; font-size: 11px; color: var(--accent); font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS SUBADMINISTRADORES</td></tr>`;
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255, 215, 0, 0.08); text-align: center; font-size: 11px; color: var(--accent); font-weight: 700; padding: 10px;">MIS SUBADMINISTRADORES</td></tr>`;
                             subadmins.forEach(sa => { tablaUsuariosHtml += renderRow(sa); });
                         }
 
                         if (clientesDirectos.length > 0) {
-                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255, 215, 0, 0.08); text-align: center; font-size: 11px; color: var(--accent); font-weight: 700; padding: 10px; letter-spacing: 1px;">MIS CLIENTES DIRECTOS Y PÚBLICOS</td></tr>`;
+                            tablaUsuariosHtml += `<tr><td colspan="5" style="background: rgba(255, 215, 0, 0.08); text-align: center; font-size: 11px; color: var(--accent); font-weight: 700; padding: 10px;">MIS CLIENTES DIRECTOS Y PÚBLICOS</td></tr>`;
                             clientesDirectos.forEach(c => { tablaUsuariosHtml += renderRow(c); });
                         }
                     } else {
@@ -2336,13 +2672,12 @@ app.get('/dash', async (req, res) => {
                 }
             }
 
-            // AÑADIMOS EL PANEL CENTRAL DE LA AUDITORÍA GLOBAL
             if (esAdminPrincipal || esSubAdmin) {
                 panelesCentroHtml += `
                 <div id="main-auditoria-global" class="main-card">
                     <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color:#ff7300;">🔎 Buscar y Limpiar Cuentas Masivamente</h3>
                     <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
-                        Pega 20, 30 o más cuentas (incluso de clientes diferentes). El sistema te mostrará en el visor de abajo <b>a qué usuarios pertenecen</b> y te dará la opción de <b>quitárselas a todos</b> de una vez.
+                        Pega cuentas mezcladas. El sistema mostrará quiénes son sus dueños y te permitirá borrarlas simultáneamente.
                     </p>
                     <form action="/admin/auditar-cuentas" method="POST" target="marco_resultados" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(255, 115, 0, 0.35);" onsubmit="document.getElementById('visor-resultados').style.display='flex';">
                         <div style="margin-bottom: 15px;">
@@ -2355,27 +2690,233 @@ app.get('/dash', async (req, res) => {
                 `;
             }
 
+            // 🌟 NUEVOS PANELES DE MEJORAS
+            if (esAdminPrincipal || esSubAdmin) {
+                let filasHistorialCreditos = historialCreditos.map(h => `
+                    <tr>
+                        <td><b style="color:var(--accent);">@${h.cliente_nombre}</b></td>
+                        <td><span class="badge-status ${h.tipo === 'AGREGAR' ? 'disp' : 'vendida'}">${h.tipo}</span></td>
+                        <td style="color:#fff;">${formatearDinero(h.cantidad, h.moneda)}</td>
+                        <td>${formatearDinero(h.saldo_anterior, h.moneda)} ➔ <b>${formatearDinero(h.saldo_nuevo, h.moneda)}</b></td>
+                        <td><small style="color:var(--text-muted);">${h.fecha}</small></td>
+                    </tr>
+                `).join('');
+
+                const clientesMap = {};
+                asignacionesClientes.forEach(a => {
+                    if (!clientesMap[a.cliente_id]) {
+                        clientesMap[a.cliente_id] = { nombre: a.cliente_nombre, telefono: a.cliente_telefono, moneda: a.moneda, cuentas: [], vencidas: [], garantias: [] };
+                    }
+                    clientesMap[a.cliente_id].cuentas.push(a);
+                    if (a.estado === 'Vencida') clientesMap[a.cliente_id].vencidas.push(a);
+                    if (a.es_reemplazo_de) clientesMap[a.cliente_id].garantias.push(a);
+                });
+
+                let filasClientesRenovacion = Object.keys(clientesMap).map(cid => {
+                    const c = clientesMap[cid];
+                    const cantVencidas = c.vencidas.length;
+                    const totalRenovar = c.cuentas.reduce((acc, curr) => acc + (curr.precio_unitario || 0), 0);
+                    const correosLista = c.cuentas.map(x => `- ${x.email} ${x.es_reemplazo_de ? '(Garantía de: '+x.es_reemplazo_de+')' : ''}`).join('\n');
+                    const fechaLimite = c.cuentas[0] ? c.cuentas[0].fecha_vencimiento : 'Fin de mes';
+                    
+                    const textoWhatsApp = `Hola ${c.nombre} 🎄,\n\nTe recordamos el estado de tus cuentas en SyncBox:\n\n*Cuentas Registradas:* ${c.cuentas.length}\n*Cuentas Vencidas:* ${cantVencidas}\n*Reemplazos por Garantía:* ${c.garantias.length}\n\n*Detalle de Cuentas:*\n${correosLista}\n\n*Total a pagar de renovación:* ${formatearDinero(totalRenovar, c.moneda)}\n*Fecha límite de pago:* ${fechaLimite}\n\n¡Quedamos atentos a tu comprobante para habilitarlas inmediatamente!`;
+                    const telLimpio = c.telefono ? c.telefono.replace('+', '').replace(/\s/g, '') : '';
+                    const linkWA = `https://api.whatsapp.com/send?phone=${telLimpio}&text=${encodeURIComponent(textoWhatsApp)}`;
+
+                    return `
+                        <tr>
+                            <td><b style="color:var(--accent);">@${c.nombre}</b><br><small style="color:var(--text-muted);">${c.telefono || 'Sin tel'}</small></td>
+                            <td><b>${c.cuentas.length}</b> (${c.garantias.length} garantías)</td>
+                            <td><span class="badge-status ${cantVencidas > 0 ? 'vencida' : 'disp'}">${cantVencidas} Vencidas</span></td>
+                            <td><b>${formatearDinero(totalRenovar, c.moneda)}</b></td>
+                            <td style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <form action="/admin/renovar-cuentas" method="POST" style="margin:0;">
+                                    <input type="hidden" name="cliente_id" value="${cid}">
+                                    <button type="submit" class="action-btn-pill" style="background:#22c55e; color:#000; padding:6px 12px; font-size:10px;" onclick="return confirm('¿Confirmas renovación?');">✅ CUENTAS RENOVADAS</button>
+                                </form>
+                                <a href="${linkWA}" target="_blank" class="action-btn-pill" style="background:#25d366; color:#000; text-decoration:none; padding:6px 12px; font-size:10px;">📲 WhatsApp Cobro</a>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                panelesCentroHtml += `
+                <div id="main-admin-creditos" class="main-card">
+                    <h3 style="margin:0 0 8px 0; font-size:19px; color:var(--accent);">💰 Gestión de Créditos a Clientes</h3>
+                    <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Agrega o quita créditos. Toda reducción solicita confirmación previa.</p>
+                    <form action="/admin/gestionar-creditos" method="POST" style="background:#000; padding:18px; border-radius:10px; border:1px solid var(--card-border);" onsubmit="
+                        const accion = this.accion_credito.value;
+                        const cant = this.cantidad.value;
+                        if(accion === 'QUITAR') {
+                            return confirm('⚠️ ATENCIÓN: ¿Confirmas que deseas QUITAR ' + cant + ' créditos a este usuario?');
+                        }
+                        return true;
+                    ">
+                        <div style="margin-bottom:12px;">
+                            <label style="color:var(--accent); font-size:11px; font-weight:700;">Seleccionar Usuario:</label>
+                            <select name="cliente_id" class="input-classic" required>
+                                <option value="" disabled selected>-- Elige usuario --</option>
+                                ${clientesOpcionesHtml}
+                            </select>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                            <div>
+                                <label style="color:var(--accent); font-size:11px; font-weight:700;">Acción:</label>
+                                <select name="accion_credito" class="input-classic" required>
+                                    <option value="AGREGAR">➕ Agregar Créditos</option>
+                                    <option value="QUITAR">➖ Quitar Créditos (Con Confirmación)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="color:var(--accent); font-size:11px; font-weight:700;">Cantidad de Créditos:</label>
+                                <input type="number" step="0.01" name="cantidad" placeholder="Ej: 500" class="input-classic" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-submit">Ejecutar Operación de Crédito</button>
+                    </form>
+
+                    <h4 style="margin:25px 0 10px 0; font-size:14px; color:#fff;">📜 Historial de Créditos Modificados</h4>
+                    <div class="table-wrapper">
+                        <table class="table-modern">
+                            <thead><tr><th>Usuario</th><th>Operación</th><th>Monto</th><th>Balance</th><th>Fecha</th></tr></thead>
+                            <tbody>${filasHistorialCreditos.length ? filasHistorialCreditos : '<tr><td colspan="5" style="text-align:center;">Sin movimientos</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="main-control-clientes" class="main-card">
+                    <h3 style="margin:0 0 8px 0; font-size:19px; color:var(--accent);">📦 Asignar Cuentas a Clientes (1 Mes de Vencimiento)</h3>
+                    <form action="/admin/asignar-bloque-cliente" method="POST" style="background:#000; padding:18px; border-radius:10px; border:1px solid var(--card-border);">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                            <div>
+                                <label style="color:var(--accent); font-size:11px; font-weight:700;">Cliente Receptor:</label>
+                                <select name="cliente_id" class="input-classic" required>
+                                    <option value="" disabled selected>-- Elige cliente --</option>
+                                    ${clientesOpcionesHtml}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="color:var(--accent); font-size:11px; font-weight:700;">País de las Cuentas:</label>
+                                <select name="pais_cuenta" class="input-classic">
+                                    ${opcionesPaisesHtml}
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <label style="color:var(--accent); font-size:11px; font-weight:700;">Precio Total Acordado:</label>
+                            <input type="number" step="0.01" name="precio_total" placeholder="Ej: 1560" class="input-classic" required>
+                        </div>
+                        <div style="margin-bottom:14px;">
+                            <label style="color:var(--accent); font-size:11px; font-weight:700;">Correos y contraseñas (10, 20 o más):</label>
+                            <textarea name="correos_bloque" rows="5" class="input-classic" placeholder="correo1@gmail.com:clave1&#10;correo2@gmail.com:clave2..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn-submit">Asignar Cuentas a 1 Mes</button>
+                    </form>
+
+                    <h4 style="margin:25px 0 10px 0; font-size:15px; color:#fff;">🧾 Renovaciones y Cobros Mensuales</h4>
+                    <div class="table-wrapper">
+                        <table class="table-modern">
+                            <thead><tr><th>Cliente</th><th>Cuentas / Garantías</th><th>Estado</th><th>Total a Cobrar</th><th>Acción</th></tr></thead>
+                            <tbody>${filasClientesRenovacion.length ? filasClientesRenovacion : '<tr><td colspan="5" style="text-align:center;">No hay asignaciones activas</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="main-cuentas-caidas" class="main-card">
+                    <h3 style="margin:0 0 8px 0; font-size:19px; color:#E50914;">🔴 CUENTAS CAÍDAS</h3>
+                    <form action="/admin/reportar-cuenta-caida" method="POST" style="background:#000; padding:15px; border-radius:10px; border:1px solid #E50914; display:flex; gap:10px; margin-bottom:20px;">
+                        <input type="email" name="email_caida" placeholder="Correo de la cuenta caída..." class="input-classic" style="margin:0;" required>
+                        <button type="submit" class="btn-submit" style="background:#E50914; color:#fff; width:auto;">Reportar Caída</button>
+                    </form>
+
+                    <div class="table-wrapper">
+                        <table class="table-modern">
+                            <thead><tr><th>Correo Caído</th><th>Cliente</th><th>Compra Original</th><th>Fecha Reporte</th><th>Precio</th><th>Estado</th><th>Acción Garantía</th></tr></thead>
+                            <tbody>${cuentasCaidas.filter(c => c.estado === 'Pendiente').map(c => `
+                                <tr>
+                                    <td style="color:#E50914; font-family:monospace; font-weight:700;">${c.email}</td>
+                                    <td><b>@${c.cliente_nombre || 'N/A'}</b></td>
+                                    <td><small style="color:var(--text-muted);">${c.fecha_compra || 'N/A'}</small></td>
+                                    <td><small style="color:#f87171;">${c.fecha_reporte}</small></td>
+                                    <td>${formatearDinero(c.precio, c.moneda)}</td>
+                                    <td><span class="badge-status vendida">CAÍDA</span></td>
+                                    <td>
+                                        <form action="/admin/cambiar-por-garantia" method="POST" style="display:flex; gap:6px; margin:0;">
+                                            <input type="hidden" name="caida_id" value="${c.id}">
+                                            <input type="text" name="nueva_cuenta_email" placeholder="Correo Reemplazo..." class="input-classic" style="margin:0; padding:6px; font-size:11px;" required>
+                                            <button type="submit" class="action-btn-pill" style="background:#3b82f6; color:#fff; width:auto; padding:6px 10px; font-size:10px;">CAMBIAR POR GARANTÍA</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="7" style="text-align:center;">No hay cuentas caídas pendientes.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+
+                    <h3 style="margin:30px 0 8px 0; font-size:19px; color:#25d366;">🟢 CUENTAS DE GARANTÍA (REEMPLAZOS ENTREGADOS)</h3>
+                    <div class="table-wrapper">
+                        <table class="table-modern">
+                            <thead><tr><th>Reemplazo Entregado</th><th>Cliente</th><th>Cuenta Caída</th><th>Fecha Original</th><th>Fecha Reemplazo</th><th>Estado</th></tr></thead>
+                            <tbody>${cuentasCaidas.filter(c => c.estado === 'Reemplazada').map(g => `
+                                <tr>
+                                    <td style="color:#25d366; font-family:monospace; font-weight:700;">${g.reemplazo_email}</td>
+                                    <td><b>@${g.cliente_nombre || 'N/A'}</b></td>
+                                    <td style="color:#ef4444; font-family:monospace;">${g.email}</td>
+                                    <td><small style="color:var(--text-muted);">${g.fecha_compra || 'N/A'}</small></td>
+                                    <td><small style="color:#22c55e;">${g.fecha_reemplazo}</small></td>
+                                    <td><span class="badge-status garantia">VINCULADA</span></td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="6" style="text-align:center;">No hay reemplazos registrados.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="main-paises-cuentas" class="main-card">
+                    <h3 style="margin:0 0 15px 0; font-size:19px; color:var(--accent);">🌎 PAÍSES DE LAS CUENTAS</h3>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:25px;">
+                        ${resumenPaisesHtml}
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="table-modern">
+                            <thead><tr><th>Correo</th><th>País Actual</th><th>Estado</th><th>Cliente / Asignado</th><th>Cambiar País Manualmente</th></tr></thead>
+                            <tbody>${(await dbAll("SELECT s.*, u.user as comprador FROM stock_cuentas s LEFT JOIN usuarios u ON s.comprador_id = u.id ORDER BY s.id DESC")).map(s => `
+                                <tr>
+                                    <td style="font-family:monospace;">${s.email}</td>
+                                    <td><span class="country-tag">${PAISES_MAPA[s.pais]?.bandera || '🌐'} ${PAISES_MAPA[s.pais]?.nombre || s.pais}</span></td>
+                                    <td><span class="badge-status ${s.estado === 'Disponible' ? 'disp' : 'vendida'}">${s.estado}</span></td>
+                                    <td>${s.comprador ? '@'+s.comprador : '<span style="color:var(--text-muted);">Sin asignar</span>'}</td>
+                                    <td>
+                                        <form action="/admin/cambiar-pais-cuenta" method="POST" style="display:flex; gap:6px; margin:0;">
+                                            <input type="hidden" name="email_cuenta" value="${s.email}">
+                                            <select name="nuevo_pais" class="input-classic" style="margin:0; padding:4px; font-size:11px;">
+                                                ${Object.keys(PAISES_MAPA).map(pk => `<option value="${pk}" ${s.pais === pk ? 'selected':''}>${PAISES_MAPA[pk].bandera} ${PAISES_MAPA[pk].nombre}</option>`).join('')}
+                                            </select>
+                                            <button type="submit" class="action-btn-pill" style="padding:4px 8px; font-size:10px; width:auto;">Cambiar</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                </div>
+                `;
+            }
+
             let botonesContactoProveedor = "";
             if (esAdminPrincipal || esSubAdmin) {
                 botonesContactoProveedor = `
                 <div class="provider-contact" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="contact-wrapper">
                         <span class="contact-label">Telegram</span>
-                        <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.14-.261.26-.536.26l.213-3.05 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.654-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/></svg> Chat
-                        </a>
+                        <a href="https://t.me/SyncBox701" target="_blank" class="contact-btn telegram">Chat</a>
                     </div>
                     <div class="contact-wrapper">
                         <span class="contact-label">WhatsApp</span>
-                        <a href="https://wa.me/${NUMERO_ADMIN_PRINCIPAL}" target="_blank" class="contact-btn whatsapp">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="#25d366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> WA
-                        </a>
+                        <a href="https://wa.me/${NUMERO_ADMIN_PRINCIPAL}" target="_blank" class="contact-btn whatsapp">WA</a>
                     </div>
                     <div class="contact-wrapper">
-                        <span class="contact-label">Grupo Oficial</span>
-                        <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g?s=cl&p=i&mlu=4&ilr=4" target="_blank" class="contact-btn whatsapp">
-                            <svg viewBox="0 0 24 24" fill="#25d366" width="14" height="14"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.025 15.34l-3.32-3.32 1.414-1.414 1.906 1.906 5.234-5.234 1.414 1.414-6.648 6.648z"/></svg> Unirse
-                        </a>
+                        <span class="contact-label">Grupo</span>
+                        <a href="https://chat.whatsapp.com/HZ5XGqXqajW5V2UICj8A7g" target="_blank" class="contact-btn whatsapp">Unirse</a>
                     </div>
                 </div>`;
             }
@@ -2392,24 +2933,17 @@ app.get('/dash', async (req, res) => {
             <body>
                 <div class="top-header">
                     <div class="brand-logo">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px rgba(255,215,0,0.6));">
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                        </svg>
-                        <strong>SYNC</strong>BOX
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        <strong>SYNC</strong>BOX 🎄
                     </div>
                     <div class="search-top"><input type="text" placeholder="Buscar en el sistema..."></div>
                 </div>
 
                 <div class="dashboard-grid">
-                    
                     <div class="left-sidebar">
                         <div class="side-card" style="padding: 16px;">
                             <h4>📺 Plataformas</h4>
-                            <div class="plat-mini-grid">
-                                ${botonesPlataformaHtml}
-                            </div>
+                            <div class="plat-mini-grid">${botonesPlataformaHtml}</div>
                         </div>
 
                         ${panelesIzquierdosHtml}
@@ -2434,7 +2968,7 @@ app.get('/dash', async (req, res) => {
                             <form action="/admin/crear" method="POST" onsubmit="
                                 const tel = this.telefono.value.replace(/\\s+/g, '');
                                 if(!/^\\+[1-9]\\d{7,14}$/.test(tel)) {
-                                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de país (Ejemplo: +521234567890 o +573001234567).');
+                                    alert('⛔ OBLIGATORIO: Debes incluir el signo + seguido del código de país.');
                                     this.telefono.focus();
                                     return false;
                                 }
@@ -2443,7 +2977,7 @@ app.get('/dash', async (req, res) => {
                             ">
                                 <input name="n" class="input-classic" placeholder="Nombre de Usuario" required>
                                 <input name="c" class="input-classic" placeholder="Contraseña" required>
-                                <input type="tel" name="telefono" class="input-classic" placeholder="WhatsApp con + y código (Ej: +52...)" pattern="^\\+[1-9]\\d{7,14}$" title="Obligatorio incluir el signo + y el código de país" required>
+                                <input type="tel" name="telefono" class="input-classic" placeholder="WhatsApp con + y código" required>
                                 <select name="r" class="input-classic">
                                     <option value="Cliente">Cliente Normal</option>
                                     ${esAdminPrincipal ? '<option value="Subadministrador">Subadministrador</option>' : ''}
@@ -2463,23 +2997,20 @@ app.get('/dash', async (req, res) => {
 
                         <div id="main-borrar-correos-masivo" class="main-card">
                             <h3 style="margin:0 0 8px 0; font-size:19px; font-weight:600; color:#E50914;">🗑️ Borrar Correos Masivamente a un Usuario</h3>
-                            <p style="color:var(--text-muted); font-size:12px; margin-bottom:18px;">
-                                Busca al usuario (ej. Juan), selecciónalo y pega sin límite todos los correos que deseas quitarle de su cuenta (20, 50 o los que necesites).
-                            </p>
                             <form action="/admin/borrar-correos-masivo" method="POST" style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(229, 9, 20, 0.35);">
                                 <div style="margin-bottom: 14px;">
                                     <label style="color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">1. Buscar y seleccionar usuario:</label>
-                                    <input type="text" id="buscador-user-borrar" class="input-classic" placeholder="🔎 Escribe aquí para filtrar el nombre (ej: juan)..." oninput="filtrarSelectorUsuarios('buscador-user-borrar', 'select-user-borrar')" style="margin-bottom: 8px; border-color: rgba(255, 215, 0, 0.4);">
-                                    <select id="select-user-borrar" name="user_id" class="input-classic" style="margin-bottom:0;" required>
+                                    <input type="text" id="buscador-user-borrar" class="input-classic" placeholder="🔎 Filtrar usuario..." oninput="filtrarSelectorUsuarios('buscador-user-borrar', 'select-user-borrar')">
+                                    <select id="select-user-borrar" name="user_id" class="input-classic" required>
                                         <option value="" disabled selected>-- Selecciona al usuario --</option>
                                         ${clientesOpcionesHtml}
                                     </select>
                                 </div>
                                 <div style="margin-bottom: 15px;">
-                                    <label style="color: #E50914; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pega los correos que le vas a borrar (sin límite):</label>
-                                    <textarea name="correos_borrar" class="input-classic" style="margin-bottom:0;" placeholder="correo1@gmail.com&#10;correo2@gmail.com&#10;correo3@hotmail.com..." rows="8" required></textarea>
+                                    <label style="color: #E50914; font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block;">2. Pega los correos que le vas a borrar:</label>
+                                    <textarea name="correos_borrar" class="input-classic" rows="8" required></textarea>
                                 </div>
-                                <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;" onclick="return confirm('⚠️ ¿Seguro que deseas borrarle todos estos correos al usuario seleccionado?');">🗑️ Borrarle estos correos al usuario</button>
+                                <button type="submit" class="btn-submit" style="background: #E50914; color: #fff;" onclick="return confirm('⚠️ ¿Seguro que deseas borrarle todos estos correos?');">🗑️ Borrarle estos correos al usuario</button>
                             </form>
                         </div>
 
@@ -2494,11 +3025,7 @@ app.get('/dash', async (req, res) => {
                             <div class="table-wrapper">
                                 <table class="table-modern">
                                     <thead><tr>
-                                        <th>Usuario</th>
-                                        <th>Rol</th>
-                                        <th style="width: 38%;">Correos Vinculados</th>
-                                        <th>Origen</th>
-                                        <th style="text-align:center;">Acción</th>
+                                        <th>Usuario</th><th>Rol</th><th style="width: 38%;">Correos Vinculados</th><th>Origen</th><th style="text-align:center;">Acción</th>
                                     </tr></thead>
                                     <tbody>${tablaUsuariosHtml}</tbody>
                                 </table>
@@ -2514,6 +3041,14 @@ app.get('/dash', async (req, res) => {
                         <div class="side-card">
                             <h4>🧭 Menú del Sistema</h4>
                             <div class="menu-list">
+                                ${(esAdminPrincipal || esSubAdmin) ? `
+                                <div class="menu-group-label">Nuevas Funciones</div>
+                                <button class="menu-btn-item" data-tab="admin-creditos" onclick="openTab('admin-creditos')">💰 Créditos (Dar/Quitar)</button>
+                                <button class="menu-btn-item" data-tab="control-clientes" onclick="openTab('control-clientes')">📦 Cuentas y Renovaciones</button>
+                                <button class="menu-btn-item" data-tab="cuentas-caidas" onclick="openTab('cuentas-caidas')" style="color:#E50914;">🔴 Caídas y Garantías</button>
+                                <button class="menu-btn-item" data-tab="paises-cuentas" onclick="openTab('paises-cuentas')" style="color:#60a5fa;">🌎 Países de Cuentas</button>
+                                ` : ''}
+
                                 ${(esAdminPrincipal) ? `
                                 <div class="menu-group-label">Inventario y Finanzas</div>
                                 <button class="menu-btn-item" data-tab="api-ghoulflix" onclick="openTab('api-ghoulflix')" style="color: #25d366;">🔌 Servidor de códigos</button>
@@ -2567,31 +3102,28 @@ app.get('/dash', async (req, res) => {
     }
 });
 
-
-// BEGIN DUAL LOOKUP HELPERS
+// =========================================================================
+// 🔎 PROTOCOLO IMAP Y BÚSQUEDA DUAL
+// =========================================================================
 function traducirErrorCodigo(message, status) {
     const text = String(message || '').toLowerCase();
-    if (status === 429 || /too many requests|rate limit/.test(text)) return 'El servidor limita las solicitudes. Espera antes de volver a intentar.';
-    if (/not assigned|not in your|access denied/.test(text)) return 'Esta cuenta no está autorizada para el usuario de la conexión.';
-    if (status === 401 || /authentication required|invalid credentials|invalid token/.test(text)) return 'No se pudo autenticar la conexión. Revisa las credenciales del servidor.';
-    if (/suspended|banned/.test(text)) return 'El perfil de la conexión está suspendido.';
-    if (/pending.*approval/.test(text)) return 'El perfil de la conexión está pendiente de aprobación.';
-    if (/account expired/.test(text)) return 'La asignación de esta cuenta está vencida.';
-    if (/disabled/.test(text)) return 'Este tipo de consulta no está habilitado para el perfil.';
+    if (status === 429 || /too many requests|rate limit/.test(text)) return 'El servidor limita las solicitudes.';
+    if (/not assigned|not in your|access denied/.test(text)) return 'Esta cuenta no está autorizada.';
     if (status >= 500) return 'El servidor de códigos no está disponible en este momento.';
-    return 'No se encontró un código válido. Comprueba el envío del correo y los permisos de la cuenta.';
+    return 'No se encontró un código válido.';
 }
 
 function escapeResultado(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
 function enlaceNetflixSeguro(value) {
     try {
         const u = new URL(value);
-        return u.protocol === 'https:' && !u.username && !u.password &&
-            (u.hostname === 'netflix.com' || u.hostname.endsWith('.netflix.com')) ? u.href : null;
+        return u.protocol === 'https:' && !u.username && !u.password && (u.hostname === 'netflix.com' || u.hostname.endsWith('.netflix.com')) ? u.href : null;
     } catch (_) { return null; }
 }
+
 function normalizarResultadoFuente(data, fuente, tipo) {
     const value = data && typeof data === 'object' ? data : {};
     let code = value.code == null ? null : String(value.code);
@@ -2600,10 +3132,13 @@ function normalizarResultadoFuente(data, fuente, tipo) {
     let link = enlaceNetflixSeguro(value.link);
     if (tipo === 'signin_6digit' || tipo === 'signin_4digit') link = null;
     const success = value.success === true && !!(code || link);
-    return { source: fuente, success, code: success ? code : null, link: success ? link : null,
-        status: success ? 'found' : value.source_error ? 'error' : 'not_found',
-        error: success ? null : fuente === 'Gmail' ? 'No se encontró un resultado reciente válido en Gmail.' : value.terminal ? value.error : traducirErrorCodigo(value.error, 0) };
+    return { 
+        source: fuente, success, code: success ? code : null, link: success ? link : null, 
+        status: success ? 'found' : 'not_found', 
+        error: success ? null : fuente === 'Gmail' ? 'No se encontró un resultado reciente en Gmail.' : 'No se encontró código.' 
+    };
 }
+
 function extraerCodigoGmail(mail, tipo) {
     if (!mail) return { success: false };
     const received = new Date(mail.date).getTime();
@@ -2617,11 +3152,11 @@ function extraerCodigoGmail(mail, tipo) {
     if (tipo !== 'reset_link') { const match = text.match(pattern); if (match) code = match[1]; }
     if (tipo === 'household' || tipo === 'reset_link') {
         const urls = (html + '\n' + text).match(/https:\/\/[^\s"'<>]+/gi) || [];
-        link = urls.map(x => enlaceNetflixSeguro(x.replace(/&amp;/g, '&'))).find(x => x &&
-            (tipo === 'reset_link' ? /password|loginhelp/i : /travel|household|update-primary-location/i).test(x)) || null;
+        link = urls.map(x => enlaceNetflixSeguro(x.replace(/&amp;/g, '&'))).find(x => x && (tipo === 'reset_link' ? /password|loginhelp/i : /travel|household|update-primary-location/i).test(x)) || null;
     }
     return { success: !!(code || link), code, link };
 }
+
 async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
     const controller = new AbortController();
     const deadline = Date.now() + 60000;
@@ -2630,25 +3165,16 @@ async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
         externalSignal.addEventListener('abort', stop, { once: true });
         if (externalSignal.aborted) stop();
     }
-    const sources = ['Servidor de códigos', 'Gmail'].map(source => ({ source, success: false, code: null, link: null, status: 'searching', error: 'Búsqueda en curso.' }));
+    const sources = ['Servidor de códigos', 'Gmail'].map(source => ({ source, success: false, code: null, link: null, status: 'searching' }));
     let resolveDone;
     const done = new Promise(resolve => { resolveDone = resolve; });
     const timer = setTimeout(stop, 60000);
     controller.signal.addEventListener('abort', () => resolveDone(), { once: true });
+    
     let finished = 0;
-    const pause = () => new Promise(resolve => {
-        if (controller.signal.aborted) return resolve();
-        const finish = () => { clearTimeout(t); controller.signal.removeEventListener('abort', finish); resolve(); };
-        const t = setTimeout(finish, Math.min(5000, Math.max(0, deadline - Date.now())));
-        controller.signal.addEventListener('abort', finish, { once: true });
-    });
     const poll = async index => {
         try {
-            let attempts = 0;
             while (!controller.signal.aborted && Date.now() < deadline) {
-                if (index === 0 && tipo === 'reset_link' && attempts > 0) break;
-                attempts++;
-                console.log('[Busqueda] Fuente:', sources[index].source, '| intento:', attempts);
                 let value;
                 try {
                     if (index === 0) value = await consultarCodigoGhoulflixApi(email, tipo, controller.signal);
@@ -2656,78 +3182,63 @@ async function buscarCodigoEnAmbasFuentes(email, tipo, externalSignal) {
                         const response = await buscarEnBuzonImap('darciogarces@gmail.com', email, 'netflix', email.split('@'), tipo, controller.signal);
                         value = extraerCodigoGmail(response && response.mail, tipo);
                     }
-                } catch (_) { value = { success: false, source_error: true }; }
+                } catch (_) { value = { success: false }; }
                 if (controller.signal.aborted) break;
                 sources[index] = normalizarResultadoFuente(value, sources[index].source, tipo);
                 if (sources[index].success) { resolveDone(); return; }
-                if (value && value.terminal) break;
-                await pause();
+                await new Promise(r => setTimeout(r, 4000));
             }
         } finally {
             finished++;
             if (finished === 2) resolveDone();
         }
     };
-    const tasks = [poll(0), poll(1)];
-    tasks.forEach(task => task.catch(() => resolveDone()));
+    poll(0); poll(1);
     try { if (!controller.signal.aborted) await done; }
     finally {
         clearTimeout(timer); controller.abort();
         if (externalSignal) externalSignal.removeEventListener('abort', stop);
     }
     const best = sources.find(x => x.success);
-    return { success: !!best, code: best ? best.code : null, link: best ? best.link : null,
-        source: best ? best.source : null, sources: sources.map(x => x.status === 'searching' ? { ...x, status: 'stopped', error: best ? 'Consulta detenida al encontrar un resultado en la otra fuente.' : 'Tiempo de búsqueda finalizado.' } : x),
-        error: best ? null : 'No se encontró un resultado válido durante la búsqueda. Comprueba el envío del correo y los permisos.' };
+    return { success: !!best, code: best ? best.code : null, link: best ? best.link : null, source: best ? best.source : null, sources };
 }
+
 function renderBusquedaCliente(email, tipo, etiqueta) {
     const payload = JSON.stringify({ email, code_type: tipo }).replace(/</g, '\\u003c');
-    return `<main class="lookup-shell"><div class="lookup-top">BÚSQUEDA AUTOMÁTICA</div><h2>${escapeResultado(etiqueta)}</h2><p class="lookup-email">${escapeResultado(email)}</p><section id="lookup-progress"><div id="lookup-seconds">60 s</div><p id="lookup-status">Buscando en Gmail y el servidor de códigos…</p><p class="lookup-muted">La búsqueda se repite automáticamente. No necesitas pulsar otra vez.</p></section><div id="lookup-results" aria-live="polite"></div></main>
-    <style>.lookup-shell{box-sizing:border-box;max-width:850px;padding:28px;margin:20px auto;background:linear-gradient(135deg,#101d30,#0b1320);border:1px solid #2b4059;border-radius:22px;color:#edf6ff;font-family:Inter,sans-serif}.lookup-top{font-size:11px;color:var(--accent);letter-spacing:2px}.lookup-shell h2{font-size:23px;margin:14px 0 8px}.lookup-email{font-size:13px;color:#a9bdd3;overflow-wrap:anywhere}#lookup-progress{text-align:center;padding:20px}#lookup-seconds{font-size:52px;font-weight:700;color:var(--accent)}.lookup-muted{font-size:12px;color:#91a7c0;line-height:1.7}.lookup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.lookup-card{padding:20px;border:1px solid #30465f;border-radius:14px;background:#101c2b;min-width:0}.lookup-card.found{border-color:#FFD700;background:rgba(255,215,0,0.1)}.lookup-card h3{font-size:15px;margin:0 0 14px}.lookup-code{font:700 35px monospace;letter-spacing:4px;color:#FFD700;padding:18px 0;user-select:all}.lookup-button{display:inline-block;margin:8px 8px 0 0;padding:11px 15px;border:1px solid #3c6079;border-radius:9px;background:#E50914;color:#fff;text-decoration:none;font:600 12px Inter,sans-serif;cursor:pointer}.lookup-error{padding:16px;background:#382126;border:1px solid #8a434c;border-radius:12px;color:#ffd8de;line-height:1.7}@media(max-width:600px){.lookup-grid{grid-template-columns:1fr}.lookup-shell{padding:18px;margin:10px}.lookup-code{font-size:29px}}</style>
+    return `<main class="lookup-shell"><div class="lookup-top">BÚSQUEDA AUTOMÁTICA</div><h2>${escapeResultado(etiqueta)}</h2><p class="lookup-email">${escapeResultado(email)}</p><section id="lookup-progress"><div id="lookup-seconds">60 s</div><p id="lookup-status">Buscando en Gmail y el servidor de códigos…</p></section><div id="lookup-results" aria-live="polite"></div></main>
+    <style>.lookup-shell{box-sizing:border-box;max-width:850px;padding:28px;margin:20px auto;background:linear-gradient(135deg,#101d30,#0b1320);border:1px solid #2b4059;border-radius:22px;color:#edf6ff;font-family:Inter,sans-serif}.lookup-top{font-size:11px;color:var(--accent);letter-spacing:2px}.lookup-shell h2{font-size:23px;margin:14px 0 8px}.lookup-email{font-size:13px;color:#a9bdd3;overflow-wrap:anywhere}#lookup-progress{text-align:center;padding:20px}#lookup-seconds{font-size:52px;font-weight:700;color:var(--accent)}.lookup-muted{font-size:12px;color:#91a7c0;line-height:1.7}.lookup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.lookup-card{padding:20px;border:1px solid #30465f;border-radius:14px;background:#101c2b;min-width:0}.lookup-card.found{border-color:#FFD700;background:rgba(255,215,0,0.1)}.lookup-card h3{font-size:15px;margin:0 0 14px}.lookup-code{font:700 35px monospace;letter-spacing:4px;color:#FFD700;padding:18px 0;user-select:all}.lookup-button{display:inline-block;margin:8px 8px 0 0;padding:11px 15px;border:1px solid #3c6079;border-radius:9px;background:#E50914;color:#fff;text-decoration:none;font:600 12px Inter,sans-serif;cursor:pointer}@media(max-width:600px){.lookup-grid{grid-template-columns:1fr}}</style>
     <script>
     (async function(){
         const requestBody=${payload};
         const controller=new AbortController();
         const started=Date.now();
-        let finished=false;
         const results=document.getElementById('lookup-results');
         const progress=document.getElementById('lookup-progress');
         function node(tag,text,cls){const el=document.createElement(tag);if(text!=null)el.textContent=text;if(cls)el.className=cls;return el;}
-        function release(){window.parent.postMessage('lookup-complete',location.origin);}
         const ticker=setInterval(function(){const left=Math.max(0,60-Math.floor((Date.now()-started)/1000));document.getElementById('lookup-seconds').textContent=left>0?left+' s':'Terminando la consulta…';},250);
-        const deadline=setTimeout(function(){controller.abort();},70000);
-        window.addEventListener('pagehide',function(){controller.abort();},{once:true});
         try{
             const response=await fetch('/api/customer/fetch-code',{
                 method:'POST',credentials:'same-origin',cache:'no-store',signal:controller.signal,
                 headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)
             });
-            const data=await response.json().catch(function(){throw new Error('El servidor devolvió una respuesta no válida. Revisa la terminal de Node.');});
-            if(!response.ok)throw new Error(response.status===401?'Tu sesión venció. Vuelve a iniciar sesión.':response.status===403?'No tienes permiso para consultar esta cuenta.':'La consulta falló (HTTP '+response.status+').');
+            const data=await response.json();
             const sources=Array.isArray(data.sources)?data.sources:[];
-            if(!sources.length && data.success!==true)throw new Error(data.error||'La búsqueda terminó sin un resultado.');
             const title=node('h2',data.success?'Resultado disponible':'Búsqueda finalizada sin código');results.append(title);
             const grid=node('div',null,'lookup-grid');results.append(grid);
             sources.forEach(function(item){
                 const card=node('section',null,'lookup-card'+(item.success?' found':''));grid.append(card);
                 card.append(node('h3',item.source==='Gmail'?'✉ Gmail':'◈ Servidor de códigos'));
-                let code=item.code==null?'':String(item.code),link=null;
-                const validCode=requestBody.code_type==='signin_6digit'?/^[0-9]{6}$/:requestBody.code_type==='signin_4digit'?/^[0-9]{4}$/:/^[0-9]{4,6}$/;
-                if(!validCode.test(code)||requestBody.code_type==='reset_link')code='';
-                if(item.link){try{const u=new URL(item.link);if(u.protocol==='https:'&&!u.username&&!u.password&&(u.hostname==='netflix.com'||u.hostname.endsWith('.netflix.com')))link=u.href;}catch(e){}}
+                let code=item.code==null?'':String(item.code),link=item.link;
                 if(item.success&&(code||link)){
                     card.append(node('p','✓ Encontrado','lookup-muted'));
                     if(code)card.append(node('div',code,'lookup-code'));
-                    if(link){const a=node('a','Abrir enlace ↗','lookup-button');a.href=link;a.target='_blank';a.rel='noopener noreferrer';card.append(a);}
-                    const copy=node('button',code?'Copiar código':'Copiar enlace','lookup-button');copy.addEventListener('click',async function(){try{await navigator.clipboard.writeText(code||link);copy.textContent='✓ Copiado';}catch(e){copy.textContent='Selecciona y copia el resultado';}});card.append(copy);
+                    if(link){const a=node('a','Abrir enlace ↗','lookup-button');a.href=link;a.target='_blank';card.append(a);}
                 }else card.append(node('p',item.error||'No se encontró un resultado.','lookup-muted'));
             });
-            results.append(node('p','Búsqueda terminada en '+((Date.now()-started)/1000).toFixed(1)+' s. Gmail revisa mensajes de los últimos 5 minutos.','lookup-muted'));
         }catch(error){
-            results.append(node('h2','No se pudo completar la búsqueda'));
-            results.append(node('p',error.name==='AbortError'?'La conexión superó el tiempo de espera. No sigas pulsando: revisa la terminal del servidor y vuelve a intentarlo después.':error.message,'lookup-error'));
+            results.append(node('p','Error en la búsqueda','lookup-error'));
         }finally{
-            finished=true;clearInterval(ticker);clearTimeout(deadline);progress.hidden=true;release();
+            clearInterval(ticker);progress.hidden=true;window.parent.postMessage('lookup-complete',location.origin);
         }
     })();
     </script>`;
@@ -2748,55 +3259,25 @@ async function buscarEnBuzonImap(correoBuzon, correoIngresado, plataforma, parte
         await connection.openBox('INBOX');
         
         let searchResults = await connection.search([['X-GM-RAW', `"${correoIngresado}"`]], { bodies: ['HEADER.FIELDS (DATE)'] });
-        
         if (searchResults.length === 0) {
             searchResults = await connection.search([['TEXT', correoIngresado]], { bodies: ['HEADER.FIELDS (DATE)'] });
         }
 
-        if (searchResults.length === 0 && partes && partes.length > 0) {
-            searchResults = await connection.search([['TEXT', partes[0]]], { bodies: ['HEADER.FIELDS (DATE)'] });
-        }
-
-        let messages = [];
-        let mail = null;
-
         if (searchResults.length > 0) {
-            searchResults.sort((a, b) => {
-                let dateA = new Date(a.attributes.date || 0).getTime();
-                let dateB = new Date(b.attributes.date || 0).getTime();
-                if (dateB !== dateA) { return dateB - dateA; }
-                return b.attributes.uid - a.attributes.uid;
-            });
-
-            if (['signin_4digit', 'signin_6digit', 'household', 'reset_link'].includes(accion)) {
-                for (const candidate of searchResults.slice(0, 10)) {
-                    if (signal && signal.aborted) return null;
-                    const received = new Date(candidate.attributes.date).getTime();
-                    if (Number.isFinite(received) && received < Date.now() - 5 * 60000) continue;
-                    const fetched = await connection.search([['UID', candidate.attributes.uid]], { bodies: [''], struct: true });
-                    if (!fetched.length) continue;
-                    const part = fetched[0].parts.find(p => p.which === '');
-                    if (!part) continue;
-                    const parsed = await simpleParser(part.body);
-                    if (extraerCodigoGmail(parsed, accion).success) return { messages: fetched, mail: parsed, buzón: correoBuzon };
-                }
-                return null;
-            }
-            let latestUid = searchResults[0].attributes.uid; 
-            
-            let fetchedMsg = await connection.search([['UID', latestUid]], { bodies: [''], struct: true });
-            if (fetchedMsg.length > 0) {
-                messages = fetchedMsg;
-                mail = await simpleParser(messages[0].parts.find(p => p.which === '').body);
+            searchResults.sort((a, b) => new Date(b.attributes.date || 0).getTime() - new Date(a.attributes.date || 0).getTime());
+            for (const candidate of searchResults.slice(0, 10)) {
+                if (signal && signal.aborted) return null;
+                const fetched = await connection.search([['UID', candidate.attributes.uid]], { bodies: [''], struct: true });
+                if (!fetched.length) continue;
+                const part = fetched[0].parts.find(p => p.which === '');
+                if (!part) continue;
+                const parsed = await simpleParser(part.body);
+                if (extraerCodigoGmail(parsed, accion).success) return { messages: fetched, mail: parsed, buzón: correoBuzon };
             }
         }
-        
         connection.end();
-        if (messages.length > 0 && mail) { return { messages, mail, buzón: correoBuzon }; }
         return null;
-
     } catch (err) {
-        console.log(`⚠ Advertencia IMAP (${correoBuzon}):`, err.message);
         if (connection) connection.end();
         return null;
     } finally {
@@ -2811,96 +3292,8 @@ app.post('/buscar', async (req, res) => {
     
     const cssIframe = `<style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body, html { 
-            font-family: 'Inter', sans-serif !important; 
-            background: transparent !important; 
-            color: #f8fafc;
-            margin: 0; padding: 0; 
-        } 
-        
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255, 215, 0, 0.5); border-radius: 10px; }
-
-        .magic-email-wrapper table, .magic-email-wrapper td, .magic-email-wrapper tr, .magic-email-wrapper body, .magic-email-wrapper div {
-            background-color: transparent !important; background: transparent !important; border: none !important;
-        }
-        
-        .magic-email-wrapper * {
-            font-family: 'Inter', sans-serif !important;
-            color: #f8fafc !important;
-            line-height: 1.6 !important;
-            box-shadow: none !important;
-        }
-
-        .magic-email-wrapper h1, 
-        .magic-email-wrapper h2, 
-        .magic-email-wrapper h3, 
-        .magic-email-wrapper strong {
-            color: #FFD700 !important; 
-            text-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 15px rgba(255, 215, 0, 0.5) !important;
-        }
-        
-        .magic-email-wrapper a {
-            background-color: #E50914 !important;
-            color: #fff !important;
-            padding: 10px 20px !important;
-            border-radius: 4px !important;
-            display: inline-block !important;
-            text-decoration: none !important;
-            text-shadow: none !important;
-            font-weight: bold !important;
-        }
-
-        .magic-email-wrapper p, 
-        .magic-email-wrapper span {
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3) !important;
-            font-size: 15px !important;
-        }
-
-        .magic-email-wrapper img {
-            filter: drop-shadow(0 0 15px rgba(229, 9, 20, 0.9)) !important;
-            border-radius: 4px !important;
-            max-width: 100% !important;
-        }
-
-        .magic-email-wrapper { 
-            width: 100%; 
-            display: flex;
-            justify-content: center;
-            padding: 20px 0;
-        }
-        
-        .magic-email-wrapper > * {
-            max-width: 600px;
-            width: 100%;
-        }
-
-        .api-result-box {
-            max-width: 520px;
-            margin: 35px auto;
-            background: rgba(10, 14, 22, 0.95);
-            border: 1px solid rgba(255, 215, 0, 0.35);
-            border-radius: 16px;
-            padding: 30px;
-            text-align: center;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.9);
-        }
-        .code-pill {
-            font-family: monospace;
-            font-size: 40px;
-            font-weight: 700;
-            letter-spacing: 6px;
-            color: #FFD700;
-            background: #000;
-            border: 1px solid rgba(255, 215, 0, 0.4);
-            padding: 18px 28px;
-            border-radius: 12px;
-            display: inline-block;
-            margin: 18px 0;
-            user-select: all;
-        }
+        body, html { font-family: 'Inter', sans-serif !important; background: transparent !important; color: #f8fafc; margin: 0; padding: 0; }
+        .api-result-box { max-width: 520px; margin: 35px auto; background: rgba(10, 14, 22, 0.95); border: 1px solid rgba(255, 215, 0, 0.35); border-radius: 16px; padding: 30px; text-align: center; }
     </style>`;
 
     try {
@@ -2910,140 +3303,39 @@ app.post('/buscar', async (req, res) => {
         const esCliente = (req.session.rol === 'Cliente');
         const esSubAdmin = (req.session.rol === 'Subadministrador');
         if (!req.session.uid || (!esAdminPrincipal && !esCliente && !esSubAdmin && req.session.rol !== 'Administrador')) return res.status(403).send('Perfil no autorizado.');
-        if (!/^[^\s@<>"\x27]+@[^\s@<>"\x27]+\.[^\s@<>"\x27]+$/.test(correoIngresado) || correoIngresado.length > 254) return res.status(422).send('Correo no válido.');
 
-
-        // Validación de permisos por rol según las reglas de Customer y Subadmin Pool
         if (esCliente && !esAdminPrincipal) {
             const tieneAcceso = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [req.session.uid, correoIngresado]);
             if (!tieneAcceso) {
-                return res.send(`${cssIframe}<div class="api-result-box" style="border-color:#E50914;"><h2 style="color:#E50914; margin-top:0;">⛔ Not assigned to your profile</h2><p style="color:#cbd5e1; font-size:13px;">No tienes este correo asignado a tu perfil. Solicítalo a tu administrador o subadministrador.</p></div>`);
-            }
-        } else if (esSubAdmin && !esAdminPrincipal) {
-            const enPool = await dbGet(`
-                SELECT c.id FROM correos c 
-                JOIN usuarios u ON c.user_id = u.id 
-                WHERE c.email = ? AND (c.user_id = ? OR u.creado_por = ?)
-            `, [correoIngresado, req.session.uid, req.session.uid]);
-            const enStockPropio = await dbGet("SELECT id FROM stock_cuentas WHERE email = ? AND propietario_id = ?", [correoIngresado, req.session.uid]);
-            if (!enPool && !enStockPropio) {
-                return res.send(`${cssIframe}<div class="api-result-box" style="border-color:#E50914;"><h2 style="color:#E50914; margin-top:0;">⛔ Not in your subadmin pool</h2><p style="color:#cbd5e1; font-size:13px;">El correo <strong>${correoIngresado}</strong> no pertenece a tu pool de subadministrador.</p></div>`);
+                return res.send(`${cssIframe}<div class="api-result-box" style="border-color:#E50914;"><h2 style="color:#E50914; margin-top:0;">⛔ Not assigned to your profile</h2><p style="color:#cbd5e1; font-size:13px;">No tienes este correo asignado.</p></div>`);
             }
         }
 
-        // 🚀 SI SE USÓ UNO DE LOS 4 BOTONES DE CÓDIGO TIPO API (signin_6digit, signin_4digit, household, reset_link)
         if (tiposApiGhoulflix.includes(accion)) {
-            const startMs = Date.now();
             const etiquetasTipo = {
-                'signin_6digit': '🔢 Código de Inicio de Sesión (6 Dígitos)',
-                'signin_4digit': '📺 Código de TV / Dispositivo (4 Dígitos)',
-                'household': '🏠 Verificación de Hogar / Viaje',
-                'reset_link': '🔑 Enlace de Restablecimiento de Contraseña'
+                'signin_6digit': '🔢 Código de Inicio (6 Dígitos)',
+                'signin_4digit': '📺 Código de TV (4 Dígitos)',
+                'household': '🏠 Hogar / Viaje',
+                'reset_link': '🔑 Enlace de Contraseña'
             };
-
-            if (plataforma !== 'netflix') {
-                return res.send(`${cssIframe}<div class="api-result-box">La búsqueda combinada de códigos está disponible para Netflix.</div>`);
-            }
             res.setHeader('Cache-Control', 'no-store');
             return res.send(cssIframe + renderBusquedaCliente(correoIngresado, accion, etiquetasTipo[accion]));
         }
 
-        let partes = correoIngresado.split('@');
-        let buzonesAbuscar = ['darciogarces@gmail.com']; 
-        let resultadoExitoso = null;
-
-        try {
-            const promesas = buzonesAbuscar.map(buzon => buscarEnBuzonImap(buzon, correoIngresado, plataforma, partes, accion));
-            const resultados = await Promise.all(promesas);
-            resultadoExitoso = resultados.find(res => res !== null);
-        } catch (error) { console.error("Error en búsqueda:", error); }
+        let resultadoExitoso = await buscarEnBuzonImap('darciogarces@gmail.com', correoIngresado, plataforma, correoIngresado.split('@'), accion);
 
         if (!resultadoExitoso) { 
-            return res.send(`${cssIframe}<div style="text-align:center; padding:40px; background: transparent;">
-                <h2 style="color:#f8fafc; font-weight:300; text-shadow: 0 0 10px rgba(255, 215, 0, 0.6);">Mensaje no encontrado</h2>
-                <p>No hay correos recientes para esa opción en el buzón: <br><strong style="color:#FFD700;">${email_search}</strong></p>
-            </div>`); 
+            return res.send(`${cssIframe}<div style="text-align:center; padding:40px;"><h2 style="color:#FFD700;">Mensaje no encontrado</h2><p>No hay mensajes recientes para: <b>${email_search}</b></p></div>`); 
         }
 
         const { mail } = resultadoExitoso;
-        const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
-        const textoCorreo = textoBruto.toLowerCase();
+        res.send(`${cssIframe}<div style="padding:20px; font-family:'Inter', sans-serif;">${mail.html || mail.text}</div>`);
 
-        // 🚀 LÓGICA DE DETECCIÓN INTELUGUENTE DE PAÍS
-        if (accion === 'pais') {
-            let paisDetectado = null;
-            
-            const codigosPais = {
-                'US': '🇺🇸 Estados Unidos', 'CO': '🇨🇴 Colombia', 'BR': '🇧🇷 Brasil',
-                'JP': '🇯🇵 Japón', 'MX': '🇲🇽 México', 'ES': '🇪🇸 España',
-                'AR': '🇦🇷 Argentina', 'CL': '🇨🇱 Chile', 'PE': '🇵🇪 Perú',
-                'EC': '🇪🇨 Ecuador', 'VE': '🇻🇪 Venezuela', 'UY': '🇺🇾 Uruguay',
-                'PY': '🇵🇾 Paraguay', 'BO': '🇧🇴 Bolivia', 'CR': '🇨🇷 Costa Rica',
-                'PA': '🇵🇦 Panamá', 'DO': '🇩🇴 República Dominicana', 'GT': '🇬🇹 Guatemala',
-                'HN': '🇭🇳 Honduras', 'SV': '🇸🇻 El Salvador', 'NI': '🇳🇮 Nicaragua',
-                'PR': '🇵🇷 Puerto Rico', 'CA': '🇨🇦 Canadá', 'GB': '🇬🇧 Reino Unido',
-                'FR': '🇫🇷 Francia', 'DE': '🇩🇪 Alemania', 'IT': '🇮🇹 Italia',
-                'PT': '🇵🇹 Portugal', 'TR': '🇹🇷 Turquía', 'IN': '🇮🇳 India',
-                'ZA': '🇿🇦 Sudáfrica', 'KR': '🇰🇷 Corea del Sur', 'AU': '🇦🇺 Australia',
-                'NL': '🇳🇱 Países Bajos', 'SE': '🇸🇪 Suecia', 'NO': '🇳🇴 Noruega',
-                'DK': '🇩🇰 Dinamarca', 'FI': '🇫🇮 Finlandia', 'PL': '🇵🇱 Polonia',
-                'CH': '🇨🇭 Suiza', 'AT': '🇦🇹 Austria', 'BE': '🇧🇪 Bélgica',
-                'IE': '🇮🇪 Irlanda', 'NZ': '🇳🇿 Nueva Zelanda', 'SG': '🇸🇬 Singapur'
-            };
-
-            let matchSrc = textoBruto.match(/_([A-Z]{2})_EVO/);
-            if (matchSrc && matchSrc[1]) {
-                let codigo = matchSrc[1].toUpperCase();
-                paisDetectado = codigosPais[codigo] || ("🌍 Código de País: " + codigo);
-            }
-
-            if (!paisDetectado) {
-                const reglasPais = [
-                    { id: "🇺🇸 Estados Unidos", keys: ['ee. uu.', 'usa', 'united states', 'los gatos', 'california', '1-866-', '1-844-', '1-800-', '1-888-', '1-877-'] },
-                    { id: "🇨🇴 Colombia", keys: ['colombia', 'bogota', 'bogotá', '018000', '01 8000'] },
-                    { id: "🇧🇷 Brasil", keys: ['brasil', 'brazil', 'são paulo', '0800-'] },
-                    { id: "🇯🇵 Japón", keys: ['japan', 'japón', 'tokyo', '合同会社'] },
-                    { id: "🇲🇽 México", keys: ['méxico', 'mexico', 'cdmx', '01 800'] },
-                    { id: "🇪🇸 España", keys: ['españa', 'spain', 'madrid', '900 '] },
-                    { id: "🇦🇷 Argentina", keys: ['argentina', 'buenos aires'] },
-                    { id: "🇨🇱 Chile", keys: ['chile', 'santiago'] },
-                    { id: "🇵🇪 Perú", keys: ['perú', 'peru', 'lima'] },
-                    { id: "🇪🇨 Ecuador", keys: ['ecuador', 'quito', 'guayaquil'] }
-                ];
-                for (let regla of reglasPais) { 
-                    if (regla.keys.some(k => textoCorreo.includes(k))) { 
-                        paisDetectado = regla.id; 
-                        break; 
-                    } 
-                }
-            }
-
-            let htmlRes = paisDetectado 
-                ? `<div style="font-size: 32px; font-weight: 300; margin: 20px auto; padding: 25px; background:transparent; display:inline-block; color:#FFD700; text-shadow: 0 0 15px rgba(255, 215, 0, 0.8);">${paisDetectado}</div>` 
-                : `<div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;"><h3 style="color:#FFD700; margin:0; font-weight:300;">País no detectado en el mensaje</h3></div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Análisis de Origen</h2><p style="color: #94a3b8;">${email_search}</p>${htmlRes}</div>`);
-        }
-
-        if (accion === 'ip') {
-            const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
-            let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
-            let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 24px; font-weight:300; color:#FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.6); margin:10px 0; letter-spacing: 1px;">${ip}</div>`).join('') : `<div style="font-size: 15px; color:#94a3b8; margin: 20px 0;">No se detectó ninguna IP pública en el texto.</div>`;
-            return res.send(`${cssIframe}<div style="text-align:center; padding: 20px; background: transparent;"><h2>Escáner de Direcciones IP</h2><p style="color: #94a3b8;">${email_search}</p><div style="margin: 20px auto; padding: 25px; background:transparent; display:inline-block;">${ipContenido}</div></div>`);
-        }
-
-        if (/\b\d{4,6}\b/.test(textoBruto) && plataforma === 'netflix') {
-            try { await dbRun("INSERT INTO registro_codigos (user, email_buscado) VALUES (?, ?)", [req.session.user, email_search.trim()]); } catch(err) {}
-        }
-        
-        res.send(`${cssIframe}
-            <div class="magic-email-wrapper">
-                ${mail.html ? mail.html : `<pre style="font-family:'Inter', sans-serif; white-space:pre-wrap; word-wrap:break-word; color:#fff; padding: 20px;">${mail.text}</pre>`}
-            </div>
-        `);
-
-    } catch (err) { if (res.headersSent) { if (!res.destroyed) res.end('<p>La búsqueda se interrumpió. Vuelve a intentarlo.</p>'); return; } res.send(`${cssIframe}<h2 style="color:#FFD700; text-align:center; padding:20px; font-weight:300;">Error en la Búsqueda</h2>`); }
+    } catch (err) {
+        res.send(`${cssIframe}<h2 style="color:#E50914; text-align:center;">Error en la búsqueda</h2>`);
+    }
 });
 
 app.listen(10000, () => {
-    console.log("🚀 SISTEMA CENTRAL INICIADO EN EL PUERTO 10000");
+    console.log("🚀 SISTEMA COMPLETO Y RESTAURADO EN EL PUERTO 10000");
 });
