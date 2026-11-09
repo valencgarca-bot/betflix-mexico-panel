@@ -661,7 +661,7 @@ const CSS_MODERNO = `
             actionInput.value = actionName;
             
             document.getElementById('visor-resultados').style.display = 'flex';
-            if (['signin_6digit','signin_4digit','household','reset_link'].includes(actionName)) lookupBusyUntil = Date.now() + 65000;
+            if (['signin_6digit','signin_4digit','household','reset_link','buzon_completo'].includes(actionName)) lookupBusyUntil = Date.now() + 65000;
             form.submit();
         }
     }
@@ -1377,7 +1377,7 @@ app.post('/bot/garantia', async (req, res) => {
 app.post('/admin/resolver-garantia', async (req, res) => {
     if(!req.session.uid) return res.redirect('/');
     try {
-        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.reemplazo, req.body.garantia_id]);
+        await dbRun("UPDATE garantias SET estado = 'Resuelto', reemplazo = ? WHERE id = ?", [req.body.garantia_id]);
         res.redirect('/dash');
     } catch(err) { res.redirect('/dash'); }
 });
@@ -2197,6 +2197,10 @@ app.get('/dash', async (req, res) => {
                             <button onclick="triggerAction('${key}', 'reset_link')" class="action-btn-pill" style="background: rgba(255, 115, 0, 0.1); border-color: rgba(255, 115, 0, 0.3); color: #fff; padding: 16px 5px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 12px;">
                                 <span style="font-size: 22px;">🔑</span>
                                 <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">CONTRASEÑA</span>
+                            </button>
+                            <button onclick="triggerAction('${key}', 'buzon_completo')" class="action-btn-pill" style="background: rgba(138, 43, 226, 0.1); border-color: rgba(138, 43, 226, 0.3); color: #fff; padding: 16px 5px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 12px; grid-column: 1 / -1;">
+                                <span style="font-size: 22px;">📥</span>
+                                <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.5px;">BUZÓN COMPLETO</span>
                             </button>
                         </div>
                     `;
@@ -3141,6 +3145,7 @@ function normalizarResultadoFuente(data, fuente, tipo) {
 
 function extraerCodigoGmail(mail, tipo) {
     if (!mail) return { success: false };
+    if (tipo === 'buzon_completo') return { success: true };
     const received = new Date(mail.date).getTime();
     if (!Number.isFinite(received) || received < Date.now() - 5 * 60000 || received > Date.now() + 60000) return { success: false };
     const sender = mail.from && mail.from.value || [];
