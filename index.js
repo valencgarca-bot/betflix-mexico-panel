@@ -118,6 +118,31 @@ function formatearDinero(montoMXN, monedaLocal) {
     return `$${convertido.toLocaleString('es-CO')} ${monedaLocal}`;
 }
 
+// 📅 FUNCIÓN PARA CALCULAR EXACTAMENTE 1 MES DESPUÉS DE LA FECHA DE COMPRA (Ej: 10 Oct -> 10 Nov)
+function formatearFechaLocalSQL(dateObj) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())} ${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
+}
+
+function calcularFechaUnMesDespues(fechaBaseInput) {
+    let base = fechaBaseInput ? new Date(String(fechaBaseInput).replace(' ', 'T')) : new Date();
+    if (isNaN(base.getTime())) base = new Date();
+    const diaOriginal = base.getDate();
+    const resultado = new Date(base.getTime());
+    resultado.setDate(1);
+    resultado.setMonth(resultado.getMonth() + 1);
+    const ultimoDiaMesSiguiente = new Date(resultado.getFullYear(), resultado.getMonth() + 1, 0).getDate();
+    resultado.setDate(Math.min(diaOriginal, ultimoDiaMesSiguiente));
+    return formatearFechaLocalSQL(resultado);
+}
+
+function formatearFechaCortaLegible(fechaStr) {
+    if (!fechaStr) return 'N/A';
+    const d = new Date(String(fechaStr).replace(' ', 'T'));
+    if (isNaN(d.getTime())) return String(fechaStr).split(' ')[0];
+    return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(session({
@@ -1136,6 +1161,7 @@ app.post('/admin/asignar-bloque-cliente', async (req, res) => {
     }
 
     try {
+        const operador = await dbGet("SELECT id, moneda FROM usuarios WHERE id = ?", [req.session.uid]);
         const cliente = await dbGet("SELECT id, user, creado_por, moneda FROM usuarios WHERE id = ?", [cliente_id]);
         if (!cliente) return res.send("<script>alert('Cliente no encontrado.'); window.location='/dash';</script>");
 
@@ -1158,7 +1184,9 @@ app.post('/admin/asignar-bloque-cliente', async (req, res) => {
         }
 
         const totalCuentas = cuentasProcesar.length;
-        const pTotal = parseFloat(precio_total) || 0;
+        const pTotalIngresado = parseFloat(precio_total) || 0;
+        const monedaOperador = (operador && operador.moneda) ? operador.moneda : 'MXN';
+        const pTotal = convertirAMXN(pTotalIngresado, monedaOperador);
         const pUnitario = totalCuentas > 0 ? (pTotal / totalCuentas) : 0;
         const paisFinal = pais_cuenta || 'US';
 
@@ -1172,32 +1200,32 @@ app.post('/admin/asignar-bloque-cliente', async (req, res) => {
             }
         }
 
-        const fechaActual = new Date();
-        const fechaVence = new Date(fechaActual.getTime() + (30 * 24 * 60 * 60 * 1000));
-        const fechaVenceSql = fechaVence.toISOString().replace('T', ' ').substring(0, 19);
+        const ahora = new Date();
+        const fechaCompraSql = formatearFechaLocalSQL(ahora);
+        const fechaVenceSql = calcularFechaUnMesDespues(ahora);
 
         const bloqueRes = await dbRun(`
-            INSERT INTO asignaciones_bloques (asignador_id, cliente_id, cantidad, precio_total, precio_unitario, fecha_vencimiento, estado)
-            VALUES (?, ?, ?, ?, ?, ?, 'Activo')
-        `, [req.session.uid, cliente.id, totalCuentas, pTotal, pUnitario, fechaVenceSql]);
+            INSERT INTO asignaciones_bloques (asignador_id, cliente_id, cantidad, precio_total, precio_unitario, fecha_asignacion, fecha_vencimiento, estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Activo')
+        `, [req.session.uid, cliente.id, totalCuentas, pTotal, pUnitario, fechaCompraSql, fechaVenceSql]);
 
         const bloqueId = bloqueRes.lastID;
 
         for (let c of cuentasProcesar) {
             await dbRun(`
-                INSERT INTO cuentas_cliente_detalle (bloque_id, cliente_id, email, password, pais, fecha_vencimiento, estado, precio_unitario)
-                VALUES (?, ?, ?, ?, ?, ?, 'Activa', ?)
-            `, [bloqueId, cliente.id, c.email, c.pass, paisFinal, fechaVenceSql, pUnitario]);
+                INSERT INTO cuentas_cliente_detalle (bloque_id, cliente_id, email, password, pais, fecha_asignacion, fecha_vencimiento, estado, precio_unitario)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'Activa', ?)
+            `, [bloqueId, cliente.id, c.email, c.pass, paisFinal, fechaCompraSql, fechaVenceSql, pUnitario]);
 
             const yaEnCorreos = await dbGet("SELECT id FROM correos WHERE user_id = ? AND email = ?", [cliente.id, c.email]);
             if (!yaEnCorreos) {
                 await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [c.email, cliente.id]);
             }
 
-            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, pais = ? WHERE email = ?", [cliente.id, paisFinal, c.email]);
+            await dbRun("UPDATE stock_cuentas SET estado = 'Asignada', comprador_id = ?, pais = ?, fecha_compra = ? WHERE email = ?", [cliente.id, paisFinal, fechaCompraSql, c.email]);
         }
 
-        res.send(`<script>alert('✅ Bloque de ${totalCuentas} cuentas asignado a @${cliente.user}.\\nVence el: ${fechaVenceSql}'); window.location='/dash';</script>`);
+        res.send(`<script>alert('✅ Bloque de ${totalCuentas} cuentas asignado a @${cliente.user}.\\n📅 Compra: ${fechaCompraSql}\\n⏳ Vence exactamente el: ${fechaVenceSql}'); window.location='/dash';</script>`);
 
     } catch (e) {
         console.error(e);
@@ -1213,18 +1241,31 @@ app.post('/admin/renovar-cuentas', async (req, res) => {
     const { cliente_id, bloque_id } = req.body;
 
     try {
-        const fechaNueva = new Date();
-        const nuevaFechaVence = new Date(fechaNueva.getTime() + (30 * 24 * 60 * 60 * 1000)).toISOString().replace('T', ' ').substring(0, 19);
-
+        const ahora = new Date();
         if (bloque_id) {
+            const bloque = await dbGet("SELECT * FROM asignaciones_bloques WHERE id = ?", [bloque_id]);
+            const baseDate = (bloque && bloque.fecha_vencimiento && new Date(String(bloque.fecha_vencimiento).replace(' ', 'T')) > ahora) ? bloque.fecha_vencimiento : ahora;
+            const nuevaFechaVence = calcularFechaUnMesDespues(baseDate);
             await dbRun("UPDATE asignaciones_bloques SET estado = 'Activo', fecha_vencimiento = ? WHERE id = ?", [nuevaFechaVence, bloque_id]);
-            await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Activa', fecha_vencimiento = ? WHERE bloque_id = ?", [nuevaFechaVence, bloque_id]);
+            await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Activa', fecha_vencimiento = ? WHERE bloque_id = ? AND reemplazada_por IS NULL", [nuevaFechaVence, bloque_id]);
         } else if (cliente_id) {
-            await dbRun("UPDATE asignaciones_bloques SET estado = 'Activo', fecha_vencimiento = ? WHERE cliente_id = ?", [nuevaFechaVence, cliente_id]);
-            await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Activa', fecha_vencimiento = ? WHERE cliente_id = ?", [nuevaFechaVence, cliente_id]);
+            const cuentasCliente = await dbAll("SELECT * FROM cuentas_cliente_detalle WHERE cliente_id = ? AND reemplazada_por IS NULL", [cliente_id]);
+            for (const cta of cuentasCliente) {
+                const fechaBaseCta = cta.fecha_vencimiento || cta.fecha_asignacion || ahora;
+                const baseRenovacion = new Date(String(fechaBaseCta).replace(' ', 'T')) > ahora ? fechaBaseCta : ahora;
+                const nuevaVenceCta = calcularFechaUnMesDespues(baseRenovacion);
+                await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Activa', fecha_vencimiento = ? WHERE id = ?", [nuevaVenceCta, cta.id]);
+            }
+            const bloquesCliente = await dbAll("SELECT * FROM asignaciones_bloques WHERE cliente_id = ?", [cliente_id]);
+            for (const blq of bloquesCliente) {
+                const fechaBaseBlq = blq.fecha_vencimiento || blq.fecha_asignacion || ahora;
+                const baseRenovBlq = new Date(String(fechaBaseBlq).replace(' ', 'T')) > ahora ? fechaBaseBlq : ahora;
+                const nuevaVenceBlq = calcularFechaUnMesDespues(baseRenovBlq);
+                await dbRun("UPDATE asignaciones_bloques SET estado = 'Activo', fecha_vencimiento = ? WHERE id = ?", [nuevaVenceBlq, blq.id]);
+            }
         }
 
-        res.send("<script>alert('✅ CUENTAS RENOVADAS. Servicio habilitado por 1 mes más.'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ CUENTAS RENOVADAS. Servicio habilitado exactamente por 1 mes más.'); window.location='/dash';</script>");
     } catch (e) {
         console.error(e);
         res.send("<script>alert('Error al renovar cuentas.'); window.location='/dash';</script>");
@@ -1294,7 +1335,7 @@ app.post('/admin/cambiar-por-garantia', async (req, res) => {
             const detalleOriginal = await dbGet("SELECT * FROM cuentas_cliente_detalle WHERE email = ? AND cliente_id = ? ORDER BY id DESC LIMIT 1", [caida.email, caida.cliente_id]);
             
             const bloqueId = detalleOriginal ? detalleOriginal.bloque_id : null;
-            const fechaVence = detalleOriginal ? detalleOriginal.fecha_vencimiento : null;
+            const fechaVence = (detalleOriginal && detalleOriginal.fecha_vencimiento) ? detalleOriginal.fecha_vencimiento : calcularFechaUnMesDespues(caida.fecha_compra);
             const paisConservado = caida.pais || (detalleOriginal ? detalleOriginal.pais : 'US');
 
             await dbRun(`
@@ -1943,15 +1984,18 @@ app.post('/tienda/comprar', async (req, res) => {
         const compraInfo = await dbRun("INSERT INTO compras_stock (subadmin_id, cantidad, creditos_usados, saldo_anterior, saldo_nuevo) VALUES (?, ?, ?, ?, ?)", [req.session.uid, paquete, costoMXN, comprador.creditos, nuevoSaldoMXN]);
         const compraId = compraInfo.lastID;
 
-        const fechaVence = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
-        const bloqueInfo = await dbRun("INSERT INTO asignaciones_bloques (asignador_id, cliente_id, cantidad, precio_total, precio_unitario, fecha_vencimiento, estado) VALUES (?, ?, ?, ?, ?, ?, 'Activo')", [proveedor_id, comprador.id, paquete, costoMXN, (costoMXN/paquete), fechaVence]);
+        const ahora = new Date();
+        const fechaCompraSql = formatearFechaLocalSQL(ahora);
+        const fechaVence = calcularFechaUnMesDespues(ahora);
+        const precioUnitarioMXN = costoMXN / paquete;
+        const bloqueInfo = await dbRun("INSERT INTO asignaciones_bloques (asignador_id, cliente_id, cantidad, precio_total, precio_unitario, fecha_asignacion, fecha_vencimiento, estado) VALUES (?, ?, ?, ?, ?, ?, ?, 'Activo')", [proveedor_id, comprador.id, paquete, costoMXN, precioUnitarioMXN, fechaCompraSql, fechaVence]);
 
         let correosEntregados = [];
         for (let cuenta of disponibles) {
-            await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = datetime('now', 'localtime') WHERE id = ?", [req.session.uid, compraId, cuenta.id]);
+            await dbRun("UPDATE stock_cuentas SET estado = 'Vendida', comprador_id = ?, compra_id = ?, fecha_compra = ? WHERE id = ?", [req.session.uid, compraId, fechaCompraSql, cuenta.id]);
             await dbRun("INSERT INTO detalles_compras (compra_id, cuenta_id, email_cuenta, password_cuenta) VALUES (?, ?, ?, ?)", [compraId, cuenta.id, cuenta.email, cuenta.password]);
             await dbRun("INSERT INTO correos (email, user_id) VALUES (?, ?)", [cuenta.email, req.session.uid]);
-            await dbRun("INSERT INTO cuentas_cliente_detalle (bloque_id, cliente_id, email, password, pais, fecha_vencimiento, estado, precio_unitario) VALUES (?, ?, ?, ?, ?, ?, 'Activa', ?)", [bloqueInfo.lastID, comprador.id, cuenta.email, cuenta.password, cuenta.pais || 'US', fechaVence, (costoMXN/paquete)]);
+            await dbRun("INSERT INTO cuentas_cliente_detalle (bloque_id, cliente_id, email, password, pais, fecha_asignacion, fecha_vencimiento, estado, precio_unitario) VALUES (?, ?, ?, ?, ?, ?, ?, 'Activa', ?)", [bloqueInfo.lastID, comprador.id, cuenta.email, cuenta.password, cuenta.pais || 'US', fechaCompraSql, fechaVence, precioUnitarioMXN]);
             correosEntregados.push(`${cuenta.email} : ${cuenta.password || 'Sin clave'}`);
         }
 
@@ -2074,7 +2118,7 @@ app.get('/dash', async (req, res) => {
 
             if (esCliente || esSubAdmin) {
                 misCorreos = await dbAll("SELECT * FROM correos WHERE user_id = ?", [req.session.uid]);
-                misCuentasVencidas = await dbAll("SELECT * FROM cuentas_cliente_detalle WHERE cliente_id = ? AND estado = 'Vencida'", [req.session.uid]);
+                misCuentasVencidas = await dbAll("SELECT * FROM cuentas_cliente_detalle WHERE cliente_id = ? AND estado = 'Vencida' AND reemplazada_por IS NULL", [req.session.uid]);
             }
 
             let query = esAdminPrincipal 
@@ -2156,12 +2200,12 @@ app.get('/dash', async (req, res) => {
 
             let avisoVencimientoCliente = "";
             if (esCliente && misCuentasVencidas.length > 0) {
-                let totalRenovar = misCuentasVencidas.reduce((acc, curr) => acc + (curr.precio_unitario || 0), 0);
+                let totalRenovar = misCuentasVencidas.reduce((acc, curr) => acc + (Number(curr.precio_unitario) || 0), 0);
                 avisoVencimientoCliente = `
                     <div style="background: rgba(229, 9, 20, 0.2); border: 2px solid #E50914; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
                         <h3 style="color:#E50914; margin:0 0 6px 0;">⚠️ TIENES ${misCuentasVencidas.length} CUENTA(S) VENCIDA(S)</h3>
-                        <p style="font-size:13px; margin:0 0 10px 0; color:#fff;">Tus cuentas cumplieron el mes y han sido bloqueadas. Para reactivarlas debes renovar.</p>
-                        <div style="font-size:15px; font-weight:700; color:var(--accent);">Total a pagar para renovar: ${formatearDinero(totalRenovar, usuarioActual.moneda)}</div>
+                        <p style="font-size:13px; margin:0 0 10px 0; color:#fff;">Tus cuentas cumplieron su mes desde la fecha de compra y han sido pausadas. Para reactivarlas debes renovar.</p>
+                        <div style="font-size:15px; font-weight:700; color:var(--accent);">💰 Total a pagar para renovar: ${formatearDinero(totalRenovar, usuarioActual.moneda)}</div>
                     </div>
                 `;
             }
@@ -2708,8 +2752,11 @@ app.get('/dash', async (req, res) => {
 
                 const clientesMap = {};
                 asignacionesClientes.forEach(a => {
+                    // Excluir cuentas ya reemplazadas por garantía para no cobrar doble
+                    if (a.reemplazada_por) return;
+
                     if (!clientesMap[a.cliente_id]) {
-                        clientesMap[a.cliente_id] = { nombre: a.cliente_nombre, telefono: a.cliente_telefono, moneda: a.moneda, cuentas: [], vencidas: [], garantias: [] };
+                        clientesMap[a.cliente_id] = { nombre: a.cliente_nombre, telefono: a.cliente_telefono, moneda: a.moneda || 'MXN', cuentas: [], vencidas: [], garantias: [] };
                     }
                     clientesMap[a.cliente_id].cuentas.push(a);
                     if (a.estado === 'Vencida') clientesMap[a.cliente_id].vencidas.push(a);
@@ -2719,24 +2766,50 @@ app.get('/dash', async (req, res) => {
                 let filasClientesRenovacion = Object.keys(clientesMap).map(cid => {
                     const c = clientesMap[cid];
                     const cantVencidas = c.vencidas.length;
-                    const totalRenovar = c.cuentas.reduce((acc, curr) => acc + (curr.precio_unitario || 0), 0);
-                    const correosLista = c.cuentas.map(x => `- ${x.email} ${x.es_reemplazo_de ? '(Garantía de: '+x.es_reemplazo_de+')' : ''}`).join('\n');
-                    const fechaLimite = c.cuentas[0] ? c.cuentas[0].fecha_vencimiento : 'Fin de mes';
+                    const cantActivas = c.cuentas.filter(x => x.estado === 'Activa').length;
+                    const totalGeneralMXN = c.cuentas.reduce((acc, curr) => acc + (Number(curr.precio_unitario) || 0), 0);
+                    const totalVencidasMXN = c.vencidas.reduce((acc, curr) => acc + (Number(curr.precio_unitario) || 0), 0);
+                    const montoCobrarMXN = cantVencidas > 0 ? totalVencidasMXN : totalGeneralMXN;
+
+                    const correosLista = c.cuentas.map((x, idx) => {
+                        const iconoEstado = x.estado === 'Vencida' ? '🔴' : '🟢';
+                        const fCompra = formatearFechaCortaLegible(x.fecha_asignacion);
+                        const fVence = formatearFechaCortaLegible(x.fecha_vencimiento || calcularFechaUnMesDespues(x.fecha_asignacion));
+                        const precioCta = formatearDinero(Number(x.precio_unitario) || 0, c.moneda);
+                        const notaGarantia = x.es_reemplazo_de ? `\n   🛡️ _Garantía de: ${x.es_reemplazo_de}_` : '';
+                        return `${idx + 1}. ${iconoEstado} *${x.email}*\n   🛒 Compra: ${fCompra} ➔ 📅 Vence: *${fVence}*\n   💵 Valor: ${precioCta}${notaGarantia}`;
+                    }).join('\n\n');
+
+                    const cuentasOrdenadas = [...c.cuentas].sort((a, b) => {
+                        const va = new Date(String(a.fecha_vencimiento || calcularFechaUnMesDespues(a.fecha_asignacion)).replace(' ', 'T')).getTime() || 0;
+                        const vb = new Date(String(b.fecha_vencimiento || calcularFechaUnMesDespues(b.fecha_asignacion)).replace(' ', 'T')).getTime() || 0;
+                        return va - vb;
+                    });
+                    const proximaCuenta = c.vencidas[0] || cuentasOrdenadas[0];
+                    const fechaCompraRef = proximaCuenta ? formatearFechaCortaLegible(proximaCuenta.fecha_asignacion) : 'N/A';
+                    const fechaLimite = proximaCuenta ? formatearFechaCortaLegible(proximaCuenta.fecha_vencimiento || calcularFechaUnMesDespues(proximaCuenta.fecha_asignacion)) : 'N/A';
                     
-                    const textoWhatsApp = `Hola ${c.nombre} 🎄,\n\nTe recordamos el estado de tus cuentas en SyncBox:\n\n*Cuentas Registradas:* ${c.cuentas.length}\n*Cuentas Vencidas:* ${cantVencidas}\n*Reemplazos por Garantía:* ${c.garantias.length}\n\n*Detalle de Cuentas:*\n${correosLista}\n\n*Total a pagar de renovación:* ${formatearDinero(totalRenovar, c.moneda)}\n*Fecha límite de pago:* ${fechaLimite}\n\n¡Quedamos atentos a tu comprobante para habilitarlas inmediatamente!`;
-                    const telLimpio = c.telefono ? c.telefono.replace('+', '').replace(/\s/g, '') : '';
+                    const textoWhatsApp = `👋 ¡Hola *${c.nombre}*! 🎄✨\n\n📢 *AVISO DE RENOVACIÓN - SYNCBOX* 🎬🍿\n\nTe compartimos el resumen y estado de tus cuentas contratadas:\n\n📊 *RESUMEN DE TU CUENTA:*\n📦 *Total de Cuentas Vigentes:* ${c.cuentas.length}\n🟢 *Cuentas Activas:* ${cantActivas}\n🔴 *Cuentas Vencidas:* ${cantVencidas}\n🛡️ *Reemplazos por Garantía:* ${c.garantias.length}\n\n📋 *DETALLE Y FECHAS DE VENCIMIENTO (1 MES EXACTO):*\n${correosLista}\n\n🗓️ *Fecha de compra base:* ${fechaCompraRef}\n⏰ *Fecha exacta de vencimiento:* *${fechaLimite}*\n${cantVencidas > 0 ? `🚨 *Valor cuentas vencidas (${cantVencidas}):* *${formatearDinero(totalVencidasMXN, c.moneda)}*\n` : ''}💰 *Total mensual (${c.cuentas.length} cuenta${c.cuentas.length > 1 ? 's' : ''}):* *${formatearDinero(totalGeneralMXN, c.moneda)}*\n💳 *TOTAL A PAGAR AHORA:* *${formatearDinero(montoCobrarMXN, c.moneda)}*\n\n🙏 Por favor envíanos tu comprobante de pago para renovar tu servicio por 1 mes más sin interrupciones. ¡Muchas gracias por tu preferencia! 🚀🔥`;
+                    const telFormateado = c.telefono ? formatearTelefono(c.telefono) : '';
+                    const telLimpio = telFormateado ? telFormateado.replace('+', '').replace(/\s/g, '') : '';
                     const linkWA = `https://api.whatsapp.com/send?phone=${telLimpio}&text=${encodeURIComponent(textoWhatsApp)}`;
 
                     return `
                         <tr>
                             <td><b style="color:var(--accent);">@${c.nombre}</b><br><small style="color:var(--text-muted);">${c.telefono || 'Sin tel'}</small></td>
-                            <td><b>${c.cuentas.length}</b> (${c.garantias.length} garantías)</td>
+                            <td>
+                                <b>${c.cuentas.length}</b> vigente(s) (${c.garantias.length} garantías)<br>
+                                <small style="color:#cbd5e1;">📅 Próximo venc.: <b style="color:var(--accent);">${fechaLimite}</b></small>
+                            </td>
                             <td><span class="badge-status ${cantVencidas > 0 ? 'vencida' : 'disp'}">${cantVencidas} Vencidas</span></td>
-                            <td><b>${formatearDinero(totalRenovar, c.moneda)}</b></td>
+                            <td>
+                                <b style="color:#25d366;">${formatearDinero(montoCobrarMXN, c.moneda)}</b>
+                                ${cantVencidas > 0 && cantVencidas < c.cuentas.length ? `<br><small style="color:var(--text-muted);">Total mes: ${formatearDinero(totalGeneralMXN, c.moneda)}</small>` : ''}
+                            </td>
                             <td style="display:flex; gap:6px; flex-wrap:wrap;">
                                 <form action="/admin/renovar-cuentas" method="POST" style="margin:0;">
                                     <input type="hidden" name="cliente_id" value="${cid}">
-                                    <button type="submit" class="action-btn-pill" style="background:#22c55e; color:#000; padding:6px 12px; font-size:10px;" onclick="return confirm('¿Confirmas renovación?');">✅ CUENTAS RENOVADAS</button>
+                                    <button type="submit" class="action-btn-pill" style="background:#22c55e; color:#000; padding:6px 12px; font-size:10px;" onclick="return confirm('¿Confirmas renovación por 1 mes exacto?');">✅ CUENTAS RENOVADAS</button>
                                 </form>
                                 <a href="${linkWA}" target="_blank" class="action-btn-pill" style="background:#25d366; color:#000; text-decoration:none; padding:6px 12px; font-size:10px;">📲 WhatsApp Cobro</a>
                             </td>
