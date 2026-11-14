@@ -124,15 +124,15 @@ function formatearFechaLocalSQL(dateObj) {
     return `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())} ${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
 }
 
+// 📅 FUNCIÓN CORREGIDA: Ciclo estricto de 30 días exactos
 function calcularFechaUnMesDespues(fechaBaseInput) {
     let base = fechaBaseInput ? new Date(String(fechaBaseInput).replace(' ', 'T')) : new Date();
     if (isNaN(base.getTime())) base = new Date();
-    const diaOriginal = base.getDate();
+    
+    // Sumar exactamente 30 días como lo manejamos en el reporte manual
     const resultado = new Date(base.getTime());
-    resultado.setDate(1);
-    resultado.setMonth(resultado.getMonth() + 1);
-    const ultimoDiaMesSiguiente = new Date(resultado.getFullYear(), resultado.getMonth() + 1, 0).getDate();
-    resultado.setDate(Math.min(diaOriginal, ultimoDiaMesSiguiente));
+    resultado.setDate(resultado.getDate() + 30);
+    
     return formatearFechaLocalSQL(resultado);
 }
 
@@ -1236,6 +1236,7 @@ app.post('/admin/asignar-bloque-cliente', async (req, res) => {
 // =========================================================================
 // 🔄 MEJORA 4: CONFIRMAR RENOVACIÓN
 // =========================================================================
+// 🔄 MEJORA 4: CONFIRMAR RENOVACIÓN CON CICLO ESTRICTO
 app.post('/admin/renovar-cuentas', async (req, res) => {
     if (req.session.rol !== 'Administrador' && req.session.rol !== 'Subadministrador') return res.redirect('/dash');
     const { cliente_id, bloque_id } = req.body;
@@ -1244,8 +1245,10 @@ app.post('/admin/renovar-cuentas', async (req, res) => {
         const ahora = new Date();
         if (bloque_id) {
             const bloque = await dbGet("SELECT * FROM asignaciones_bloques WHERE id = ?", [bloque_id]);
+            // Si renueva a tiempo, suma a la fecha original; si paga tarde, inicia hoy.
             const baseDate = (bloque && bloque.fecha_vencimiento && new Date(String(bloque.fecha_vencimiento).replace(' ', 'T')) > ahora) ? bloque.fecha_vencimiento : ahora;
             const nuevaFechaVence = calcularFechaUnMesDespues(baseDate);
+            
             await dbRun("UPDATE asignaciones_bloques SET estado = 'Activo', fecha_vencimiento = ? WHERE id = ?", [nuevaFechaVence, bloque_id]);
             await dbRun("UPDATE cuentas_cliente_detalle SET estado = 'Activa', fecha_vencimiento = ? WHERE bloque_id = ? AND reemplazada_por IS NULL", [nuevaFechaVence, bloque_id]);
         } else if (cliente_id) {
@@ -1265,7 +1268,7 @@ app.post('/admin/renovar-cuentas', async (req, res) => {
             }
         }
 
-        res.send("<script>alert('✅ CUENTAS RENOVADAS. Servicio habilitado exactamente por 1 mes más.'); window.location='/dash';</script>");
+        res.send("<script>alert('✅ CUENTAS RENOVADAS. Servicio habilitado exactamente por 30 días más.'); window.location='/dash';</script>");
     } catch (e) {
         console.error(e);
         res.send("<script>alert('Error al renovar cuentas.'); window.location='/dash';</script>");
@@ -1335,6 +1338,7 @@ app.post('/admin/cambiar-por-garantia', async (req, res) => {
             const detalleOriginal = await dbGet("SELECT * FROM cuentas_cliente_detalle WHERE email = ? AND cliente_id = ? ORDER BY id DESC LIMIT 1", [caida.email, caida.cliente_id]);
             
             const bloqueId = detalleOriginal ? detalleOriginal.bloque_id : null;
+            // 🛡️ HERENCIA DE FECHA: El reemplazo conserva la misma fecha límite de la cuenta original caída
             const fechaVence = (detalleOriginal && detalleOriginal.fecha_vencimiento) ? detalleOriginal.fecha_vencimiento : calcularFechaUnMesDespues(caida.fecha_compra);
             const paisConservado = caida.pais || (detalleOriginal ? detalleOriginal.pais : 'US');
 
